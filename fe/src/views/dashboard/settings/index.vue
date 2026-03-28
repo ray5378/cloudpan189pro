@@ -165,6 +165,39 @@
         </div>
       </div>
 
+      <div class="setting-item">
+        <div class="item-left">
+          <div class="item-title">持久检测存储</div>
+          <div class="item-desc">每月指定日期和时间，对所有未启用自动刷新或自动刷新日期已过期的存储节点执行一次普通刷新，用于检测文件是否仍然存在。</div>
+        </div>
+        <div class="item-right">
+          <div class="right-inline">
+            <n-switch v-model:value="additionForm.persistentCheckEnabled" />
+            <n-input-number
+              v-model:value="additionForm.persistentCheckDay"
+              :min="1"
+              :max="28"
+              :step="1"
+              placeholder="每月几号"
+              style="width: 120px"
+            />
+            <n-input
+              v-model:value="additionForm.persistentCheckTime"
+              placeholder="HH:MM"
+              style="width: 120px"
+            />
+            <n-button
+              size="small"
+              type="primary"
+              :loading="savingPersistentCheck"
+              @click="handleSavePersistentCheck"
+            >
+              保存
+            </n-button>
+          </div>
+        </div>
+      </div>
+
       <n-divider />
 
       <!-- 用户认证 -->
@@ -383,6 +416,10 @@ const additionForm = reactive<Models.SettingAddition>({
   externalAutoRefreshEnabled: true,
   externalRefreshIntervalMin: 60,
   externalAutoRefreshDays: 60,
+
+  persistentCheckEnabled: false,
+  persistentCheckDay: 1,
+  persistentCheckTime: '03:00',
 })
 
 // 初始化完成标记，防止初始渲染触发自动保存
@@ -402,6 +439,7 @@ const cloudTokenOptions = ref<Array<{ label: string; value: number }>>([])
 const loadingCloudTokens = ref(false)
 const savingDefaultToken = ref(false)
 const savingExternalAutoRefresh = ref(false)
+const savingPersistentCheck = ref(false)
 
 const generateExternalApiKey = () => {
   // 32 chars strong random (URL-safe-ish + symbols)
@@ -474,6 +512,41 @@ const handleSaveExternalAutoRefresh = () => {
     })
     .finally(() => {
       savingExternalAutoRefresh.value = false
+    })
+}
+
+const handleSavePersistentCheck = () => {
+  const timeText = (additionForm.persistentCheckTime || '').trim()
+  if (!/^\d{2}:\d{2}$/.test(timeText)) {
+    message.warning('检测时间必须为 HH:MM 格式')
+    return
+  }
+  const [hour, minute] = timeText.split(':').map((v) => Number(v))
+  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+    message.warning('检测时间必须在 00:00 ~ 23:59 之间')
+    return
+  }
+
+  savingPersistentCheck.value = true
+  modifySettingAddition({
+    persistentCheckEnabled: !!additionForm.persistentCheckEnabled,
+    persistentCheckDay: Number(additionForm.persistentCheckDay || 1),
+    persistentCheckTime: timeText,
+  })
+    .then((res) => {
+      if (res.code === 200) {
+        message.success('已保存')
+        additionForm.persistentCheckTime = timeText
+        originalAddition.value = { ...additionForm }
+      } else {
+        message.error(res.msg || '保存失败')
+      }
+    })
+    .catch((err) => {
+      message.error(err instanceof Error ? err.message : '网络错误')
+    })
+    .finally(() => {
+      savingPersistentCheck.value = false
     })
 }
 
@@ -707,6 +780,10 @@ onMounted(() => {
           res.data.externalRefreshIntervalMin ?? 60
         additionForm.externalAutoRefreshDays =
           res.data.externalAutoRefreshDays ?? 60
+        additionForm.persistentCheckEnabled =
+          (res.data.persistentCheckEnabled ?? false) as boolean
+        additionForm.persistentCheckDay = res.data.persistentCheckDay ?? 1
+        additionForm.persistentCheckTime = res.data.persistentCheckTime ?? '03:00'
       } else {
         message.error(res.msg || '获取附加设置失败')
       }

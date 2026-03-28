@@ -128,6 +128,10 @@ declare namespace Models {
     externalAutoRefreshEnabled?: boolean
     externalRefreshIntervalMin?: number
     externalAutoRefreshDays?: number
+
+    persistentCheckEnabled?: boolean
+    persistentCheckDay?: number
+    persistentCheckTime?: string
   }
 
   // 任务引擎统计信息（对应后端 TaskStats）

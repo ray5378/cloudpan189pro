@@ -1,6 +1,8 @@
 package setting
 
 import (
+	"fmt"
+
 	"github.com/xxcheng123/cloudpan189-share/internal/framework/httpcontext"
 	"github.com/xxcheng123/cloudpan189-share/internal/pkgs/utils"
 	"github.com/xxcheng123/cloudpan189-share/internal/repository/models"
@@ -20,6 +22,10 @@ type modifyAdditionRequest struct {
 	ExternalAutoRefreshEnabled **bool  `json:"externalAutoRefreshEnabled"`
 	ExternalRefreshIntervalMin *int    `json:"externalRefreshIntervalMin"`
 	ExternalAutoRefreshDays    *int    `json:"externalAutoRefreshDays"`
+
+	PersistentCheckEnabled *bool   `json:"persistentCheckEnabled"`
+	PersistentCheckDay     *int    `json:"persistentCheckDay" binding:"omitempty,min=1,max=28"`
+	PersistentCheckTime    *string `json:"persistentCheckTime" binding:"omitempty,len=5"`
 }
 
 // ModifyAddition 修改系统附加设置（可选字段更新）
@@ -91,6 +97,19 @@ func (h *handler) ModifyAddition() httpcontext.HandlerFunc {
 		if req.ExternalAutoRefreshDays != nil {
 			merged.ExternalAutoRefreshDays = *req.ExternalAutoRefreshDays
 		}
+		if req.PersistentCheckEnabled != nil {
+			merged.PersistentCheckEnabled = *req.PersistentCheckEnabled
+		}
+		if req.PersistentCheckDay != nil {
+			merged.PersistentCheckDay = *req.PersistentCheckDay
+		}
+		if req.PersistentCheckTime != nil {
+			if _, err := fmt.Sscanf(*req.PersistentCheckTime, "%02d:%02d", new(int), new(int)); err != nil {
+				ctx.AbortWithInvalidParams(fmt.Errorf("persistentCheckTime 必须为 HH:MM 格式"))
+				return
+			}
+			merged.PersistentCheckTime = *req.PersistentCheckTime
+		}
 
 		// 更新数据库
 		if err := h.settingService.Update(ctx.GetContext(),
@@ -113,6 +132,9 @@ func (h *handler) ModifyAddition() httpcontext.HandlerFunc {
 			ExternalAutoRefreshEnabled: merged.ExternalAutoRefreshEnabled,
 			ExternalRefreshIntervalMin: merged.ExternalRefreshIntervalMin,
 			ExternalAutoRefreshDays:    merged.ExternalAutoRefreshDays,
+			PersistentCheckEnabled:     merged.PersistentCheckEnabled,
+			PersistentCheckDay:         merged.PersistentCheckDay,
+			PersistentCheckTime:        merged.PersistentCheckTime,
 		}
 
 		ctx.Success()

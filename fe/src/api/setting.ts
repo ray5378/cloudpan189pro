@@ -71,6 +71,10 @@ export interface ModifySettingAdditionRequest {
   externalAutoRefreshEnabled?: boolean
   externalRefreshIntervalMin?: number
   externalAutoRefreshDays?: number
+
+  persistentCheckEnabled?: boolean
+  persistentCheckDay?: number
+  persistentCheckTime?: string
 }
 
 export const modifySettingAddition = (data: ModifySettingAdditionRequest): Promise<ApiResponse> => {

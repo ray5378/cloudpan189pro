@@ -43,11 +43,15 @@ type SettingAddition struct {
 	MultipleStreamChunkSize   int64  `json:"multipleStreamChunkSize"`
 	TaskThreadCount           int    `json:"taskThreadCount"`
 
-	ExternalAPIKey              string `json:"externalApiKey"`
-	DefaultTokenId              int64  `json:"defaultTokenId"`
-	ExternalAutoRefreshEnabled  *bool  `json:"externalAutoRefreshEnabled"`
-	ExternalRefreshIntervalMin  int    `json:"externalRefreshIntervalMin"`
-	ExternalAutoRefreshDays     int    `json:"externalAutoRefreshDays"`
+	ExternalAPIKey             string `json:"externalApiKey"`
+	DefaultTokenId             int64  `json:"defaultTokenId"`
+	ExternalAutoRefreshEnabled *bool  `json:"externalAutoRefreshEnabled"`
+	ExternalRefreshIntervalMin int    `json:"externalRefreshIntervalMin"`
+	ExternalAutoRefreshDays    int    `json:"externalAutoRefreshDays"`
+
+	PersistentCheckEnabled bool   `json:"persistentCheckEnabled"`
+	PersistentCheckDay     int    `json:"persistentCheckDay"`
+	PersistentCheckTime    string `json:"persistentCheckTime"`
 }
 
 // applyDefaults 统一填充默认值，确保零值时也能获得期望配置
@@ -73,6 +77,12 @@ func (sa *SettingAddition) applyDefaults() {
 	}
 	if sa.ExternalAutoRefreshDays <= 0 {
 		sa.ExternalAutoRefreshDays = 60
+	}
+	if sa.PersistentCheckDay <= 0 || sa.PersistentCheckDay > 28 {
+		sa.PersistentCheckDay = 1
+	}
+	if sa.PersistentCheckTime == "" {
+		sa.PersistentCheckTime = "03:00"
 	}
 }
 
