@@ -75,6 +75,8 @@ func (s *RefreshFileScheduler) Stop() {
 
 func (s *RefreshFileScheduler) doJob() bool {
 	ctx := s.ctx
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -84,98 +86,80 @@ func (s *RefreshFileScheduler) doJob() bool {
 		}
 	}()
 
-	select {
-	case <-ctx.Done():
-		ctx.Info("文件刷新执行器停止")
-
-		return false
-	case <-time.After(time.Minute):
-		mountPoints, err := s.mountPointService.GetAutoRefreshList(ctx, &mountpoint.GetAutoRefreshListRequest{})
-		if err != nil {
-			ctx.Error("查询挂载点失败", zap.Error(err))
-
-			return true
-		}
-
-		ctx.Debug("文件刷新执行器查询到挂载点数量", zap.Int("count", len(mountPoints)))
-
-		now := time.Now()
-
-		for _, mp := range mountPoints {
-			// 只处理启用自动刷新的挂载点
-			if !mp.EnableAutoRefresh {
+	for {
+		select {
+		case <-ctx.Done():
+			ctx.Info("文件刷新执行器停止")
+			return false
+		case <-ticker.C:
+			mountPoints, err := s.mountPointService.GetAutoRefreshList(ctx, &mountpoint.GetAutoRefreshListRequest{})
+			if err != nil {
+				ctx.Error("查询挂载点失败", zap.Error(err))
 				continue
 			}
 
-			if mp.RefreshInterval <= 0 || mp.AutoRefreshBeginAt == nil {
-				continue
-			}
+			ctx.Debug("文件刷新执行器查询到挂载点数量", zap.Int("count", len(mountPoints)))
+			now := time.Now()
 
-			// 以每个挂载点自己的 auto_refresh_begin_at 作为刷新节奏锚点，
-			// 并用“槽位(slot)”判断是否该刷新：
-			//   slot = floor((now - beginAt) / interval)
-			// 仅当当前时间位于该槽位开始后的 60 秒窗口内时才触发，
-			// 这样能容忍 scheduler 每分钟轮询的轻微漂移，不再依赖“恰好整除”。
-			beginAt := mp.AutoRefreshBeginAt.In(now.Location())
-			if now.Before(beginAt) {
-				continue
-			}
+			for _, mp := range mountPoints {
+				if !mp.EnableAutoRefresh {
+					continue
+				}
+				if mp.RefreshInterval <= 0 || mp.AutoRefreshBeginAt == nil {
+					continue
+				}
 
-			interval := time.Duration(mp.RefreshInterval) * time.Minute
-			elapsed := now.Sub(beginAt)
-			if elapsed < 0 {
-				continue
-			}
+				beginAt := mp.AutoRefreshBeginAt.In(now.Location())
+				if now.Before(beginAt) {
+					continue
+				}
 
-			slot := int64(elapsed / interval)
-			slotStart := beginAt.Add(time.Duration(slot) * interval)
-			if now.Sub(slotStart) >= time.Minute {
-				continue
-			}
+				interval := time.Duration(mp.RefreshInterval) * time.Minute
+				elapsed := now.Sub(beginAt)
+				if elapsed < 0 {
+					continue
+				}
 
-			// 同一进程内对每个 mount point 的同一 slot 只触发一次
-			s.mu.Lock()
-			lastSlot, exists := s.lastTriggeredSlot[mp.ID]
-			if exists && lastSlot == slot {
+				slot := int64(elapsed / interval)
+				slotStart := beginAt.Add(time.Duration(slot) * interval)
+				if now.Sub(slotStart) >= time.Minute {
+					continue
+				}
+
+				s.mu.Lock()
+				lastSlot, exists := s.lastTriggeredSlot[mp.ID]
+				if exists && lastSlot == slot {
+					s.mu.Unlock()
+					continue
+				}
+				s.lastTriggeredSlot[mp.ID] = slot
 				s.mu.Unlock()
-				continue
-			}
-			s.lastTriggeredSlot[mp.ID] = slot
-			s.mu.Unlock()
 
-			ctx.Info("文件扫描执行器触发",
-				zap.Int64("mount_point_id", mp.ID),
-				zap.Int64("file_id", mp.FileId),
-				zap.String("full_path", mp.FullPath),
-				zap.Int("refresh_interval", mp.RefreshInterval),
-				zap.Int64("refresh_slot", slot),
-				zap.Time("slot_start", slotStart))
-
-			// 创建文件扫描任务
-			taskReq := &topic.FileScanFileRequest{
-				FileId: mp.FileId,
-				Deep:   mp.EnableDeepRefresh,
-			}
-
-			body, _ := json.Marshal(taskReq)
-			taskCtx := ctx.
-				WithValue(consts.CtxKeyFullPath, mp.FullPath).
-				WithValue(consts.CtxKeyInvokeHandlerName, "定时任务")
-
-			if err = s.taskEngine.PushMessage(taskCtx, taskReq.Topic(), body); err != nil {
-				ctx.Error("推送文件扫描任务失败",
+				ctx.Info("文件扫描执行器触发",
 					zap.Int64("mount_point_id", mp.ID),
 					zap.Int64("file_id", mp.FileId),
 					zap.String("full_path", mp.FullPath),
-					zap.Error(err))
-			} else {
-				ctx.Info("下发文件扫描任务成功",
-					zap.Int64("mount_point_id", mp.ID),
-					zap.Int64("file_id", mp.FileId),
-					zap.String("full_path", mp.FullPath))
+					zap.Int("refresh_interval", mp.RefreshInterval),
+					zap.Int64("refresh_slot", slot),
+					zap.Time("slot_start", slotStart))
+
+				taskReq := &topic.FileScanFileRequest{FileId: mp.FileId, Deep: mp.EnableDeepRefresh}
+				body, _ := json.Marshal(taskReq)
+				taskCtx := ctx.WithValue(consts.CtxKeyFullPath, mp.FullPath).WithValue(consts.CtxKeyInvokeHandlerName, "定时任务")
+
+				if err = s.taskEngine.PushMessage(taskCtx, taskReq.Topic(), body); err != nil {
+					ctx.Error("推送文件扫描任务失败",
+						zap.Int64("mount_point_id", mp.ID),
+						zap.Int64("file_id", mp.FileId),
+						zap.String("full_path", mp.FullPath),
+						zap.Error(err))
+				} else {
+					ctx.Info("下发文件扫描任务成功",
+						zap.Int64("mount_point_id", mp.ID),
+						zap.Int64("file_id", mp.FileId),
+						zap.String("full_path", mp.FullPath))
+				}
 			}
 		}
 	}
-
-	return true
 }

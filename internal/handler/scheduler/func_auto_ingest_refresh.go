@@ -78,6 +78,8 @@ func (s *AutoIngestRefreshScheduler) Stop() {
 
 func (s *AutoIngestRefreshScheduler) doJob() bool {
 	ctx := s.ctx
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -87,43 +89,34 @@ func (s *AutoIngestRefreshScheduler) doJob() bool {
 		}
 	}()
 
-	select {
-	case <-ctx.Done():
-		ctx.Info("自动入库执行器停止")
-
-		return false
-	case <-time.After(time.Minute):
-		list, err := s.autoIngestPlanService.FindDue(ctx, time.Now())
-		if err != nil {
-			ctx.Error("查询自动入库计划失败", zap.Error(err))
-
-			if _, logErr := s.autoIngestLogService.Create(ctx, 0, autoingest.LogLevelError, "查询自动入库计划失败"); logErr != nil {
-				ctx.Error("写入自动入库失败日志失败", zap.Error(logErr))
-			}
-
-			return true
-		}
-
-		for _, plan := range list {
-			if plan.SourceType != autoingest.SourceTypeSubscribe {
-				ctx.Error("不支持的自动入库源类型", zap.String("name", plan.Name), zap.String("type", plan.SourceType.String()), zap.Int64("id", plan.ID))
-
+	for {
+		select {
+		case <-ctx.Done():
+			ctx.Info("自动入库执行器停止")
+			return false
+		case <-ticker.C:
+			list, err := s.autoIngestPlanService.FindDue(ctx, time.Now())
+			if err != nil {
+				ctx.Error("查询自动入库计划失败", zap.Error(err))
+				if _, logErr := s.autoIngestLogService.Create(ctx, 0, autoingest.LogLevelError, "查询自动入库计划失败"); logErr != nil {
+					ctx.Error("写入自动入库失败日志失败", zap.Error(logErr))
+				}
 				continue
 			}
 
-			taskReq := &topic.AutoIngestRefreshSubscribeRequest{
-				PlanId: plan.ID,
+			for _, plan := range list {
+				if plan.SourceType != autoingest.SourceTypeSubscribe {
+					ctx.Error("不支持的自动入库源类型", zap.String("name", plan.Name), zap.String("type", plan.SourceType.String()), zap.Int64("id", plan.ID))
+					continue
+				}
+
+				taskReq := &topic.AutoIngestRefreshSubscribeRequest{PlanId: plan.ID}
+				msgBody, _ := json.Marshal(taskReq)
+				if err = s.taskEngine.PushMessage(ctx, taskReq.Topic(), msgBody); err != nil {
+					ctx.Error("推送自动入库任务失败", zap.Error(err))
+				}
+				ctx.Info("查询到需要自动入库的订阅计划", zap.Int64("id", plan.ID), zap.String("name", plan.Name))
 			}
-
-			msgBody, _ := json.Marshal(taskReq)
-
-			if err = s.taskEngine.PushMessage(ctx, taskReq.Topic(), msgBody); err != nil {
-				ctx.Error("推送自动入库任务失败", zap.Error(err))
-			}
-
-			ctx.Info("查询到需要自动入库的订阅计划", zap.Int64("id", plan.ID), zap.String("name", plan.Name))
 		}
 	}
-
-	return true
 }

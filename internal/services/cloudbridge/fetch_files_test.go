@@ -2,6 +2,7 @@ package cloudbridge
 
 import (
 	stdContext "context"
+	"fmt"
 	"os"
 	"strconv"
 	"testing"
@@ -51,7 +52,27 @@ var (
 	shareCode                     = os.Getenv(consts.EnvKeyTestShareCode)
 )
 
+func requireIntegrationEnv(t *testing.T, keyValues map[string]string) {
+	t.Helper()
+	if testing.Short() {
+		t.Skip("skip cloudbridge integration tests in short mode")
+	}
+	if os.Getenv("RUN_CLOUDBRIDGE_INTEGRATION") != "1" {
+		t.Skip("set RUN_CLOUDBRIDGE_INTEGRATION=1 to run cloudbridge integration tests")
+	}
+	for key, value := range keyValues {
+		if value == "" || value == "0" {
+			t.Skip(fmt.Sprintf("missing integration env %s", key))
+		}
+	}
+}
+
 func TestGetSubscribeUserFiles(t *testing.T) {
+	requireIntegrationEnv(t, map[string]string{
+		consts.EnvKeyTestSubUserId:            subUserId,
+		consts.EnvKeyTestSubUserResourceCount: strconv.Itoa(subUserResourceCount),
+	})
+
 	mockSvc := bootstrap.NewMockServiceContext()
 
 	ctx := context.NewContext(stdContext.Background())
@@ -73,6 +94,13 @@ func TestGetSubscribeUserFiles(t *testing.T) {
 }
 
 func TestGetSubscribeShareFiles(t *testing.T) {
+	requireIntegrationEnv(t, map[string]string{
+		consts.EnvKeyTestSubUserId:             subUserId,
+		consts.EnvKeyTestSubShareId:            strconv.FormatInt(subShareId, 10),
+		consts.EnvKeyTestSubShareFileId:        subShareFileId,
+		consts.EnvKeyTestSubShareResourceCount: strconv.Itoa(subShareResourceCount),
+	})
+
 	mockSvc := bootstrap.NewMockServiceContext()
 
 	ctx := context.NewContext(stdContext.Background())
@@ -94,6 +122,12 @@ func TestGetSubscribeShareFiles(t *testing.T) {
 }
 
 func TestGetShareFiles(t *testing.T) {
+	requireIntegrationEnv(t, map[string]string{
+		consts.EnvKeyTestShareId:            strconv.FormatInt(shareId, 10),
+		consts.EnvKeyTestShareFileId:        shareFileId,
+		consts.EnvKeyTestShareResourceCount: strconv.Itoa(shareResourceCount),
+	})
+
 	mockSvc := bootstrap.NewMockServiceContext()
 
 	ctx := context.NewContext(stdContext.Background())
@@ -115,6 +149,13 @@ func TestGetShareFiles(t *testing.T) {
 }
 
 func TestGetShareFilesWithCode(t *testing.T) {
+	requireIntegrationEnv(t, map[string]string{
+		consts.EnvKeyTestShareIdWithCode:            strconv.FormatInt(shareIdWithCode, 10),
+		consts.EnvKeyTestShareFileIdWithCode:        shareFileIdWithCode,
+		consts.EnvKeyTestShareWithCodeResourceCount: strconv.Itoa(shareWithCodeResourceCount),
+		consts.EnvKeyTestShareCode:                  shareCode,
+	})
+
 	mockSvc := bootstrap.NewMockServiceContext()
 
 	ctx := context.NewContext(stdContext.Background())
@@ -136,6 +177,13 @@ func TestGetShareFilesWithCode(t *testing.T) {
 }
 
 func TestGetCloudFiles(t *testing.T) {
+	requireIntegrationEnv(t, map[string]string{
+		consts.EnvKeyTestAccessToken:     accessToken,
+		consts.EnvKeyTestAccessExpire:    strconv.Itoa(accessExpire),
+		consts.EnvKeyTestPersonFileId:    personFileId,
+		consts.EnvKeyTestPersonFileCount: strconv.Itoa(personFileCount),
+	})
+
 	mockSvc := bootstrap.NewMockServiceContext()
 
 	ctx := context.NewContext(stdContext.Background())
@@ -157,6 +205,14 @@ func TestGetCloudFiles(t *testing.T) {
 }
 
 func TestGetCloudFamilyFiles(t *testing.T) {
+	requireIntegrationEnv(t, map[string]string{
+		consts.EnvKeyTestAccessToken:     accessToken,
+		consts.EnvKeyTestAccessExpire:    strconv.Itoa(accessExpire),
+		consts.EnvKeyTestFamilyFamilyId:  familyFamilyId,
+		consts.EnvKeyTestFamilyFileId:    familyFileId,
+		consts.EnvKeyTestFamilyFileCount: strconv.Itoa(familyFileCount),
+	})
+
 	mockSvc := bootstrap.NewMockServiceContext()
 
 	ctx := context.NewContext(stdContext.Background())

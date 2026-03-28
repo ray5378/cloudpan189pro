@@ -3,7 +3,7 @@ package storage
 import (
 	stdctx "context"
 	"encoding/json"
-	"sync"
+	"sync/atomic"
 
 	"github.com/xxcheng123/cloudpan189-share/internal/consts"
 	fctx "github.com/xxcheng123/cloudpan189-share/internal/framework/context"
@@ -36,8 +36,10 @@ func (h *handler) BatchRefresh() httpcontext.HandlerFunc {
 		res := &batchResult{}
 		sem := make(chan struct{}, 10)
 		done := make(chan struct{})
-
-		var payloadPool = sync.Pool{New: func() any { b := make([]byte, 0, 512); return &b }}
+		var (
+			successCount atomic.Int64
+			failCount    atomic.Int64
+		)
 
 		for _, id := range req.IDs {
 			sem <- struct{}{}
@@ -51,36 +53,27 @@ func (h *handler) BatchRefresh() httpcontext.HandlerFunc {
 				// 查询挂载点，确保刷新的是挂载点对应的 file_id，而不是 mount_point.id
 				mp, err := h.mountPointService.Query(bg, id)
 				if err != nil || mp == nil {
+					failCount.Add(1)
 					return
 				}
 
-				// 结构性回收：payload 缓冲复用，使用完立刻置空
-				bufp := payloadPool.Get().(*[]byte)
-				buf := (*bufp)[:0]
 				payload := &topic.FileScanFileRequest{FileId: mp.FileId, Deep: req.Deep}
-				b, _ := json.Marshal(payload)
-				buf = append(buf, b...)
+				body, _ := json.Marshal(payload)
 				base := bg.WithValue(consts.CtxKeyInvokeHandlerName, "批量刷新").WithValue(consts.CtxKeyFullPath, mp.FullPath)
-				if err := h.taskEngine.PushMessage(base, payload.Topic(), buf); err != nil {
-					// 归还前置空
-					buf = buf[:0]
-					*bufp = buf
-					payloadPool.Put(bufp)
+				if err := h.taskEngine.PushMessage(base, payload.Topic(), body); err != nil {
+					failCount.Add(1)
 					return
 				}
-				// 成功后同样归还缓冲并断开对象引用
-				buf = buf[:0]
-				*bufp = buf
-				payloadPool.Put(bufp)
-				payload = nil
 
-				res.SuccessCount++
+				successCount.Add(1)
 			}(id)
 		}
 
 		for range req.IDs {
 			<-done
 		}
+		res.SuccessCount = int(successCount.Load())
+		res.FailCount = int(failCount.Load())
 		ctx.Success(res)
 	}
 }

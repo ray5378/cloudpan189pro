@@ -1,6 +1,9 @@
 package storage
 
 import (
+	"sync"
+	"sync/atomic"
+
 	"github.com/pkg/errors"
 	"github.com/xxcheng123/cloudpan189-share/internal/framework/httpcontext"
 	"gorm.io/gorm"
@@ -12,9 +15,9 @@ type batchModifyTokenRequest struct {
 }
 
 type batchModifyTokenResult struct {
-	SuccessCount int      `json:"successCount"`
-	FailCount    int      `json:"failCount"`
-	FailIDs      []int64  `json:"failIds"`
+	SuccessCount int     `json:"successCount"`
+	FailCount    int     `json:"failCount"`
+	FailIDs      []int64 `json:"failIds"`
 }
 
 // BatchModifyToken 批量更换令牌
@@ -49,6 +52,11 @@ func (h *handler) BatchModifyToken() httpcontext.HandlerFunc {
 		res := &batchModifyTokenResult{}
 		sem := make(chan struct{}, 10)
 		done := make(chan struct{})
+		var (
+			successCount atomic.Int64
+			failCount    atomic.Int64
+			failIDsMu    sync.Mutex
+		)
 
 		for _, id := range req.IDs {
 			id := id
@@ -57,20 +65,28 @@ func (h *handler) BatchModifyToken() httpcontext.HandlerFunc {
 				defer func() { <-sem; done <- struct{}{} }()
 				// 校验挂载点是否存在
 				if _, err := h.mountPointService.Query(ctx.GetContext(), id); err != nil {
-					res.FailCount++
+					failCount.Add(1)
+					failIDsMu.Lock()
 					res.FailIDs = append(res.FailIDs, id)
+					failIDsMu.Unlock()
 					return
 				}
 				if err := h.mountPointService.ModifyToken(ctx.GetContext(), id, req.TokenID); err != nil {
-					res.FailCount++
+					failCount.Add(1)
+					failIDsMu.Lock()
 					res.FailIDs = append(res.FailIDs, id)
+					failIDsMu.Unlock()
 					return
 				}
-				res.SuccessCount++
+				successCount.Add(1)
 			}()
 		}
 
-		for range req.IDs { <-done }
+		for range req.IDs {
+			<-done
+		}
+		res.SuccessCount = int(successCount.Load())
+		res.FailCount = int(failCount.Load())
 		ctx.Success(res)
 	}
 }

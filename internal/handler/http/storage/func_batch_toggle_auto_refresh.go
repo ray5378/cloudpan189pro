@@ -2,6 +2,7 @@ package storage
 
 import (
 	stdctx "context"
+	"sync/atomic"
 	"time"
 
 	fctx "github.com/xxcheng123/cloudpan189-share/internal/framework/context"
@@ -43,6 +44,10 @@ func (h *handler) BatchToggleAutoRefresh() httpcontext.HandlerFunc {
 		res := &batchResult{}
 		sem := make(chan struct{}, 10)
 		done := make(chan struct{})
+		var (
+			successCount atomic.Int64
+			failCount    atomic.Int64
+		)
 
 		for _, id := range req.IDs {
 			sem <- struct{}{}
@@ -56,22 +61,38 @@ func (h *handler) BatchToggleAutoRefresh() httpcontext.HandlerFunc {
 				// 先更新配置（仅当开启时）
 				if req.EnableAutoRefresh {
 					cfg := mountpoint.RefreshConfig{}
-					if req.AutoRefreshDays > 0 { cfg.AutoRefreshDays = &req.AutoRefreshDays }
-					if req.RefreshInterval > 0 { cfg.RefreshInterval = &req.RefreshInterval }
-					if req.RefreshBeginAt != "" { if t, err := time.Parse(time.DateOnly, req.RefreshBeginAt); err == nil { cfg.AutoRefreshBeginAt = &t } }
+					if req.AutoRefreshDays > 0 {
+						cfg.AutoRefreshDays = &req.AutoRefreshDays
+					}
+					if req.RefreshInterval > 0 {
+						cfg.RefreshInterval = &req.RefreshInterval
+					}
+					if req.RefreshBeginAt != "" {
+						if t, err := time.Parse(time.DateOnly, req.RefreshBeginAt); err == nil {
+							cfg.AutoRefreshBeginAt = &t
+						}
+					}
 					cfg.EnableDeepRefresh = &req.EnableDeepRefresh
-					if err := h.mountPointService.UpdateRefreshConfig(bg, id, cfg); err != nil { return }
+					if err := h.mountPointService.UpdateRefreshConfig(bg, id, cfg); err != nil {
+						failCount.Add(1)
+						return
+					}
 				}
 
-				if err := h.mountPointService.EnableAutoRefresh(bg, id, req.EnableAutoRefresh); err != nil { return }
+				if err := h.mountPointService.EnableAutoRefresh(bg, id, req.EnableAutoRefresh); err != nil {
+					failCount.Add(1)
+					return
+				}
 
-				// 结构性回收：尽快断开临时对象引用
-				res.SuccessCount++
+				successCount.Add(1)
 			}(id)
 		}
 
-		// wait all
-		for range req.IDs { <-done }
+		for range req.IDs {
+			<-done
+		}
+		res.SuccessCount = int(successCount.Load())
+		res.FailCount = int(failCount.Load())
 		ctx.Success(res)
 	}
 }

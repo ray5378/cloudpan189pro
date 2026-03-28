@@ -55,6 +55,8 @@ func (s *FileTaskLogCheckScheduler) Start(ctx context.Context) error {
 
 func (s *FileTaskLogCheckScheduler) doJob() bool {
 	ctx := s.ctx
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -64,30 +66,25 @@ func (s *FileTaskLogCheckScheduler) doJob() bool {
 		}
 	}()
 
-	select {
-	case <-s.ctx.Done():
-		ctx.Info("日志检查器停止")
+	for {
+		select {
+		case <-s.ctx.Done():
+			ctx.Info("日志检查器停止")
+			return false
+		case <-ticker.C:
+			tasks, err := s.fileTaskLogService.FindStaleTasksByDuration(ctx, time.Minute*10)
+			if err != nil {
+				ctx.Error("查询超时任务失败", zap.Error(err))
+				continue
+			}
 
-		return false
-	case <-time.After(time.Minute):
-		// 检查有没有超时的任务
-		tasks, err := s.fileTaskLogService.FindStaleTasksByDuration(ctx, time.Minute*10)
-		if err != nil {
-			ctx.Error("查询超时任务失败", zap.Error(err))
-
-			return true
-		}
-
-		ctx.Debug("文件刷新执行器查询到超时任务数量", zap.Int("count", len(tasks)))
-
-		for _, task := range tasks {
-			_ = s.fileTaskLogService.Failed(ctx, filetasklogSvi.NewLogID(task.ID), utils.WithField("result", fmt.Sprintf("任务执行超时, 系统强制回收任务, 回收前状态: %s", task.Status)))
-
-			ctx.Info("发现超时任务", zap.Int64("task_id", task.ID))
+			ctx.Debug("文件刷新执行器查询到超时任务数量", zap.Int("count", len(tasks)))
+			for _, task := range tasks {
+				_ = s.fileTaskLogService.Failed(ctx, filetasklogSvi.NewLogID(task.ID), utils.WithField("result", fmt.Sprintf("任务执行超时, 系统强制回收任务, 回收前状态: %s", task.Status)))
+				ctx.Info("发现超时任务", zap.Int64("task_id", task.ID))
+			}
 		}
 	}
-
-	return true
 }
 
 func (s *FileTaskLogCheckScheduler) Stop() {

@@ -126,39 +126,36 @@ func (h *handler) walkFile(ctx context.Context, rootId int64, walkFunc walkFunc)
 				}
 			}
 		} else {
-			// 使用多线程并发处理
+			// 使用多线程并发处理，但在启动 goroutine 前先拿信号量，
+			// 避免大目录场景下一次性创建过多 goroutine，降低峰值内存。
 			var wg sync.WaitGroup
-
 			errorChan := make(chan error, len(nextFiles))
 			semaphore := make(chan struct{}, threadCount)
 
 			for _, nextFile := range nextFiles {
+				semaphore <- struct{}{}
 				wg.Add(1)
 
 				go func(file *models.VirtualFile) {
 					defer wg.Done()
-
-					// 获取信号量
-					semaphore <- struct{}{}
 					defer func() {
 						<-semaphore
 						time.Sleep(10 * time.Millisecond)
 					}()
 
-					if err = h.walkFile(ctx, file.ID, walkFunc); err != nil {
-						errorChan <- err
+					childCtx := ctx.WithValue(consts.CtxKeyFileFullPath, "")
+					if walkErr := h.walkFile(childCtx, file.ID, walkFunc); walkErr != nil {
+						errorChan <- walkErr
 					}
 				}(nextFile)
 			}
 
-			// 等待所有goroutine完成
 			wg.Wait()
 			close(errorChan)
 
-			// 检查是否有错误
-			for err = range errorChan {
-				if err != nil {
-					return err
+			for walkErr := range errorChan {
+				if walkErr != nil {
+					return walkErr
 				}
 			}
 		}
