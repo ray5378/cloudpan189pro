@@ -272,8 +272,9 @@ func (s *RefreshFileScheduler) runAutoDeletePermanentInvalid(ctx context.Context
 		matchedKeyword := lastLog != nil && logMatchesAnyKeyword(lastLog, keywords)
 		expiredOrDisabled := !mp.EnableAutoRefresh || !mp.IsInAutoRefreshPeriod()
 		zeroFiles := fileCountMap[mp.FileId] == 0
+		latestRefreshSucceeded := lastLog != nil && lastLog.Status == models.StatusCompleted
 
-		if matchedKeyword || (expiredOrDisabled && zeroFiles) {
+		if matchedKeyword || (expiredOrDisabled && zeroFiles && latestRefreshSucceeded) {
 			deleteIDs = append(deleteIDs, mp.FileId)
 		}
 	}
