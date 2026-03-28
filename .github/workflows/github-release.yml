@@ -1,0 +1,436 @@
+name: github-release
+
+on:
+  push:
+    tags:
+      - 'v*'  # 当推送 v* 标签时触发，如 v1.0.0
+  workflow_dispatch:  # 允许手动触发
+    inputs:
+      tag:
+        description: '发布标签 (例如: v1.0.0)'
+        required: true
+        type: string
+
+env:
+  PROJECT_NAME: cloudpan189-share
+  MODULE_NAME: github.com/xxcheng123/cloudpan189-share
+  BINARY_NAME: share
+  GO_VERSION: '1.25'
+  NODE_VERSION: '22'
+
+jobs:
+  # 先构建前端，生成 dist 目录
+  build-frontend:
+    name: 🎨 构建前端
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 检出代码
+        uses: actions/checkout@v4
+
+      - name: 🧩 安装 pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+          run_install: true
+          package_json_path: fe/package.json
+
+      - name: 📦 设置 Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+          cache-dependency-path: |
+            fe/pnpm-lock.yaml
+
+      - name: 🔍 验证前端环境
+        run: |
+          echo "📊 前端环境信息："
+          echo "Node 版本: $(node --version)"
+          echo "NPM 版本: $(npm --version)"
+          echo "PNPM 版本: $(pnpm --version || echo 'pnpm 未安装')"
+          echo "工作目录: $(pwd)"
+          
+          if [ -d "fe" ]; then
+            echo "✅ 前端目录存在"
+            echo "📋 前端目录内容："
+            ls -la fe/
+          
+            if [ -f "fe/package.json" ]; then
+              echo "✅ 找到 package.json"
+              echo "📋 包信息："
+              cd fe && npm list --depth=0 2>/dev/null || echo "尚未安装依赖"
+            else
+              echo "❌ 未找到 package.json"
+              exit 1
+            fi
+          else
+            echo "❌ 未找到前端目录 'fe'"
+            exit 1
+          fi
+
+      - name: 🎨 构建前端
+        run: |
+          echo "🎨 使用 Node.js ${{ env.NODE_VERSION }} 构建前端..."
+          cd fe
+          
+          echo "🔨 构建前端..."
+          pnpm build
+          
+          echo "✅ 前端构建完成"
+          
+          # 验证构建产物
+          if [ -d "dist" ]; then
+            echo "📋 前端构建输出 (dist/)："
+            find dist -type f | head -20
+            echo "📊 dist 目录文件总数: $(find dist -type f | wc -l)"
+            echo "📊 dist 目录大小: $(du -sh dist)"
+          else
+            echo "❌ 前端构建失败 - 未找到 dist 目录"
+            exit 1
+          fi
+
+      - name: 📤 上传前端构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: fe/dist/
+          retention-days: 1
+          compression-level: 6
+
+  # 构建多平台后端二进制文件（依赖前端构建）
+  build-backend:
+    name: 🔨 构建后端 (${{ matrix.suffix }})
+    runs-on: ubuntu-latest
+    needs: build-frontend  # 依赖前端构建完成
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            suffix: linux-amd64
+          - goos: linux
+            goarch: arm64
+            suffix: linux-arm64
+          - goos: linux
+            goarch: arm
+            goarm: 7
+            suffix: linux-armv7a
+          - goos: darwin
+            goarch: amd64
+            suffix: darwin-amd64
+          - goos: darwin
+            goarch: arm64
+            suffix: darwin-arm64
+          - goos: windows
+            goarch: amd64
+            suffix: windows-amd64
+            ext: .exe
+
+    steps:
+      - name: 📥 检出代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 获取完整历史，用于生成版本信息
+
+      - name: 🔧 设置 Go ${{ env.GO_VERSION }}
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: |
+            go.sum
+            go.mod
+
+      - name: 📥 下载前端构建产物
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: fe/dist/
+
+      - name: 🔍 验证前端资源
+        run: |
+          echo "🔍 验证前端构建产物..."
+          
+          if [ -d "fe/dist" ]; then
+            echo "✅ 前端 dist 目录已恢复"
+            echo "📋 前端资源："
+            find fe/dist -type f | head -20
+            echo "📊 文件总数: $(find fe/dist -type f | wc -l)"
+            echo "📊 目录大小: $(du -sh fe/dist)"
+          else
+            echo "❌ 下载后未找到前端 dist 目录"
+            echo "📋 当前目录结构："
+            find . -name "dist" -type d 2>/dev/null || echo "未找到 dist 目录"
+            exit 1
+          fi
+
+      - name: 🔍 验证 Go 环境
+        run: |
+          echo "📊 Go 环境信息："
+          echo "Go 版本: $(go version)"
+          echo "目标平台: ${{ matrix.goos }}/${{ matrix.goarch }}"
+          echo "GOPATH: $GOPATH"
+          echo "GOROOT: $GOROOT"
+
+      - name: 📊 生成构建变量
+        id: vars
+        run: |
+          echo "VAR_COMMIT=$(git rev-parse HEAD)" >> $GITHUB_ENV
+          echo "VAR_BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_ENV
+          echo "VAR_GIT_SUMMARY=$(git describe --tags --dirty --always)" >> $GITHUB_ENV
+          echo "VAR_GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)" >> $GITHUB_ENV
+          
+          # 获取版本号
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "VERSION=${{ github.event.inputs.tag }}" >> $GITHUB_ENV
+          else
+            echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+          fi
+          
+          echo "📊 构建变量："
+          echo "  提交: $(git rev-parse HEAD)"
+          echo "  日期: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "  摘要: $(git describe --tags --dirty --always)"
+          echo "  分支: $(git rev-parse --abbrev-ref HEAD)"
+
+      - name: 🔨 构建 Go 二进制文件 (${{ matrix.suffix }})
+        run: |
+          echo "🔨 为 ${{ matrix.goos }}/${{ matrix.goarch }} 构建 Go 二进制文件..."
+          
+          # 创建输出目录
+          mkdir -p output
+          
+          # 整理 Go 模块
+          echo "📦 整理 Go 模块..."
+          go mod tidy
+          
+          # 验证 Go 模块
+          go mod verify
+          
+          # 检查主程序入口
+          if [ ! -f "cmd/main.go" ]; then
+            echo "❌ 在 cmd/main.go 未找到主程序"
+            echo "📋 可用的 Go 文件："
+            find . -name "*.go" -type f | head -10
+            exit 1
+          fi
+          
+          # 构建二进制文件（包含前端资源）
+          echo "🔧 构建包含嵌入式前端资源的二进制文件..."
+          
+          # 设置 GOARM 环境变量（如果需要）
+          if [ "${{ matrix.goarm }}" != "" ]; then
+            export GOARM=${{ matrix.goarm }}
+            echo "🔧 设置 GOARM=${{ matrix.goarm }}"
+          fi
+          
+          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build \
+            -ldflags="-s -w \
+                      -X ${{ env.MODULE_NAME }}/configs.Commit=${{ env.VAR_COMMIT }} \
+                      -X ${{ env.MODULE_NAME }}/configs.BuildDate=${{ env.VAR_BUILD_DATE }} \
+                      -X ${{ env.MODULE_NAME }}/configs.GitSummary=${{ env.VAR_GIT_SUMMARY }} \
+                      -X ${{ env.MODULE_NAME }}/configs.GitBranch=${{ env.VAR_GIT_BRANCH }}" \
+            -trimpath \
+            -o output/${{ env.BINARY_NAME }}-${{ matrix.suffix }}${{ matrix.ext }} \
+            ./cmd/main.go
+          
+          # 验证构建结果
+          if [ -f "output/${{ env.BINARY_NAME }}-${{ matrix.suffix }}${{ matrix.ext }}" ]; then
+            echo "✅ 二进制文件构建成功: output/${{ env.BINARY_NAME }}-${{ matrix.suffix }}${{ matrix.ext }}"
+          
+            # 显示文件信息
+            ls -lh output/${{ env.BINARY_NAME }}-${{ matrix.suffix }}${{ matrix.ext }}
+          
+            # 对于非 Windows 平台，显示文件类型
+            if [ "${{ matrix.goos }}" != "windows" ]; then
+              file output/${{ env.BINARY_NAME }}-${{ matrix.suffix }}${{ matrix.ext }} || true
+            fi
+          else
+            echo "❌ 二进制文件构建失败"
+            exit 1
+          fi
+
+      - name: 📦 创建压缩包
+        run: |
+          # 复制整个 etc 目录到输出目录
+          cp -r etc output/
+
+          # 进入输出目录
+          cd output
+
+          # 显示目录结构
+          echo "📋 当前目录结构："
+          find . -type f | sort
+
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            echo "📦 为 Windows 创建 ZIP 压缩包..."
+            zip -9 -r ${{ env.BINARY_NAME }}-${{ matrix.suffix }}.zip \
+              ${{ env.BINARY_NAME }}-${{ matrix.suffix }}${{ matrix.ext }} \
+              etc/
+            echo "✅ 已创建: ${{ env.BINARY_NAME }}-${{ matrix.suffix }}.zip"
+
+            # 验证 ZIP 文件
+            if command -v unzip >/dev/null 2>&1; then
+              echo "🔍 验证 ZIP 压缩包内容..."
+              unzip -l ${{ env.BINARY_NAME }}-${{ matrix.suffix }}.zip
+            fi
+          else
+            echo "📦 为 ${{ matrix.goos }} 创建 TAR.GZ 压缩包..."
+            tar -czf ${{ env.BINARY_NAME }}-${{ matrix.suffix }}.tar.gz \
+              ${{ env.BINARY_NAME }}-${{ matrix.suffix }}${{ matrix.ext }} \
+              etc/
+            echo "✅ 已创建: ${{ env.BINARY_NAME }}-${{ matrix.suffix }}.tar.gz"
+
+            # 验证 TAR.GZ 文件
+            echo "🔍 验证 TAR.GZ 压缩包内容..."
+            tar -tzf ${{ env.BINARY_NAME }}-${{ matrix.suffix }}.tar.gz
+          fi
+
+          # 显示最终文件信息
+          echo "📊 最终压缩包信息："
+          ls -lh ${{ env.BINARY_NAME }}-${{ matrix.suffix }}*
+
+      - name: 📤 上传后端构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary-${{ matrix.suffix }}
+          path: |
+            output/${{ env.BINARY_NAME }}-${{ matrix.suffix }}*
+          retention-days: 1
+          compression-level: 0  # 文件已经压缩过了
+
+  # 创建 GitHub Release
+  release:
+    name: 📋 创建 GitHub 发布
+    runs-on: ubuntu-latest
+    needs: [build-frontend, build-backend]  # 依赖前端和后端构建
+    permissions:
+      contents: write
+
+    steps:
+      - name: 📥 检出代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 📊 生成发布变量
+        id: vars
+        run: |
+          # 获取版本号
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.tag }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/}"
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          
+          # 生成构建信息
+          echo "VAR_COMMIT=$(git rev-parse HEAD)" >> $GITHUB_ENV
+          echo "VAR_BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_ENV
+          echo "VAR_GIT_SUMMARY=$(git describe --tags --dirty --always)" >> $GITHUB_ENV
+          echo "SHORT_COMMIT=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+          
+          # 生成变更日志
+          echo "📝 为 $VERSION 生成变更日志..."
+          if git tag --list | grep -q "^${VERSION}$"; then
+            # 获取上一个标签
+            PREV_TAG=$(git tag --sort=-version:refname | grep -v "^${VERSION}$" | head -n1)
+            if [ -n "$PREV_TAG" ]; then
+              echo "📋 上一个标签: $PREV_TAG"
+              echo "CHANGELOG<<EOF" >> $GITHUB_ENV
+              echo "## 🎉 $VERSION 版本新特性" >> $GITHUB_ENV
+              echo "" >> $GITHUB_ENV
+              echo "### 📝 自 $PREV_TAG 以来的变更" >> $GITHUB_ENV
+              git log --pretty=format:"- %s ([%h](https://github.com/${{ github.repository }}/commit/%H))" $PREV_TAG..$VERSION | head -20 >> $GITHUB_ENV
+              echo "" >> $GITHUB_ENV
+              echo "" >> $GITHUB_ENV
+              echo "### 👥 贡献者" >> $GITHUB_ENV
+              git log --pretty=format:"- %an" $PREV_TAG..$VERSION | sort -u | head -10 >> $GITHUB_ENV
+              echo "" >> $GITHUB_ENV
+              echo "" >> $GITHUB_ENV
+              echo "**完整变更日志**: https://github.com/${{ github.repository }}/compare/$PREV_TAG...$VERSION" >> $GITHUB_ENV
+              echo "EOF" >> $GITHUB_ENV
+            else
+              echo "CHANGELOG=## 🎉 发布 $VERSION" >> $GITHUB_ENV
+            fi
+          else
+            echo "CHANGELOG=## 🎉 发布 $VERSION" >> $GITHUB_ENV
+          fi
+
+      - name: 📥 下载所有构建产物
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: 🔧 整理发布文件
+        run: |
+          echo "🔧 整理发布文件..."
+          
+          # 创建发布目录
+          mkdir -p release-files
+          
+          # 查看下载的文件结构
+          echo "📋 下载的文件结构："
+          find artifacts -type f | sort
+          
+          # 移动所有压缩包到发布目录
+          find artifacts -name "*.tar.gz" -o -name "*.zip" | while read file; do
+            filename=$(basename "$file")
+            echo "📦 移动文件: $filename"
+            cp "$file" "release-files/$filename"
+          done
+          
+          # 验证发布文件
+          echo "📊 准备发布的文件："
+          ls -la release-files/
+          
+          # 生成校验和文件
+          cd release-files
+          echo "🔐 生成校验和..."
+          sha256sum *.tar.gz *.zip > SHA256SUMS 2>/dev/null || true
+          
+          echo "📋 校验和文件内容："
+          cat SHA256SUMS || echo "未生成校验和文件"
+
+      - name: 📋 创建 GitHub 发布
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.VERSION }}
+          name: "${{ env.VERSION }}"
+          body: |
+            ${{ env.CHANGELOG }}
+            
+            ## 📦 下载
+            
+            请根据您的系统选择合适的二进制文件。**所有二进制文件都包含嵌入式 Web 前端。**
+            
+            ### 🐧 Linux 系统
+            - **AMD64 (x86_64)**: [`share-linux-amd64.tar.gz`](https://github.com/${{ github.repository }}/releases/download/${{ env.VERSION }}/share-linux-amd64.tar.gz)
+            - **ARM64 (aarch64)**: [`share-linux-arm64.tar.gz`](https://github.com/${{ github.repository }}/releases/download/${{ env.VERSION }}/share-linux-arm64.tar.gz)
+            - **ARMv7a (32位ARM)**: [`share-linux-armv7a.tar.gz`](https://github.com/${{ github.repository }}/releases/download/${{ env.VERSION }}/share-linux-armv7a.tar.gz)
+            
+            ### 🍎 macOS 系统
+            - **Intel (x86_64)**: [`share-darwin-amd64.tar.gz`](https://github.com/${{ github.repository }}/releases/download/${{ env.VERSION }}/share-darwin-amd64.tar.gz)
+            - **Apple Silicon (ARM64)**: [`share-darwin-arm64.tar.gz`](https://github.com/${{ github.repository }}/releases/download/${{ env.VERSION }}/share-darwin-arm64.tar.gz)
+            
+            ### 🪟 Windows 系统
+            - **AMD64 (x86_64)**: [`share-windows-amd64.zip`](https://github.com/${{ github.repository }}/releases/download/${{ env.VERSION }}/share-windows-amd64.zip)
+            
+            ## 🚀 快速开始
+            
+            ### Linux / macOS 系统
+            ```bash
+            # 下载（请替换为您的平台对应的 URL）
+            curl -L -o share.tar.gz https://github.com/${{ github.repository }}/releases/download/${{ env.VERSION }}/share-linux-amd64.tar.gz
+            
+            # 解压
+            tar -xzf share.tar.gz
+            
+            # 添加执行权限（如果需要）
+            chmod +x share-linux-amd64
+            
+            # 运行（Web 界面将在 http://localhost:12395 可用）
+            ./share-linux-amd64
+          files: |
+            release-files/*

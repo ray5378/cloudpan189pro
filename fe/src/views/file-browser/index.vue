@@ -1,0 +1,476 @@
+<template>
+  <div class="file-browser">
+    <!-- 顶部导航栏 -->
+    <div class="header">
+      <div class="breadcrumb-section">
+        <n-breadcrumb>
+          <n-breadcrumb-item @click="navigateToPath('/')">
+            <n-icon :component="HomeOutline" />
+          </n-breadcrumb-item>
+          <n-breadcrumb-item
+            v-for="(item, index) in breadcrumbs"
+            :key="index"
+            @click="navigateToPath(item.href.replace('/api/file/open', ''))"
+            :clickable="index < breadcrumbs.length - 1"
+          >
+            {{ item.name }}
+          </n-breadcrumb-item>
+        </n-breadcrumb>
+      </div>
+
+      <div class="actions">
+        <!-- 新增：批量删除按钮 -->
+        <n-button v-if="selectedRowKeys.length > 0" type="error" text @click="handleBatchDelete">
+          <template #icon>
+            <n-icon :component="TrashOutline" />
+          </template>
+          删除({{ selectedRowKeys.length }})
+        </n-button>
+
+        <n-divider vertical v-if="selectedRowKeys.length > 0" />
+
+        <n-button text @click="goBack" :disabled="!canGoBack">
+          <template #icon>
+            <n-icon :component="ArrowUndoOutline" />
+          </template>
+          返回上级
+        </n-button>
+        <n-button text @click="goAdmin">
+          <template #icon>
+            <n-icon :component="SettingsOutline" />
+          </template>
+          后台
+        </n-button>
+        <n-button text @click="showSearch = true">
+          <template #icon>
+            <n-icon :component="SearchOutline" />
+          </template>
+          搜索
+        </n-button>
+        <n-button text @click="refreshCurrentPath" :loading="loading">
+          <template #icon>
+            <n-icon :component="RefreshOutline" />
+          </template>
+          刷新
+        </n-button>
+      </div>
+    </div>
+
+    <!-- 加载状态 -->
+    <div v-if="loading" class="loading-container">
+      <n-spin size="large" />
+    </div>
+
+    <!-- 根据isDir判断渲染不同组件 -->
+    <template v-else-if="fileInfo">
+      <!-- 目录：显示文件列表 -->
+      <div v-if="fileInfo.isDir" class="directory-view">
+        <!--
+          修改点：传入 checked-row-keys 和更新事件
+          注意：你需要确保 FileList 组件接收这些 props 并传递给内部的 n-data-table
+        -->
+        <FileList
+          :file-list="fileInfo.children || []"
+          :loading="false"
+          v-model:checked-row-keys="selectedRowKeys"
+          @file-click="handleFileClick"
+          @download="downloadFile"
+        />
+      </div>
+      <!-- 文件：显示文件详情 -->
+      <FileDetail v-else :file-info="fileInfo" :loading="false" />
+    </template>
+
+    <!-- 搜索弹窗 -->
+    <SearchFilesDialog
+      :show="showSearch"
+      :currentDirId="fileInfo && fileInfo.isDir ? fileInfo.id : null"
+      @update:show="(v) => (showSearch = v)"
+      @select="onSearchSelect"
+    />
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import {
+  NButton,
+  NIcon,
+  NBreadcrumb,
+  NBreadcrumbItem,
+  NSpin,
+  NDivider,
+  useMessage,
+  useDialog, // 引入 useDialog
+} from 'naive-ui'
+import {
+  HomeOutline,
+  RefreshOutline,
+  ArrowUndoOutline,
+  SearchOutline,
+  SettingsOutline,
+  TrashOutline, // 引入删除图标
+} from '@vicons/ionicons5'
+import {
+  openFile,
+  createDownloadUrl,
+  batchDeleteFiles, // 引入批量删除API
+  type FileChild,
+  type BreadcrumbItem,
+  type FileOpenResponse,
+  type FileSearchItem,
+} from '@/api/file'
+import { FileList, FileDetail, SearchFilesDialog } from '@/components/file-browser'
+
+const route = useRoute()
+const router = useRouter()
+const message = useMessage()
+const dialog = useDialog() // 初始化 dialog
+
+// 响应式数据
+const loading = ref(false)
+const fileInfo = ref<FileOpenResponse | null>(null)
+const currentPath = ref('/')
+const breadcrumbs = ref<BreadcrumbItem[]>([])
+const showSearch = ref(false)
+// 新增：选中的文件ID列表
+const selectedRowKeys = ref<number[]>([])
+
+// 计算属性
+const canGoBack = computed(() => breadcrumbs.value.length > 0)
+
+// 方法
+const loadPath = (path: string) => {
+  loading.value = true
+  // 切换路径时清空选中状态
+  selectedRowKeys.value = []
+
+  openFile(path)
+    .then((response) => {
+      if (response.code === 200 && response.data) {
+        fileInfo.value = response.data
+        currentPath.value = path
+        breadcrumbs.value = response.data.breadcrumbs || []
+      } else {
+        message.error(response.msg || '加载失败')
+      }
+    })
+    .catch((error) => {
+      console.error('加载文件失败:', error)
+      message.error('加载文件失败')
+    })
+    .finally(() => {
+      loading.value = false
+    })
+}
+
+const handleFileClick = (file: FileChild) => {
+  navigateToPath(file.href)
+}
+
+const navigateToPath = (path: string) => {
+  router.push({
+    path: '/',
+    query: { path: path },
+  })
+}
+
+const refreshCurrentPath = () => {
+  loadPath(currentPath.value)
+}
+
+const goAdmin = () => {
+  router.push({ path: '/@dashboard' })
+}
+
+// 新增：处理批量删除
+const handleBatchDelete = () => {
+  if (selectedRowKeys.value.length === 0) return
+
+  dialog.warning({
+    title: '确认删除',
+    content: `确定要删除选中的 ${selectedRowKeys.value.length} 个文件/文件夹吗？此操作不可恢复。`,
+    positiveText: '确定删除',
+    negativeText: '取消',
+    onPositiveClick: () => {
+      loading.value = true
+      batchDeleteFiles({ ids: selectedRowKeys.value })
+        .then((res) => {
+          if (res.code === 200) {
+            message.success('删除任务已提交')
+            selectedRowKeys.value = [] // 清空选中
+            refreshCurrentPath() // 刷新列表
+          } else {
+            message.error(res.msg || '删除失败')
+          }
+        })
+        .catch((err) => {
+          console.error(err)
+          message.error('删除请求出错')
+        })
+        .finally(() => {
+          loading.value = false
+        })
+    },
+  })
+}
+
+const onSearchSelect = (row: FileSearchItem) => {
+  let targetPath = row.fullPath || '/'
+  if (!row.isDir) {
+    const idx = targetPath.lastIndexOf('/')
+    targetPath = idx > 0 ? targetPath.slice(0, idx) : '/'
+  }
+  showSearch.value = false
+  navigateToPath(targetPath)
+}
+
+const goBack = () => {
+  if (breadcrumbs.value.length > 0) {
+    const parentIndex = breadcrumbs.value.length - 2
+    if (parentIndex >= 0) {
+      const parentPath = breadcrumbs.value[parentIndex].href.replace('/api/file/open', '')
+      navigateToPath(parentPath)
+    } else {
+      navigateToPath('/')
+    }
+  }
+}
+
+const downloadFile = (file: FileChild) => {
+  createDownloadUrl({ fileId: file.id })
+    .then((response) => {
+      if (response.code === 200 && response.data) {
+        const link = document.createElement('a')
+        link.href = response.data.downloadUrl
+        link.download = file.name
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        message.success('开始下载')
+      } else {
+        message.error(response.msg || '创建下载链接失败')
+      }
+    })
+    .catch((error) => {
+      console.error('下载失败:', error)
+      message.error('下载失败')
+    })
+}
+
+// 监听路由变化
+watch(
+  () => route.query.path,
+  (newPath) => {
+    const path = (newPath as string) || '/'
+    currentPath.value = path
+    loadPath(path)
+  },
+  { immediate: true }
+)
+</script>
+
+<style scoped>
+.file-browser {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+  background: var(--n-color-target);
+  min-height: 100vh;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  background: var(--n-card-color);
+  border-radius: 8px;
+  margin-bottom: 20px;
+  border: 1px solid var(--n-border-color);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 6%);
+  backdrop-filter: saturate(180%) blur(2px);
+}
+
+.breadcrumb-section {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  align-items: center; /* 确保垂直居中 */
+}
+
+.file-container {
+  background: var(--n-card-color);
+  border: 1px solid var(--n-border-color);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.list-header {
+  display: grid;
+  grid-template-columns: 1fr 120px 180px 120px;
+  gap: 16px;
+  padding: 12px 20px;
+  background: var(--n-color-hover);
+  border-bottom: 1px solid var(--n-border-color);
+  font-weight: 500;
+  color: var(--n-text-color);
+  font-size: 14px;
+}
+
+.header-item {
+  display: flex;
+  align-items: center;
+}
+
+.header-item:nth-child(2),
+.header-item:nth-child(3),
+.header-item:nth-child(4) {
+  justify-content: center;
+}
+
+.loading-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 60px 20px;
+}
+
+.file-list {
+  min-height: 400px;
+}
+
+.file-item {
+  border-bottom: 1px solid var(--n-divider-color);
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.file-item:hover {
+  background-color: var(--n-color-hover);
+}
+
+.file-item:last-child {
+  border-bottom: none;
+}
+
+.file-info {
+  display: grid;
+  grid-template-columns: 1fr 120px 180px 120px;
+  gap: 16px;
+  padding: 12px 20px;
+  align-items: center;
+}
+
+.file-icon-name {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.file-icon {
+  font-size: 20px;
+  color: var(--n-primary-color);
+  flex-shrink: 0;
+}
+
+.file-name {
+  font-size: 14px;
+  color: var(--n-text-color);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-size {
+  font-size: 14px;
+  color: var(--n-text-color-2);
+  text-align: center;
+}
+
+.file-date {
+  font-size: 14px;
+  color: var(--n-text-color-2);
+  text-align: center;
+}
+
+.file-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+.empty-state {
+  padding: 60px 20px;
+  text-align: center;
+}
+
+.file-preview {
+  padding: 16px 0;
+}
+
+.preview-actions {
+  margin-top: 24px;
+}
+
+/* 响应式设计 */
+@media (width <= 768px) {
+  .file-browser {
+    padding: 12px;
+  }
+
+  .header {
+    flex-direction: column;
+    gap: 12px;
+    align-items: stretch;
+  }
+
+  .actions {
+    justify-content: center;
+  }
+
+  .list-header,
+  .file-info {
+    grid-template-columns: 1fr 80px 100px;
+    gap: 8px;
+    padding: 8px 12px;
+  }
+
+  .file-actions {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .file-date {
+    display: none;
+  }
+}
+
+@media (width <= 480px) {
+  .list-header,
+  .file-info {
+    grid-template-columns: 1fr 60px;
+    gap: 8px;
+  }
+
+  .file-size {
+    display: none;
+  }
+
+  .file-name {
+    font-size: 13px;
+  }
+}
+</style>

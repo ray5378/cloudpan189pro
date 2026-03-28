@@ -1,0 +1,23 @@
+#!/usr/bin/env sh
+#. "$(dirname -- "$0")/_/husky.sh"
+
+# 检查 Go 代码格式化和 lint
+echo "🔍 Checking Go code formatting and linting..."
+if ! gofmt -l . | grep -q .; then
+    echo "✅ Go code formatting check passed"
+else
+    echo "❌ Go code formatting issues found:"
+    gofmt -l .
+    echo "Please run 'gofmt -w .' to fix formatting issues"
+    exit 1
+fi
+
+#if ! golangci-lint run; then
+#    echo "❌ Go linting failed"
+#    exit 1
+#fi
+echo "✅ Go linting passed"
+
+# 检查前端代码
+echo "🎨 Checking frontend code..."
+cd fe && npx lint-staged

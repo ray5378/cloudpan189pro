@@ -1,0 +1,72 @@
+package mediafile
+
+import (
+	"os"
+	"path/filepath"
+
+	"github.com/pkg/errors"
+	"gorm.io/gorm"
+
+	"github.com/xxcheng123/cloudpan189-share/internal/framework/context"
+	"github.com/xxcheng123/cloudpan189-share/internal/repository/models"
+	"github.com/xxcheng123/cloudpan189-share/internal/types/media"
+	"go.uber.org/zap"
+)
+
+func (s *service) WriteStrm(ctx context.Context, car media.WriterCar, fid int64, url string) (int64, error) {
+	// 先检查记录是否存在
+	if _, err := s.QueryStrm(ctx, fid); err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		ctx.Error("查询文件元数据失败", zap.Error(err))
+
+		return 0, err
+	} else if err == nil {
+		if car.GetFileConflictPolicy() == media.FileConflictPolicyReplace {
+			if err = s.DeleteStrm(ctx, fid, car.RootPath()); err != nil {
+				ctx.Error("删除文件失败", zap.Error(err))
+
+				return 0, err
+			}
+		} else {
+			return 0, nil
+		}
+	}
+
+	size := int64(len(url))
+	fullPath := car.GetFullPath()
+	dir := filepath.Dir(fullPath)
+
+	// 确保目录存在
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		ctx.Error("创建目录失败", zap.Error(err), zap.String("dir", dir))
+
+		return 0, err
+	}
+
+	// 写入文件（replace 策略或不存在文件时覆盖写入）
+	if err := os.WriteFile(fullPath, []byte(url), 0o644); err != nil {
+		ctx.Error("写入文件失败", zap.Error(err), zap.String("path", fullPath))
+
+		return 0, err
+	}
+
+	ctx.Debug("写入文件成功", zap.String("path", fullPath))
+
+	file := &models.MediaFile{
+		FID:       fid,
+		Name:      car.GetName(),
+		Path:      car.GetPath(),
+		Size:      size,
+		MediaType: media.TypeStrm,
+		// 考虑删除字段
+		Hash: "-",
+	}
+
+	// 保存文件元数据
+	if err := s.getDB(ctx).Create(file).Error; err != nil {
+		ctx.Error("保存文件元数据失败", zap.Error(err))
+
+		return 0, err
+	}
+
+	return file.ID, nil
+}

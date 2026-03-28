@@ -1,0 +1,177 @@
+name: docker-image
+
+on:
+  push:
+    tags:
+      - 'v*'  # 当推送 v* 标签时触发，如 v1.0.0
+  workflow_dispatch:  # 允许手动触发
+    inputs:
+      tag:
+        description: 'Release tag (e.g., v1.0.0)'
+        required: true
+        type: string
+
+env:
+  APP_NAME: cloudpan189-share
+  DOCKERHUB_REPO: ${{ secrets.DOCKERHUB_USERNAME }}/cloudpan189-share
+  MODULE_NAME: github.com/xxcheng123/cloudpan189-share
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 获取完整的 git 历史，用于生成构建信息
+
+      - name: 🔧 Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: 🔧 Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: 🔑 Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: 📊 Generate build metadata
+        id: meta
+        run: |
+          # 设置版本
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "APP_VERSION=${{ github.event.inputs.tag }}" >> $GITHUB_ENV
+          else
+            echo "APP_VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+          fi
+          
+          # 生成构建信息 - 与 Makefile 保持一致
+          echo "VAR_COMMIT=$(git rev-parse HEAD)" >> $GITHUB_ENV
+          echo "VAR_BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_ENV
+          echo "VAR_GIT_SUMMARY=$(git describe --tags --dirty --always 2>/dev/null || git rev-parse --short HEAD)" >> $GITHUB_ENV
+          echo "VAR_GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)" >> $GITHUB_ENV
+          
+          # 输出构建信息用于调试
+          echo "🔍 Build Information:"
+          echo "  Version: ${APP_VERSION:-${GITHUB_REF#refs/tags/}}"
+          echo "  Commit: $(git rev-parse HEAD)"
+          echo "  Build Date: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "  Git Summary: $(git describe --tags --dirty --always 2>/dev/null || git rev-parse --short HEAD)"
+          echo "  Git Branch: $(git rev-parse --abbrev-ref HEAD)"
+
+      - name: 🏷️ Generate Docker tags
+        id: tags
+        run: |
+          # 生成 Docker 标签
+          TAGS="${{ env.DOCKERHUB_REPO }}:${{ env.APP_VERSION }}"
+          
+          # 检查是否为 alpha 版本
+          if [[ "${{ env.APP_VERSION }}" == *"alpha"* ]]; then
+            # Alpha 版本：添加 alpha 标签，不添加 latest
+            TAGS="${TAGS},${{ env.DOCKERHUB_REPO }}:alpha"
+            echo "🔖 检测到 Alpha 版本，将发布为 alpha 标签"
+          elif [[ "${{ env.APP_VERSION }}" != *"-"* ]]; then
+            # 正式版本：添加 latest 标签
+            TAGS="${TAGS},${{ env.DOCKERHUB_REPO }}:latest"
+            echo "🔖 检测到正式版本，将发布为 latest 标签"
+          else
+            # 其他预发布版本：不添加额外标签
+            echo "🔖 检测到预发布版本，仅使用版本标签"
+          fi
+          
+          echo "TAGS=${TAGS}" >> $GITHUB_ENV
+          echo "Generated tags: ${TAGS}"
+
+      - name: 🔨 Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          build-args: |
+            MODULE_NAME=${{ env.MODULE_NAME }}
+            VAR_COMMIT=${{ env.VAR_COMMIT }}
+            VAR_BUILD_DATE=${{ env.VAR_BUILD_DATE }}
+            VAR_GIT_SUMMARY=${{ env.VAR_GIT_SUMMARY }}
+            VAR_GIT_BRANCH=${{ env.VAR_GIT_BRANCH }}
+          tags: ${{ env.TAGS }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: 🔍 Inspect multi-arch image
+        run: |
+          echo "🔍 检查多架构镜像信息..."
+          docker buildx imagetools inspect ${{ env.DOCKERHUB_REPO }}:${{ env.APP_VERSION }}
+
+      - name: 📋 Docker Image Info
+        run: |
+          echo "🎉 Docker 镜像构建完成！"
+          echo ""
+          echo "📦 镜像标签:"
+          echo "  - ${{ env.DOCKERHUB_REPO }}:${{ env.APP_VERSION }}"
+          if [[ "${{ env.APP_VERSION }}" == *"alpha"* ]]; then
+            echo "  - ${{ env.DOCKERHUB_REPO }}:alpha"
+          elif [[ "${{ env.APP_VERSION }}" != *"-"* ]]; then
+            echo "  - ${{ env.DOCKERHUB_REPO }}:latest"
+          fi
+          echo ""
+          echo "🏗️ 支持的架构:"
+          echo "  - linux/amd64"
+          echo "  - linux/arm64"
+          echo ""
+          echo "📋 构建信息:"
+          echo "  - Commit: ${{ env.VAR_COMMIT }}"
+          echo "  - Build Date: ${{ env.VAR_BUILD_DATE }}"
+          echo "  - Git Summary: ${{ env.VAR_GIT_SUMMARY }}"
+          echo "  - Git Branch: ${{ env.VAR_GIT_BRANCH }}"
+          echo ""
+          echo "🚀 使用方法:"
+          echo ""
+          # 根据版本类型显示不同的使用示例
+          if [[ "${{ env.APP_VERSION }}" == *"alpha"* ]]; then
+            echo "# Alpha 版本运行 (测试用途)"
+            echo "docker run -d \\"
+            echo "  --name ${{ env.APP_NAME }}-alpha \\"
+            echo "  -p 12395:12395 \\"
+            echo "  -v \$(pwd)/data:/app/data \\"
+            echo "  --restart unless-stopped \\"
+            echo "  ${{ env.DOCKERHUB_REPO }}:alpha"
+            echo ""
+            echo "# 指定版本运行"
+            echo "docker run -d ${{ env.DOCKERHUB_REPO }}:${{ env.APP_VERSION }}"
+          else
+            echo "# 基本运行"
+            echo "docker run -d \\"
+            echo "  --name ${{ env.APP_NAME }} \\"
+            echo "  -p 12395:12395 \\"
+            echo "  -v \$(pwd)/data:/app/data \\"
+            echo "  --restart unless-stopped \\"
+            if [[ "${{ env.APP_VERSION }}" != *"-"* ]]; then
+              echo "  ${{ env.DOCKERHUB_REPO }}:latest"
+            else
+              echo "  ${{ env.DOCKERHUB_REPO }}:${{ env.APP_VERSION }}"
+            fi
+            echo ""
+            echo "# 指定架构运行"
+            if [[ "${{ env.APP_VERSION }}" != *"-"* ]]; then
+              echo "docker run --platform linux/arm64 -d ${{ env.DOCKERHUB_REPO }}:latest"
+            else
+              echo "docker run --platform linux/arm64 -d ${{ env.DOCKERHUB_REPO }}:${{ env.APP_VERSION }}"
+            fi
+          fi
+          echo ""
+          echo "# Docker Compose 示例"
+          echo "version: '3.8'"
+          echo "services:"
+          echo "  cloudpan189-share:"
+          echo "    image: ${{ env.DOCKERHUB_REPO }}:${{ env.APP_VERSION }}"
+          echo "    container_name: ${{ env.APP_NAME }}"
+          echo "    ports:"
+          echo "      - \"12395:12395\""
+          echo "    volumes:"
+          echo "      - ./data:/app/data"
+          echo "    restart: unless-stopped"
+          echo "    environment:"
+          echo "      - TZ=Asia/Shanghai"

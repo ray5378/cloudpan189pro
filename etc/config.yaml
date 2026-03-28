@@ -1,0 +1,4 @@
+port: 12395
+dbFile: "data/data.db"
+logFile: "logs/share.log"
+mediaDir: "media_dir"

@@ -1,0 +1,4714 @@
+definitions:
+  advance.getFamilyFilesResponse:
+    properties:
+      currentPage:
+        type: integer
+      data:
+        items:
+          $ref: '#/definitions/cloudbridge.FileNode'
+        type: array
+      pageSize:
+        type: integer
+      total:
+        type: integer
+    type: object
+  advance.getPersonFilesResponse:
+    properties:
+      currentPage:
+        type: integer
+      data:
+        items:
+          $ref: '#/definitions/cloudbridge.FileNode'
+        type: array
+      pageSize:
+        type: integer
+      total:
+        type: integer
+    type: object
+  advance.getSubscribeUserResponse:
+    properties:
+      currentPage:
+        type: integer
+      data:
+        items:
+          $ref: '#/definitions/cloudbridge.ShareResourceInfo'
+        type: array
+      name:
+        example: 订阅用户
+        type: string
+      pageSize:
+        type: integer
+      total:
+        type: integer
+    type: object
+  autoingest.LogLevel:
+    enum:
+    - info
+    - warn
+    - error
+    type: string
+    x-enum-varnames:
+    - LogLevelInfo
+    - LogLevelWarn
+    - LogLevelError
+  autoingest.OnConflict:
+    enum:
+    - rename
+    - abandon
+    type: string
+    x-enum-varnames:
+    - OnConflictRename
+    - OnConflictAbandon
+  autoingest.SourceType:
+    enum:
+    - subscribe
+    type: string
+    x-enum-varnames:
+    - SourceTypeSubscribe
+  autoingest.createSubscribePlanRequest:
+    properties:
+      autoIngestInterval:
+        description: 单位分钟
+        example: 30
+        minimum: 5
+        type: integer
+      cloudToken:
+        type: integer
+      name:
+        example: 订阅计划A
+        maxLength: 255
+        type: string
+      onConflict:
+        description: 冲突时的解决策略
+        enum:
+        - rename
+        - abandon
+        example: rename
+        type: string
+      oneClickAddHistory:
+        description: 是否一键添加之前的
+        example: true
+        type: boolean
+      parentPath:
+        example: /Movies
+        type: string
+      refreshStrategy:
+        $ref: '#/definitions/autoingest.refreshStrategyRequest'
+      upUserId:
+        description: 上传用户ID
+        example: "123456"
+        type: string
+    required:
+    - name
+    - parentPath
+    - upUserId
+    type: object
+  autoingest.createSubscribePlanResponse:
+    properties:
+      id:
+        example: 1
+        type: integer
+    type: object
+  autoingest.deletePlanRequest:
+    properties:
+      id:
+        example: 1
+        minimum: 1
+        type: integer
+    required:
+    - id
+    type: object
+  autoingest.disablePlanRequest:
+    properties:
+      id:
+        example: 1
+        minimum: 1
+        type: integer
+    required:
+    - id
+    type: object
+  autoingest.enablePlanRequest:
+    properties:
+      id:
+        example: 1
+        minimum: 1
+        type: integer
+    required:
+    - id
+    type: object
+  autoingest.logDTO:
+    properties:
+      content:
+        type: string
+      createdAt:
+        type: string
+      id:
+        type: integer
+      level:
+        $ref: '#/definitions/autoingest.LogLevel'
+      planId:
+        type: integer
+      planName:
+        type: string
+      updatedAt:
+        type: string
+    type: object
+  autoingest.logListResponse:
+    properties:
+      currentPage:
+        description: 当前页码
+        example: 1
+        type: integer
+      data:
+        description: 日志列表数据
+        items:
+          $ref: '#/definitions/autoingest.logDTO'
+        type: array
+      pageSize:
+        description: 每页大小
+        example: 10
+        type: integer
+      total:
+        description: 总记录数
+        example: 100
+        type: integer
+    type: object
+  autoingest.planListResponse:
+    properties:
+      currentPage:
+        description: 当前页码
+        example: 1
+        type: integer
+      data:
+        description: 计划列表数据
+        items:
+          $ref: '#/definitions/models.AutoIngestPlan'
+        type: array
+      pageSize:
+        description: 每页大小
+        example: 10
+        type: integer
+      total:
+        description: 总记录数
+        example: 100
+        type: integer
+    type: object
+  autoingest.refreshPlanRequest:
+    properties:
+      planId:
+        example: 1
+        type: integer
+    required:
+    - planId
+    type: object
+  autoingest.refreshStrategyRequest:
+    properties:
+      autoRefreshDays:
+        example: 7
+        minimum: 1
+        type: integer
+      enableAutoRefresh:
+        example: false
+        type: boolean
+      enableDeepRefresh:
+        example: false
+        type: boolean
+      refreshInterval:
+        description: 单位分钟，最小30
+        example: 30
+        minimum: 30
+        type: integer
+    type: object
+  autoingest.refreshStrategyUpdateRequest:
+    properties:
+      autoRefreshDays:
+        example: 7
+        minimum: 1
+        type: integer
+      enableAutoRefresh:
+        example: false
+        type: boolean
+      enableDeepRefresh:
+        example: false
+        type: boolean
+      refreshInterval:
+        description: 单位分钟，最小30
+        example: 30
+        minimum: 30
+        type: integer
+    type: object
+  autoingest.updatePlanRequest:
+    properties:
+      autoIngestInterval:
+        description: 单位分钟
+        example: 30
+        minimum: 5
+        type: integer
+      id:
+        example: 1
+        minimum: 1
+        type: integer
+      name:
+        example: 订阅计划A
+        maxLength: 255
+        type: string
+      onConflict:
+        description: 冲突时的解决策略
+        enum:
+        - rename
+        - abandon
+        example: rename
+        type: string
+      parentPath:
+        example: /Movies
+        type: string
+      refreshStrategy:
+        $ref: '#/definitions/autoingest.refreshStrategyUpdateRequest'
+      tokenId:
+        type: integer
+    required:
+    - id
+    type: object
+  client.FamilyInfo:
+    properties:
+      count:
+        type: integer
+      createTime:
+        type: string
+      expireTime:
+        type: string
+      familyId:
+        type: string
+      remarkName:
+        type: string
+      type:
+        type: integer
+      useFlag:
+        type: integer
+      userRole:
+        type: integer
+    type: object
+  cloudbridge.FileNode:
+    properties:
+      id:
+        type: string
+      isFolder:
+        type: integer
+      name:
+        type: string
+      parentId:
+        type: string
+    type: object
+  cloudbridge.GetFamilyListResponse:
+    properties:
+      familyInfoResp:
+        items:
+          $ref: '#/definitions/client.FamilyInfo'
+        type: array
+    type: object
+  cloudbridge.ShareInfo:
+    properties:
+      accessCode:
+        type: string
+      id:
+        type: string
+      isFolder:
+        type: boolean
+      name:
+        type: string
+      shareId:
+        type: integer
+      shareTime:
+        type: string
+    type: object
+  cloudbridge.ShareResourceInfo:
+    properties:
+      accessCode:
+        type: string
+      id:
+        type: string
+      isFolder:
+        type: boolean
+      isTop:
+        type: integer
+      name:
+        type: string
+      shareId:
+        type: integer
+      shareTime:
+        type: string
+      userId:
+        type: string
+    type: object
+  cloudtoken.checkQrcodeRequest:
+    properties:
+      id:
+        description: 云盘令牌ID，可选
+        example: 1
+        type: integer
+      uuid:
+        description: 二维码UUID
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+    required:
+    - uuid
+    type: object
+  cloudtoken.deleteRequest:
+    properties:
+      id:
+        description: 云盘令牌ID
+        example: 1
+        type: integer
+    required:
+    - id
+    type: object
+  cloudtoken.listResponse:
+    properties:
+      currentPage:
+        description: 当前页码
+        example: 1
+        type: integer
+      data:
+        description: 云盘令牌列表数据
+        items:
+          $ref: '#/definitions/models.CloudToken'
+        type: array
+      pageSize:
+        description: 每页大小
+        example: 10
+        type: integer
+      total:
+        description: 总记录数
+        example: 100
+        type: integer
+    type: object
+  cloudtoken.modifyNameRequest:
+    properties:
+      id:
+        description: 云盘令牌ID
+        example: 1
+        type: integer
+      name:
+        description: 新名称
+        example: 新名称
+        type: string
+    required:
+    - id
+    - name
+    type: object
+  cloudtoken.usernameLoginRequest:
+    properties:
+      id:
+        description: 云盘令牌ID，可选
+        example: 1
+        type: integer
+      name:
+        description: 令牌名称，可选
+        example: 云盘令牌
+        type: string
+      password:
+        description: 密码，添加时必填
+        example: 密码
+        type: string
+      username:
+        description: 用户名，添加时必填
+        example: 用户名
+        type: string
+    type: object
+  file.breadcrumbItem:
+    properties:
+      href:
+        type: string
+      name:
+        type: string
+    type: object
+  file.childDTO:
+    properties:
+      addition:
+        allOf:
+        - $ref: '#/definitions/github_com_xxcheng123_cloudpan189-share_internal_pkgs_datatypes.JSONMap'
+        description: 额外信息 例如分享id 文件夹id 等
+      apiPath:
+        type: string
+      cloudId:
+        description: 云端的文件ID
+        type: string
+      createDate:
+        description: 云盘记录的创建时间
+        type: string
+      createdAt:
+        description: 数据库记录的创建时间
+        type: string
+      hash:
+        description: 文件的hash值 这个没有啥用 考虑是否删除
+        type: string
+      href:
+        type: string
+      id:
+        type: integer
+      isDir:
+        description: 是否为目录
+        type: boolean
+      isTop:
+        description: 是否最顶层文件夹
+        type: boolean
+      modifyDate:
+        description: 云盘记录的修改时间
+        type: string
+      name:
+        description: 文件名
+        type: string
+      osType:
+        allOf:
+        - $ref: '#/definitions/models.OsType'
+        description: 读取文件的方式
+      parentId:
+        description: 上级文件ID
+        type: integer
+      rev:
+        description: 版本 用于下次扫描时知道当前文件是删除还是修改还是新增
+        type: string
+      size:
+        description: 文件大小
+        type: integer
+      topId:
+        description: 隶属于的挂载点ID（便于快速删除和查询） 如果本身是挂载点，那么 top_id = id
+        type: integer
+      updatedAt:
+        description: 数据库记录的修改时间
+        type: string
+    type: object
+  file.createDownloadURLRequest:
+    properties:
+      fileId:
+        example: 123456
+        minimum: 1
+        type: integer
+    required:
+    - fileId
+    type: object
+  file.createDownloadURLResponse:
+    properties:
+      downloadUrl:
+        example: /api/file/download/123456?sign=abc&uuid=def&timestamp=1234567890&signer=v1
+        type: string
+    type: object
+  file.openResponse:
+    properties:
+      addition:
+        allOf:
+        - $ref: '#/definitions/github_com_xxcheng123_cloudpan189-share_internal_pkgs_datatypes.JSONMap'
+        description: 额外信息 例如分享id 文件夹id 等
+      apiPath:
+        type: string
+      breadcrumbs:
+        items:
+          $ref: '#/definitions/file.breadcrumbItem'
+        type: array
+      children:
+        items:
+          $ref: '#/definitions/file.childDTO'
+        type: array
+      childrenTotal:
+        type: integer
+      cloudId:
+        description: 云端的文件ID
+        type: string
+      createDate:
+        description: 云盘记录的创建时间
+        type: string
+      createdAt:
+        description: 数据库记录的创建时间
+        type: string
+      hash:
+        description: 文件的hash值 这个没有啥用 考虑是否删除
+        type: string
+      href:
+        type: string
+      id:
+        type: integer
+      isDir:
+        description: 是否为目录
+        type: boolean
+      isTop:
+        description: 是否最顶层文件夹
+        type: boolean
+      modifyDate:
+        description: 云盘记录的修改时间
+        type: string
+      name:
+        description: 文件名
+        type: string
+      osType:
+        allOf:
+        - $ref: '#/definitions/models.OsType'
+        description: 读取文件的方式
+      parentId:
+        description: 上级文件ID
+        type: integer
+      rev:
+        description: 版本 用于下次扫描时知道当前文件是删除还是修改还是新增
+        type: string
+      size:
+        description: 文件大小
+        type: integer
+      topId:
+        description: 隶属于的挂载点ID（便于快速删除和查询） 如果本身是挂载点，那么 top_id = id
+        type: integer
+      updatedAt:
+        description: 数据库记录的修改时间
+        type: string
+    type: object
+  file.searchDTO:
+    properties:
+      addition:
+        allOf:
+        - $ref: '#/definitions/github_com_xxcheng123_cloudpan189-share_internal_pkgs_datatypes.JSONMap'
+        description: 额外信息 例如分享id 文件夹id 等
+      cloudId:
+        description: 云端的文件ID
+        type: string
+      createDate:
+        description: 云盘记录的创建时间
+        type: string
+      createdAt:
+        description: 数据库记录的创建时间
+        type: string
+      fullPath:
+        description: 文件完整路径
+        example: /folder1/test.txt
+        type: string
+      hash:
+        description: 文件的hash值 这个没有啥用 考虑是否删除
+        type: string
+      id:
+        type: integer
+      isDir:
+        description: 是否为目录
+        type: boolean
+      isTop:
+        description: 是否最顶层文件夹
+        type: boolean
+      modifyDate:
+        description: 云盘记录的修改时间
+        type: string
+      name:
+        description: 文件名
+        type: string
+      osType:
+        allOf:
+        - $ref: '#/definitions/models.OsType'
+        description: 读取文件的方式
+      parentId:
+        description: 上级文件ID
+        type: integer
+      rev:
+        description: 版本 用于下次扫描时知道当前文件是删除还是修改还是新增
+        type: string
+      size:
+        description: 文件大小
+        type: integer
+      topId:
+        description: 隶属于的挂载点ID（便于快速删除和查询） 如果本身是挂载点，那么 top_id = id
+        type: integer
+      updatedAt:
+        description: 数据库记录的修改时间
+        type: string
+    type: object
+  file.searchResponse:
+    properties:
+      currentPage:
+        description: 当前页码
+        example: 1
+        type: integer
+      data:
+        description: 搜索结果列表
+        items:
+          $ref: '#/definitions/file.searchDTO'
+        type: array
+      pageSize:
+        description: 每页大小
+        example: 10
+        type: integer
+      total:
+        description: 总记录数
+        example: 100
+        type: integer
+    type: object
+  github_com_xxcheng123_cloudpan189-share_internal_handler_http_cloudtoken.InitQrcodeResponse:
+    properties:
+      uuid:
+        description: 二维码UUID
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+    type: object
+  github_com_xxcheng123_cloudpan189-share_internal_pkgs_datatypes.JSONMap:
+    additionalProperties: true
+    type: object
+  github_com_xxcheng123_cloudpan189-share_internal_services_cloudtoken.UsernameLoginResponse:
+    properties:
+      id:
+        description: 云盘令牌ID
+        example: 1
+        type: integer
+    type: object
+  httpcontext.Response:
+    properties:
+      code:
+        example: 200
+        type: integer
+      data: {}
+      msg:
+        example: success
+        type: string
+    type: object
+  loginlog.Event:
+    enum:
+    - login
+    - refresh_token
+    type: string
+    x-enum-varnames:
+    - EventLogin
+    - EventRefreshToken
+  loginlog.Method:
+    enum:
+    - web
+    - api
+    - app
+    - cli
+    type: string
+    x-enum-varnames:
+    - MethodWeb
+    - MethodAPI
+    - MethodApp
+    - MethodCLI
+  loginlog.Status:
+    enum:
+    - success
+    - failed
+    - blocked
+    type: string
+    x-enum-varnames:
+    - StatusSuccess
+    - StatusFailed
+    - StatusBlocked
+  loginlog.listResponse:
+    properties:
+      currentPage:
+        description: 当前页码
+        example: 1
+        type: integer
+      data:
+        description: 登录日志列表数据
+        items:
+          $ref: '#/definitions/models.LoginLog'
+        type: array
+      pageSize:
+        description: 每页大小
+        example: 10
+        type: integer
+      total:
+        description: 总记录数
+        example: 100
+        type: integer
+    type: object
+  media.FileConflictPolicy:
+    enum:
+    - skip
+    - replace
+    type: string
+    x-enum-varnames:
+    - FileConflictPolicySkip
+    - FileConflictPolicyReplace
+  media.configInfoResponse:
+    properties:
+      config:
+        $ref: '#/definitions/models.MediaConfig'
+      initialized:
+        type: boolean
+    type: object
+  media.configInitRequest:
+    properties:
+      autoClean:
+        example: true
+        type: boolean
+      baseURL:
+        example: http://localhost:12395
+        type: string
+      conflictPolicy:
+        allOf:
+        - $ref: '#/definitions/media.FileConflictPolicy'
+        enum:
+        - skip
+        - replace
+        example: skip
+      enable:
+        example: false
+        type: boolean
+      includedSuffixes:
+        example:
+        - '[''.mp4'''
+        - '''.mkv'''
+        - '''.avi'']'
+        items:
+          type: string
+        type: array
+      storagePath:
+        example: /opt/media
+        type: string
+    required:
+    - autoClean
+    - baseURL
+    - storagePath
+    type: object
+  media.configToggleRequest:
+    properties:
+      enable:
+        example: true
+        type: boolean
+    type: object
+  media.configUpdateRequest:
+    properties:
+      autoClean:
+        example: true
+        type: boolean
+      baseURL:
+        example: http://localhost:12395
+        type: string
+      conflictPolicy:
+        allOf:
+        - $ref: '#/definitions/media.FileConflictPolicy'
+        enum:
+        - skip
+        - replace
+        example: skip
+      enable:
+        example: false
+        type: boolean
+      includedSuffixes:
+        example:
+        - '[''.mp4'''
+        - '''.mkv'''
+        - '''.avi'']'
+        items:
+          type: string
+        type: array
+      storagePath:
+        example: /opt/media
+        type: string
+    type: object
+  models.AutoIngestPlan:
+    properties:
+      addCount:
+        description: 新增挂载数
+        type: integer
+      addition:
+        $ref: '#/definitions/github_com_xxcheng123_cloudpan189-share_internal_pkgs_datatypes.JSONMap'
+      autoIngestInterval:
+        description: 单位分钟
+        type: integer
+      createdAt:
+        type: string
+      enabled:
+        type: boolean
+      failedCount:
+        description: 失败挂载数
+        type: integer
+      id:
+        type: integer
+      name:
+        type: string
+      offset:
+        description: 偏移量
+        type: integer
+      onConflict:
+        allOf:
+        - $ref: '#/definitions/autoingest.OnConflict'
+        description: 冲突处理策略
+      parentPath:
+        description: 父目录路径
+        type: string
+      refreshStrategy:
+        $ref: '#/definitions/models.RefreshStrategy'
+      sourceType:
+        $ref: '#/definitions/autoingest.SourceType'
+      tokenId:
+        type: integer
+      updatedAt:
+        type: string
+    type: object
+  models.CloudToken:
+    properties:
+      accessToken:
+        type: string
+      addition:
+        description: 附属参数
+        type: object
+      createdAt:
+        type: string
+      expiresIn:
+        type: integer
+      id:
+        type: integer
+      loginType:
+        description: '1: 扫码登录 2: 密码登录'
+        type: integer
+      name:
+        type: string
+      status:
+        description: '状态 1:正常 2: 登录失败'
+        type: integer
+      updatedAt:
+        type: string
+      username:
+        type: string
+    type: object
+  models.FileTaskLog:
+    properties:
+      addition:
+        allOf:
+        - $ref: '#/definitions/github_com_xxcheng123_cloudpan189-share_internal_pkgs_datatypes.JSONMap'
+        description: 附加信息
+      beginAt:
+        description: 开始时间
+        type: string
+      completed:
+        description: 进度显示
+        type: integer
+      createdAt:
+        type: string
+      desc:
+        type: string
+      duration:
+        description: 执行耗时（毫秒）
+        type: integer
+      endAt:
+        description: 结束时间
+        type: string
+      errorMsg:
+        description: 错误信息
+        type: string
+      fileId:
+        description: 关联信息
+        type: integer
+      id:
+        type: integer
+      result:
+        description: 执行结果描述
+        type: string
+      status:
+        description: 状态：pending, running, completed, failed
+        type: string
+      title:
+        description: 任务标题
+        type: string
+      total:
+        description: 总数量
+        type: integer
+      type:
+        description: 任务类型（如：file_refresh, file_scan等）
+        type: string
+      updatedAt:
+        type: string
+      userId:
+        description: 触发用户ID（如果适用）
+        type: integer
+    type: object
+  models.LoginLog:
+    properties:
+      addr:
+        type: string
+      createdAt:
+        type: string
+      event:
+        $ref: '#/definitions/loginlog.Event'
+      id:
+        type: integer
+      location:
+        type: string
+      method:
+        $ref: '#/definitions/loginlog.Method'
+      reason:
+        type: string
+      status:
+        $ref: '#/definitions/loginlog.Status'
+      traceId:
+        type: string
+      updatedAt:
+        type: string
+      userAgent:
+        type: string
+      userId:
+        type: integer
+      username:
+        type: string
+    type: object
+  models.MediaConfig:
+    properties:
+      autoClean:
+        description: AutoClean 自动清理空文件夹 文件删除后自动检查是否为空文件夹
+        type: boolean
+      baseURL:
+        type: string
+      conflictPolicy:
+        allOf:
+        - $ref: '#/definitions/media.FileConflictPolicy'
+        description: ConflictPolicy 冲突策略 跳过/替换
+      createdAt:
+        type: string
+      enable:
+        type: boolean
+      id:
+        type: integer
+      includedSuffixes:
+        description: IncludedSuffixes 包括的后缀格式 不包括的将过滤 如果为空则表示不过滤
+        items:
+          type: string
+        type: array
+      storagePath:
+        description: StoragePath StoragePath 落盘根路径
+        type: string
+      updatedAt:
+        type: string
+    type: object
+  models.OsType:
+    enum:
+    - folder
+    - file
+    - subscribe
+    - subscribe_share_folder
+    - subscribe_share_file
+    - share_folder
+    - share_file
+    - person_folder
+    - person_file
+    - family_folder
+    - family_file
+    type: string
+    x-enum-varnames:
+    - OsTypeFolder
+    - OsTypeFile
+    - OsTypeSubscribe
+    - OsTypeSubscribeShareFolder
+    - OsTypeSubscribeShareFile
+    - OsTypeShareFolder
+    - OsTypeShareFile
+    - OsTypePersonFolder
+    - OsTypePersonFile
+    - OsTypeFamilyFolder
+    - OsTypeFamilyFile
+  models.RefreshStrategy:
+    properties:
+      autoRefreshDays:
+        type: integer
+      enableAutoRefresh:
+        type: boolean
+      enableDeepRefresh:
+        type: boolean
+      refreshInterval:
+        type: integer
+    type: object
+  models.SettingAddition:
+    properties:
+      localProxy:
+        type: boolean
+      multipleStream:
+        type: boolean
+      multipleStreamChunkSize:
+        type: integer
+      multipleStreamThreadCount:
+        type: integer
+      taskThreadCount:
+        type: integer
+    type: object
+  models.User:
+    properties:
+      createdAt:
+        type: string
+      groupId:
+        type: integer
+      id:
+        type: integer
+      isAdmin:
+        type: boolean
+      status:
+        type: integer
+      updatedAt:
+        type: string
+      username:
+        type: string
+      version:
+        type: integer
+    type: object
+  setting.infoResponse:
+    properties:
+      baseURL:
+        type: string
+      enableAuth:
+        type: boolean
+      initialized:
+        type: boolean
+      runTime:
+        description: 运行时间 单位 s
+        type: integer
+      runTimeHuman:
+        description: 运行时间 格式 例如：1年2月3天4小时5分6秒
+        type: string
+      title:
+        type: string
+    type: object
+  setting.initSystemRequest:
+    properties:
+      baseURL:
+        description: 系统基础URL
+        example: https://example.com
+        type: string
+      enableAuth:
+        description: 是否启用认证
+        example: true
+        type: boolean
+      superPassword:
+        description: 超级管理员密码，长度6-20位
+        example: "123456"
+        maxLength: 20
+        minLength: 6
+        type: string
+      superUsername:
+        description: 超级管理员用户名，长度3-20位
+        example: admin
+        maxLength: 20
+        minLength: 3
+        type: string
+      title:
+        description: 系统标题
+        example: 我的云盘系统
+        type: string
+    required:
+    - baseURL
+    - enableAuth
+    - superPassword
+    - superUsername
+    - title
+    type: object
+  setting.modifyAdditionRequest:
+    properties:
+      localProxy:
+        description: 是否启用本地代理（可选）
+        example: false
+        type: boolean
+      multipleStream:
+        description: 是否启用多线程分流（可选）
+        example: true
+        type: boolean
+      multipleStreamChunkSize:
+        description: 分片大小，单位字节（可选，>=1MiB）
+        example: 4194304
+        minimum: 1048576
+        type: integer
+      multipleStreamThreadCount:
+        description: 多线程数量（可选）
+        example: 4
+        maximum: 64
+        minimum: 1
+        type: integer
+      taskThreadCount:
+        description: 任务线程数量（可选）
+        example: 1
+        maximum: 32
+        minimum: 1
+        type: integer
+    type: object
+  setting.modifyBaseURLRequest:
+    properties:
+      baseURL:
+        description: 系统基础URL
+        example: https://example.com
+        maxLength: 255
+        type: string
+    required:
+    - baseURL
+    type: object
+  setting.modifyTitleRequest:
+    properties:
+      title:
+        description: 系统标题
+        example: 我的云盘系统
+        maxLength: 255
+        minLength: 1
+        type: string
+    required:
+    - title
+    type: object
+  setting.toggleEnableAuthRequest:
+    properties:
+      enableAuth:
+        description: 是否启用鉴权
+        example: true
+        type: boolean
+    type: object
+  storage.addRequest:
+    properties:
+      autoRefreshDays:
+        example: 7
+        maximum: 365
+        minimum: 1
+        type: integer
+      cloudToken:
+        example: 1
+        type: integer
+      enableAutoRefresh:
+        example: true
+        type: boolean
+      enableDeepRefresh:
+        example: true
+        type: boolean
+      familyId:
+        example: family123
+        type: string
+      fileId:
+        example: file123
+        type: string
+      localPath:
+        example: /test
+        type: string
+      osType:
+        enum:
+        - subscribe
+        - subscribe_share_folder
+        - share_folder
+        - person_folder
+        - family_folder
+        example: subscribe
+        type: string
+      refreshInterval:
+        example: 3600
+        maximum: 1440
+        minimum: 30
+        type: integer
+      shareAccessCode:
+        example: "1234"
+        type: string
+      shareCode:
+        example: abc123
+        type: string
+      subscribeUser:
+        example: user123
+        type: string
+    required:
+    - localPath
+    - osType
+    type: object
+  storage.addResponse:
+    properties:
+      id:
+        description: 存储ID
+        example: 1001
+        type: integer
+      path:
+        description: 存储路径
+        example: /test
+        type: string
+    type: object
+  storage.batchDeleteRequest:
+    properties:
+      ids:
+        items:
+          type: integer
+        minItems: 1
+        type: array
+    required:
+    - ids
+    type: object
+  storage.deleteRequest:
+    properties:
+      id:
+        description: 存储节点ID
+        example: 1
+        type: integer
+    required:
+    - id
+    type: object
+  storage.listResponse:
+    properties:
+      currentPage:
+        description: 当前页码
+        example: 1
+        type: integer
+      data:
+        description: 列表数据
+        items:
+          $ref: '#/definitions/storage.storageDTO'
+        type: array
+      pageSize:
+        description: 每页大小
+        example: 10
+        type: integer
+      total:
+        description: 总记录数
+        example: 100
+        type: integer
+    type: object
+  storage.modifyTokenRequest:
+    properties:
+      id:
+        description: 挂载点ID
+        example: 1001
+        type: integer
+      tokenId:
+        description: 新的令牌ID
+        example: 123
+        type: integer
+    required:
+    - id
+    type: object
+  storage.refreshRequest:
+    properties:
+      deep:
+        description: 深度刷新
+        example: true
+        type: boolean
+      id:
+        description: 挂载点ID
+        example: 1001
+        type: integer
+    required:
+    - id
+    type: object
+  storage.selectItem:
+    properties:
+      id:
+        description: fileId
+        example: 123
+        type: integer
+      name:
+        description: 展示名称（挂载点名称）
+        example: 我的挂载点
+        type: string
+      path:
+        description: 完整路径
+        example: /path/aaa
+        type: string
+    type: object
+  storage.storageDTO:
+    properties:
+      autoRefreshBeginAt:
+        type: string
+      autoRefreshDays:
+        type: integer
+      createdAt:
+        type: string
+      enableAutoRefresh:
+        type: boolean
+      enableDeepRefresh:
+        type: boolean
+      fileCount:
+        type: integer
+      fileId:
+        type: integer
+      fullPath:
+        type: string
+      id:
+        type: integer
+      isInAutoRefreshPeriod:
+        description: 是否在自动刷新时间范围内
+        type: boolean
+      lastState:
+        type: string
+      name:
+        type: string
+      osType:
+        type: string
+      refreshInterval:
+        type: integer
+      taskLogs:
+        items:
+          $ref: '#/definitions/models.FileTaskLog'
+        type: array
+      tokenId:
+        description: 关联的token id
+        type: integer
+      tokenName:
+        type: string
+      updatedAt:
+        type: string
+    type: object
+  storage.toggleAutoRefreshRequest:
+    properties:
+      autoRefreshDays:
+        description: 自动刷新持续天数，单位天，最小值1，最大值365
+        example: 7
+        maximum: 365
+        minimum: 1
+        type: integer
+      enableAutoRefresh:
+        description: 是否启用自动刷新
+        example: true
+        type: boolean
+      enableDeepRefresh:
+        description: 是否启用深度刷新
+        example: false
+        type: boolean
+      id:
+        description: 挂载点ID
+        example: 1
+        type: integer
+      refreshBeginAt:
+        description: 自动刷新开始时间，格式：yyyy-MM-dd HH:mm:ss，默认为当前时间
+        example: "2023-01-01"
+        type: string
+      refreshInterval:
+        description: 刷新间隔，单位分钟，最小值30，最大值1440
+        example: 30
+        maximum: 1440
+        minimum: 30
+        type: integer
+    required:
+    - id
+    type: object
+  taskengine.ProcessorResult:
+    properties:
+      duration:
+        $ref: '#/definitions/time.Duration'
+      endTime:
+        type: string
+      error:
+        type: string
+      processorId:
+        type: string
+      startTime:
+        type: string
+      status:
+        type: string
+    type: object
+  taskengine.TaskInfo:
+    properties:
+      endAt:
+        description: 结束时间
+        type: string
+      id:
+        description: 任务唯一ID
+        type: string
+      payload:
+        items:
+          type: integer
+        type: array
+      receiveAt:
+        description: 接收时间
+        type: string
+      results:
+        description: 处理器结果
+        items:
+          $ref: '#/definitions/taskengine.ProcessorResult'
+        type: array
+      startAt:
+        description: 开始时间
+        type: string
+      status:
+        description: 状态
+        type: string
+      topic:
+        description: 消息主题
+        type: string
+      workerId:
+        description: 处理的Worker ID
+        type: string
+    type: object
+  taskengine.TaskStats:
+    properties:
+      completedTasks:
+        type: integer
+      failedTasks:
+        type: integer
+      pendingTasks:
+        type: integer
+      runningTasks:
+        type: integer
+      totalTasks:
+        type: integer
+    type: object
+  taskstate.fileLogListResponse:
+    properties:
+      currentPage:
+        description: 当前页码
+        example: 1
+        type: integer
+      data:
+        description: 任务日志列表数据
+        items:
+          $ref: '#/definitions/models.FileTaskLog'
+        type: array
+      pageSize:
+        description: 每页大小
+        example: 10
+        type: integer
+      total:
+        description: 总记录数
+        example: 100
+        type: integer
+    type: object
+  taskstate.taskEngineListResponse:
+    properties:
+      isRunning:
+        description: 引擎是否正在运行
+        type: boolean
+      pendingTasks:
+        description: 待处理的任务列表
+        items:
+          $ref: '#/definitions/taskengine.TaskInfo'
+        type: array
+      runningTasks:
+        description: 正在运行的任务列表
+        items:
+          $ref: '#/definitions/taskengine.TaskInfo'
+        type: array
+      stats:
+        allOf:
+        - $ref: '#/definitions/taskengine.TaskStats'
+        description: 任务引擎统计信息
+    type: object
+  time.Duration:
+    enum:
+    - -9223372036854775808
+    - 9223372036854775807
+    - 1
+    - 1000
+    - 1000000
+    - 1000000000
+    - 60000000000
+    - 3600000000000
+    format: int64
+    type: integer
+    x-enum-varnames:
+    - minDuration
+    - maxDuration
+    - Nanosecond
+    - Microsecond
+    - Millisecond
+    - Second
+    - Minute
+    - Hour
+  topic.BatchParseTextRequest:
+    properties:
+      cloudToken:
+        description: 需要用到token去查询信息
+        type: integer
+      content:
+        description: 文本内容
+        type: string
+    required:
+    - cloudToken
+    - content
+    type: object
+  user.addRequest:
+    properties:
+      password:
+        description: 密码，长度6-20
+        example: "12345678"
+        maxLength: 20
+        minLength: 6
+        type: string
+      username:
+        description: 用户名，长度3-20位
+        example: tom123
+        maxLength: 20
+        minLength: 3
+        type: string
+    required:
+    - password
+    - username
+    type: object
+  user.addResponse:
+    properties:
+      id:
+        description: 新创建用户的ID
+        example: 1001
+        type: integer
+    type: object
+  user.bindGroupRequest:
+    properties:
+      groupId:
+        description: 用户组ID，0表示默认用户组
+        example: 2
+        minimum: 0
+        type: integer
+      userId:
+        description: 用户ID，必须大于0
+        example: 1001
+        minimum: 1
+        type: integer
+    required:
+    - userId
+    type: object
+  user.bindGroupResponse:
+    properties:
+      groupId:
+        description: 用户组ID
+        example: 2
+        type: integer
+      groupName:
+        description: 用户组名称
+        example: 管理员组
+        type: string
+      userId:
+        description: 用户ID
+        example: 1001
+        type: integer
+    type: object
+  user.delRequest:
+    properties:
+      id:
+        description: 用户ID，必须大于1
+        example: 1001
+        minimum: 1
+        type: integer
+    required:
+    - id
+    type: object
+  user.listResponse:
+    properties:
+      currentPage:
+        description: 当前页码
+        example: 1
+        type: integer
+      data:
+        description: 用户列表数据
+        items:
+          $ref: '#/definitions/user.userInfo'
+        type: array
+      pageSize:
+        description: 每页大小
+        example: 10
+        type: integer
+      total:
+        description: 总记录数
+        example: 100
+        type: integer
+    type: object
+  user.loginRequest:
+    properties:
+      password:
+        description: 密码，长度6-20位
+        example: "12345678"
+        maxLength: 20
+        minLength: 6
+        type: string
+      username:
+        description: 用户名，长度3-20位
+        example: tom123
+        maxLength: 20
+        minLength: 3
+        type: string
+    required:
+    - password
+    - username
+    type: object
+  user.loginResponse:
+    properties:
+      accessToken:
+        description: 访问令牌
+        example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        type: string
+      expiresIn:
+        description: 过期时间（秒）
+        example: 3600
+        type: integer
+      refreshToken:
+        description: 刷新令牌
+        example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        type: string
+      tokenType:
+        description: 令牌类型
+        example: Bearer
+        type: string
+      user:
+        allOf:
+        - $ref: '#/definitions/models.User'
+        description: 用户信息
+    type: object
+  user.modifyOwnPassRequest:
+    properties:
+      oldPassword:
+        description: 旧密码，长度6-20位
+        example: oldpass123
+        maxLength: 20
+        minLength: 6
+        type: string
+      password:
+        description: 新密码，长度6-20位
+        example: newpass123
+        maxLength: 20
+        minLength: 6
+        type: string
+    required:
+    - oldPassword
+    - password
+    type: object
+  user.modifyPassRequest:
+    properties:
+      id:
+        description: 用户ID，必须大于0
+        example: 1001
+        minimum: 1
+        type: integer
+      password:
+        description: 新密码，长度6-20位
+        example: newpass123
+        maxLength: 20
+        minLength: 6
+        type: string
+    required:
+    - id
+    - password
+    type: object
+  user.refreshRequest:
+    properties:
+      refreshToken:
+        description: 刷新令牌
+        example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        type: string
+    required:
+    - refreshToken
+    type: object
+  user.refreshResponse:
+    properties:
+      accessToken:
+        description: 访问令牌
+        example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        type: string
+      expiresIn:
+        description: 过期时间（秒）
+        example: 3600
+        type: integer
+      refreshToken:
+        description: 刷新令牌
+        example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        type: string
+      tokenType:
+        description: 令牌类型
+        example: Bearer
+        type: string
+      user:
+        allOf:
+        - $ref: '#/definitions/models.User'
+        description: 用户信息
+    type: object
+  user.toggleStatusRequest:
+    properties:
+      id:
+        description: 用户ID，必须大于0
+        example: 1001
+        minimum: 1
+        type: integer
+      status:
+        description: 用户状态：1=启用，2=禁用
+        enum:
+        - 1
+        - 2
+        example: 1
+        type: integer
+    required:
+    - id
+    - status
+    type: object
+  user.updateRequest:
+    properties:
+      id:
+        description: 用户ID，必须大于0
+        example: 1001
+        minimum: 1
+        type: integer
+      status:
+        enum:
+        - 1
+        - 2
+        type: integer
+    required:
+    - id
+    type: object
+  user.userInfo:
+    properties:
+      createdAt:
+        type: string
+      groupId:
+        type: integer
+      groupName:
+        description: 用户组名称
+        example: 管理员组
+        type: string
+      id:
+        type: integer
+      isAdmin:
+        type: boolean
+      status:
+        type: integer
+      updatedAt:
+        type: string
+      username:
+        type: string
+      version:
+        type: integer
+    type: object
+  usergroup.addRequest:
+    properties:
+      name:
+        description: 用户组名称，长度1-255位
+        example: 管理员组
+        maxLength: 255
+        minLength: 1
+        type: string
+    required:
+    - name
+    type: object
+  usergroup.addResponse:
+    properties:
+      id:
+        description: 新创建用户组的ID
+        example: 1001
+        type: integer
+    type: object
+  usergroup.batchBindFilesRequest:
+    properties:
+      fileIds:
+        description: 文件ID列表
+        example:
+        - 1001
+        - 1002
+        - 1003
+        items:
+          type: integer
+        type: array
+      groupId:
+        description: 用户组ID
+        example: 1
+        minimum: 1
+        type: integer
+    required:
+    - fileIds
+    - groupId
+    type: object
+  usergroup.deleteRequest:
+    properties:
+      id:
+        description: 用户组ID，必须大于1
+        example: 1001
+        minimum: 1
+        type: integer
+    required:
+    - id
+    type: object
+  usergroup.getBindFilesResponse:
+    properties:
+      fileIds:
+        description: 文件ID列表
+        example:
+        - 1001
+        - 1002
+        - 1003
+        items:
+          type: integer
+        type: array
+    type: object
+  usergroup.listResponse:
+    properties:
+      currentPage:
+        description: 当前页码
+        example: 1
+        type: integer
+      data:
+        description: 用户组列表数据
+        items:
+          $ref: '#/definitions/usergroup.userGroupInfo'
+        type: array
+      pageSize:
+        description: 每页大小
+        example: 10
+        type: integer
+      total:
+        description: 总记录数
+        example: 100
+        type: integer
+    type: object
+  usergroup.modifyNameRequest:
+    properties:
+      id:
+        description: 用户组ID
+        example: 1
+        minimum: 1
+        type: integer
+      name:
+        description: 新的用户组名称
+        example: 管理员组
+        maxLength: 255
+        minLength: 1
+        type: string
+    required:
+    - id
+    - name
+    type: object
+  usergroup.userGroupInfo:
+    properties:
+      createdAt:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+      updatedAt:
+        type: string
+      userCount:
+        description: 该用户组下的用户数量
+        example: 5
+        type: integer
+    type: object
+info:
+  contact: {}
+paths:
+  /api/auto_ingest/log/list:
+    get:
+      consumes:
+      - application/json
+      description: 分页获取自动挂载日志，支持按计划ID与级别筛选
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - default: 1
+        description: 当前页码，默认为1
+        in: query
+        name: currentPage
+        type: integer
+      - default: 10
+        description: 每页大小，默认为10
+        in: query
+        name: pageSize
+        type: integer
+      - description: 计划ID
+        in: query
+        name: planId
+        type: integer
+      - description: 日志级别，如 info/error
+        in: query
+        name: level
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 获取日志列表成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/httpcontext.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/autoingest.logListResponse'
+              type: object
+        "400":
+          description: 获取自动挂载日志列表失败，code=xxxx
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "401":
+          description: 未授权访问
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 获取自动挂载日志列表
+      tags:
+      - 自动挂载管理
+  /api/auto_ingest/plan/create_subscribe:
+    post:
+      consumes:
+      - application/json
+      description: 创建订阅计划（占位实现，后续由你补充具体逻辑）
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: 订阅计划参数（占位）
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/autoingest.createSubscribePlanRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 创建成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/httpcontext.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/autoingest.createSubscribePlanResponse'
+              type: object
+        "400":
+          description: 参数验证失败，code=99998
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "401":
+          description: 未授权访问
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 创建订阅型自动挂载计划
+      tags:
+      - 自动挂载管理
+  /api/auto_ingest/plan/delete:
+    post:
+      consumes:
+      - application/json
+      description: 根据计划ID删除自动挂载计划
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: 计划ID
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/autoingest.deletePlanRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 删除成功
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "400":
+          description: 删除自动挂载计划失败，code=xxxx
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "401":
+          description: 未授权访问
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 删除自动挂载计划
+      tags:
+      - 自动挂载管理
+  /api/auto_ingest/plan/disable:
+    post:
+      consumes:
+      - application/json
+      description: 根据计划ID停用自动挂载计划
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: 计划ID
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/autoingest.disablePlanRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 停用成功
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "400":
+          description: 停用自动挂载计划失败，code=xxxx
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "401":
+          description: 未授权访问
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 停用自动挂载计划
+      tags:
+      - 自动挂载管理
+  /api/auto_ingest/plan/enable:
+    post:
+      consumes:
+      - application/json
+      description: 根据计划ID启用自动挂载计划
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: 计划ID
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/autoingest.enablePlanRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 启用成功
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "400":
+          description: 启用自动挂载计划失败，code=xxxx
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "401":
+          description: 未授权访问
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 启用自动挂载计划
+      tags:
+      - 自动挂载管理
+  /api/auto_ingest/plan/list:
+    get:
+      consumes:
+      - application/json
+      description: 分页获取自动挂载计划列表，支持按名称模糊搜索
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - default: 1
+        description: 当前页码，默认为1
+        in: query
+        name: currentPage
+        type: integer
+      - default: 10
+        description: 每页大小，默认为10
+        in: query
+        name: pageSize
+        type: integer
+      - description: 按名称模糊搜索
+        in: query
+        name: name
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 获取计划列表成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/httpcontext.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/autoingest.planListResponse'
+              type: object
+        "400":
+          description: 获取自动挂载计划列表失败，code=xxxx
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "401":
+          description: 未授权访问
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 获取自动挂载计划列表
+      tags:
+      - 自动挂载管理
+  /api/auto_ingest/plan/refresh:
+    post:
+      consumes:
+      - application/json
+      description: 传入计划ID，查询计划信息并下发 AutoIngestRefreshSubscribeRequest 任务
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: 刷新计划请求参数
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/autoingest.refreshPlanRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 任务已下发
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "400":
+          description: 下发订阅刷新任务失败，code=xxxx
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "401":
+          description: 未授权访问
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 下发订阅计划刷新任务
+      tags:
+      - 自动挂载管理
+  /api/auto_ingest/plan/update:
+    post:
+      consumes:
+      - application/json
+      description: 仅允许修改字段：parentPath、refreshStrategy、tokenId、autoIngestInterval、name、onConflict
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: 修改计划参数
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/autoingest.updatePlanRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 修改成功
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "400":
+          description: 更新自动挂载计划失败，code=xxxx
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "401":
+          description: 未授权访问
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 修改自动挂载计划
+      tags:
+      - 自动挂载管理
+  /api/cloud_token/{id}:
+    get:
+      consumes:
+      - application/json
+      description: 根据云盘令牌ID查询详细信息
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: 云盘令牌ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 查询成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/httpcontext.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.CloudToken'
+              type: object
+        "400":
+          description: 查询云盘令牌失败，code=5007
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "401":
+          description: 未授权访问
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "404":
+          description: 云盘令牌不存在
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 查询云盘令牌详情
+      tags:
+      - 云盘令牌管理
+  /api/cloud_token/check_qrcode:
+    post:
+      consumes:
+      - application/json
+      description: 检查二维码扫码状态，如果扫码成功则创建或更新云盘令牌
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: 检查二维码请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/cloudtoken.checkQrcodeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 二维码检查成功
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "400":
+          description: 检查二维码失败，code=5002
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "401":
+          description: 未授权访问
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 检查二维码状态
+      tags:
+      - 云盘令牌管理
+  /api/cloud_token/delete:
+    post:
+      consumes:
+      - application/json
+      description: 根据云盘令牌ID删除指定的云盘令牌
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: 删除请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/cloudtoken.deleteRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 删除成功
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "400":
+          description: 删除云盘令牌失败，code=5004
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "401":
+          description: 未授权访问
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 删除云盘令牌
+      tags:
+      - 云盘令牌管理
+  /api/cloud_token/init_qrcode:
+    post:
+      consumes:
+      - application/json
+      description: 初始化登录二维码，获取二维码UUID用于后续扫码登录
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 二维码初始化成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/httpcontext.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/github_com_xxcheng123_cloudpan189-share_internal_handler_http_cloudtoken.InitQrcodeResponse'
+              type: object
+        "400":
+          description: 初始化二维码失败，code=5001
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "401":
+          description: 未授权访问
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 初始化二维码
+      tags:
+      - 云盘令牌管理
+  /api/cloud_token/list:
+    get:
+      consumes:
+      - application/json
+      description: 分页获取云盘令牌列表，支持按名称模糊搜索
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - default: 1
+        description: 当前页码，默认为1
+        in: query
+        name: currentPage
+        type: integer
+      - default: 10
+        description: 每页大小，默认为10
+        in: query
+        name: pageSize
+        type: integer
+      - default: false
+        description: 是否不分页，默认false
+        in: query
+        name: noPaginate
+        type: boolean
+      - description: 名称模糊搜索
+        in: query
+        name: name
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 获取云盘令牌列表成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/httpcontext.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/cloudtoken.listResponse'
+              type: object
+        "400":
+          description: 获取云盘令牌列表失败，code=5005
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "401":
+          description: 未授权访问
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 获取云盘令牌列表
+      tags:
+      - 云盘令牌管理
+  /api/cloud_token/modify_name:
+    post:
+      consumes:
+      - application/json
+      description: 根据云盘令牌ID修改其显示名称
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: 修改名称请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/cloudtoken.modifyNameRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 名称修改成功
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "400":
+          description: 修改名称失败，code=5003
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "401":
+          description: 未授权访问
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 修改云盘令牌名称
+      tags:
+      - 云盘令牌管理
+  /api/cloud_token/username_login:
+    post:
+      consumes:
+      - application/json
+      description: 使用用户名和密码登录云盘，创建或更新云盘令牌
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: 用户名登录请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/cloudtoken.usernameLoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 登录成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/httpcontext.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/github_com_xxcheng123_cloudpan189-share_internal_services_cloudtoken.UsernameLoginResponse'
+              type: object
+        "400":
+          description: 用户名登录失败，code=5006
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "401":
+          description: 未授权访问
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 用户名密码登录
+      tags:
+      - 云盘令牌管理
+  /api/file/create_download_url:
+    post:
+      consumes:
+      - application/json
+      description: 为指定文件生成带签名的下载链接
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: 文件ID信息
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/file.createDownloadURLRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 下载链接创建成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/httpcontext.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/file.createDownloadURLResponse'
+              type: object
+        "400":
+          description: 文件签名失败，code=6015
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "401":
+          description: 未授权访问
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 创建文件下载链接
+      tags:
+      - 文件管理
+  /api/file/download/{fileId}:
+    get:
+      consumes:
+      - application/json
+      description: 通过文件ID和签名验证下载文件，支持多种传输方式（重定向、本地代理、多线程流）
+      parameters:
+      - description: 文件ID
+        example: 123456
+        in: path
+        name: fileId
+        required: true
+        type: integer
+      - description: 签名
+        example: '"abc123"'
+        in: query
+        name: sign
+        required: true
+        type: string
+      - description: UUID
+        example: '"def456"'
+        in: query
+        name: uuid
+        required: true
+        type: string
+      - description: 时间戳
+        example: '"1234567890"'
+        in: query
+        name: timestamp
+        required: true
+        type: string
+      - default: '"v1"'
+        description: 签名版本
+        example: '"v1"'
+        in: query
+        name: signer
+        required: true
+        type: string
+      - description: HTTP Range 请求头，支持断点续传
+        example: '"bytes=0-1023"'
+        in: header
+        name: Range
+        type: string
+      produces:
+      - application/octet-stream
+      responses:
+        "200":
+          description: 文件下载成功（本地代理或多线程流模式）
+          schema:
+            type: file
+        "302":
+          description: 重定向到下载链接（重定向模式）
+          schema:
+            type: string
+        "400":
+          description: 创建多线程流请求失败，code=6014
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "401":
+          description: 未授权访问
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "404":
+          description: 文件令牌未绑定，code=6007
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 下载文件
+      tags:
+      - 文件管理
+  /api/file/open/{fullPath}:
+    get:
+      consumes:
+      - application/json
+      description: 根据完整路径打开文件或目录，返回文件信息、子文件列表和面包屑导航
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: 文件或目录的完整路径
+        example: '"/folder1/subfolder"'
+        in: path
+        name: fullPath
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 打开文件或目录成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/httpcontext.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/file.openResponse'
+              type: object
+        "400":
+          description: 查询文件失败，code=6004
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "401":
+          description: 未授权访问
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 打开文件或目录
+      tags:
+      - 文件管理
+  /api/file/search:
+    get:
+      consumes:
+      - application/json
+      description: 根据关键词搜索虚拟文件，支持全局搜索或指定目录搜索
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: 搜索关键词
+        example: '"test.txt"'
+        in: query
+        name: keyword
+        type: string
+      - default: 0
+        description: 父级目录ID，0表示根目录
+        example: 0
+        in: query
+        name: pid
+        type: integer
+      - default: false
+        description: 是否全局搜索，true时忽略pid参数
+        example: false
+        in: query
+        name: global
+        type: boolean
+      - default: 10
+        description: 每页大小，范围1-100
+        example: 10
+        in: query
+        maximum: 100
+        minimum: 1
+        name: pageSize
+        required: true
+        type: integer
+      - default: 1
+        description: 当前页码，从1开始
+        example: 1
+        in: query
+        minimum: 1
+        name: currentPage
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 搜索文件成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/httpcontext.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/file.searchResponse'
+              type: object
+        "400":
+          description: 计算文件完整路径失败，code=6003
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "401":
+          description: 未授权访问
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 搜索文件
+      tags:
+      - 文件管理
+  /api/login_log/list:
+    get:
+      consumes:
+      - application/json
+      description: 分页获取登录日志列表，支持多条件过滤（用户、地址、事件、状态、来源、时间范围）
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - default: 1
+        description: 当前页码，默认为1
+        in: query
+        name: currentPage
+        type: integer
+      - default: 10
+        description: 每页大小，默认为10
+        in: query
+        name: pageSize
+        type: integer
+      - description: 用户ID
+        in: query
+        name: userId
+        type: integer
+      - description: 用户名
+        in: query
+        name: username
+        type: string
+      - description: 客户端地址或IP
+        in: query
+        name: addr
+        type: string
+      - description: 事件来源(web/api/app/cli)
+        in: query
+        name: method
+        type: string
+      - description: 事件类型(login/refresh_token)
+        in: query
+        name: event
+        type: string
+      - description: 状态(success/failed/blocked)
+        in: query
+        name: status
+        type: string
+      - description: 开始时间(ISO8601)
+        example: '"2025-01-01T00:00:00Z"'
+        in: query
+        name: beginAt
+        type: string
+      - description: 结束时间(ISO8601)
+        example: '"2025-01-31T23:59:59Z"'
+        in: query
+        name: endAt
+        type: string
+      - default: false
+        description: 是否不分页，默认false
+        in: query
+        name: noPaginate
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 获取登录日志列表成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/httpcontext.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/loginlog.listResponse'
+              type: object
+        "400":
+          description: 获取登录日志列表失败，code=5011
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "401":
+          description: 未授权访问
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 获取登录日志列表
+      tags:
+      - 登录日志
+  /api/media/clear:
+    post:
+      consumes:
+      - application/json
+      description: 清理媒体存储路径下的所有媒体文件
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 清理任务已提交
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "400":
+          description: 提交清理任务失败，code=xxxx
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "401":
+          description: 未授权访问
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 清理媒体文件
+      tags:
+      - 媒体操作
+  /api/media/config/info:
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 获取成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/httpcontext.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/media.configInfoResponse'
+              type: object
+        "400":
+          description: 查询媒体配置失败
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 获取媒体配置
+      tags:
+      - 媒体配置
+  /api/media/config/init:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: 初始化请求体
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/media.configInitRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 初始化成功
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "400":
+          description: 初始化媒体配置失败
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 初始化媒体配置
+      tags:
+      - 媒体配置
+  /api/media/config/toggle:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: 切换启用状态请求体
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/media.configToggleRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 切换成功
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "400":
+          description: 切换媒体配置启用状态失败
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 启用/禁用媒体配置
+      tags:
+      - 媒体配置
+  /api/media/config/update:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: 更新请求体（任意字段可选）
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/media.configUpdateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 更新成功
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "400":
+          description: 更新媒体配置失败
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 更新媒体配置
+      tags:
+      - 媒体配置
+  /api/media/rebuild_strm_file:
+    post:
+      consumes:
+      - application/json
+      description: 扫描所有挂载点并重新生成strm文件
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 重建任务已提交
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "400":
+          description: 提交重建任务失败，code=xxxx
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "401":
+          description: 未授权访问
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 重建strm文件
+      tags:
+      - 媒体操作
+  /api/setting/addition:
+    get:
+      consumes:
+      - application/json
+      description: 获取系统的 SettingAddition，仅登录用户可访问
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 获取系统附加设置成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/httpcontext.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.SettingAddition'
+              type: object
+        "400":
+          description: 查询系统配置失败，code=2003
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "401":
+          description: 未授权访问
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 查询系统附加设置
+      tags:
+      - 系统设置
+  /api/setting/info:
+    get:
+      consumes:
+      - application/json
+      description: 获取系统运行状态信息，包括运行时间、基础URL、初始化状态和认证启用状态
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 获取系统信息成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/httpcontext.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/setting.infoResponse'
+              type: object
+        "400":
+          description: 查询系统配置失败，code=2003
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 获取系统信息
+      tags:
+      - 系统设置
+  /api/setting/init_system:
+    post:
+      consumes:
+      - application/json
+      description: 初始化系统配置并创建超级管理员账户。此接口只能在系统未初始化时调用，初始化后将无法再次调用
+      parameters:
+      - description: 系统初始化信息
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/setting.initSystemRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 系统初始化成功
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "400":
+          description: 初始化超级管理员时发生错误，code=6002
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 初始化系统
+      tags:
+      - 系统设置
+  /api/setting/modify_addition:
+    post:
+      consumes:
+      - application/json
+      description: 更新系统的 SettingAddition（可选字段更新），仅管理员可操作
+      parameters:
+      - description: 系统附加设置（仅填写需要修改的字段）
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/setting.modifyAdditionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 系统附加设置更新成功
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "400":
+          description: 更新系统附加设置失败，code=6006
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "401":
+          description: 未授权访问
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 修改系统附加设置
+      tags:
+      - 系统设置
+  /api/setting/modify_base_url:
+    post:
+      consumes:
+      - application/json
+      description: 更新系统基础URL，仅管理员可操作
+      parameters:
+      - description: 新的系统基础URL
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/setting.modifyBaseURLRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 系统基础URL更新成功
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "400":
+          description: 更新系统基础URL失败，code=6004
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "401":
+          description: 未授权访问
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 修改系统基础URL
+      tags:
+      - 系统设置
+  /api/setting/modify_title:
+    post:
+      consumes:
+      - application/json
+      description: 更新系统标题，仅管理员可操作
+      parameters:
+      - description: 新的系统标题
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/setting.modifyTitleRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 系统标题更新成功
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "400":
+          description: 更新系统标题失败，code=6003
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "401":
+          description: 未授权访问
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 修改系统标题
+      tags:
+      - 系统设置
+  /api/setting/toggle_enable_auth:
+    post:
+      consumes:
+      - application/json
+      description: 启用或关闭系统鉴权，仅管理员可操作
+      parameters:
+      - description: 鉴权开关设置
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/setting.toggleEnableAuthRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 系统鉴权开关更新成功
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "400":
+          description: 更新系统鉴权开关失败，code=6005
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "401":
+          description: 未授权访问
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 切换系统鉴权开关
+      tags:
+      - 系统设置
+  /api/storage/add:
+    post:
+      consumes:
+      - application/json
+      description: 添加新的存储挂载点，支持多种协议类型（订阅、分享、个人云盘、家庭云盘等）
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: 存储挂载信息
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/storage.addRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 存储挂载创建成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/httpcontext.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/storage.addResponse'
+              type: object
+        "400":
+          description: 家庭云盘参数不完整，code=4011
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "401":
+          description: 未授权访问
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 添加存储挂载
+      tags:
+      - 存储管理
+  /api/storage/advance/family/files:
+    get:
+      consumes:
+      - application/json
+      description: 根据云盘令牌和家庭云ID获取家庭云文件列表，支持分页查询
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: 页码，从1开始
+        in: query
+        minimum: 1
+        name: pageNum
+        required: true
+        type: integer
+      - description: 每页数量，最大100
+        in: query
+        maximum: 100
+        minimum: 1
+        name: pageSize
+        required: true
+        type: integer
+      - description: 云盘令牌ID
+        in: query
+        name: cloudToken
+        required: true
+        type: integer
+      - description: 家庭云ID
+        in: query
+        name: familyId
+        required: true
+        type: string
+      - default: '""'
+        description: 父目录ID，默认为空（根目录）
+        in: query
+        name: parentId
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 获取家庭云文件列表成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/httpcontext.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/advance.getFamilyFilesResponse'
+              type: object
+        "400":
+          description: 获取家庭云文件列表失败，code=8002
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "401":
+          description: 未授权访问
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 获取家庭云文件列表
+      tags:
+      - 存储管理-高级功能
+  /api/storage/advance/family/list:
+    get:
+      consumes:
+      - application/json
+      description: 根据云盘令牌获取用户的家庭云列表
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: 云盘令牌ID
+        in: query
+        name: cloudToken
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 获取家庭云列表成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/httpcontext.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/cloudbridge.GetFamilyListResponse'
+              type: object
+        "400":
+          description: 获取家庭云列表失败，code=8002
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "401":
+          description: 未授权访问
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 获取家庭云列表
+      tags:
+      - 存储管理-高级功能
+  /api/storage/advance/get_subscribe_user:
+    get:
+      consumes:
+      - application/json
+      description: 根据订阅用户名获取该用户的共享资源列表，支持分页和按文件名搜索
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: 订阅用户名
+        example: '"user123"'
+        in: query
+        name: subscribeUser
+        required: true
+        type: string
+      - description: 文件名搜索
+        example: '"三生三世"'
+        in: query
+        name: name
+        type: string
+      - default: 1
+        description: 当前页码，默认为1
+        in: query
+        name: currentPage
+        type: integer
+      - default: 10
+        description: 每页大小，默认为10，最大100
+        in: query
+        name: pageSize
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 获取订阅用户资源列表成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/httpcontext.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/advance.getSubscribeUserResponse'
+              type: object
+        "400":
+          description: 查询订阅用户列表失败，code=8002
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "401":
+          description: 未授权访问
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 获取订阅用户资源列表
+      tags:
+      - 存储高级功能
+  /api/storage/advance/person/files:
+    get:
+      consumes:
+      - application/json
+      description: 根据云盘令牌获取个人文件列表，支持分页查询
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: 页码，从1开始
+        in: query
+        minimum: 1
+        name: pageNum
+        required: true
+        type: integer
+      - description: 每页数量，最大100
+        in: query
+        maximum: 100
+        minimum: 1
+        name: pageSize
+        required: true
+        type: integer
+      - description: 云盘令牌ID
+        in: query
+        name: cloudToken
+        required: true
+        type: integer
+      - default: "-11"
+        description: 父目录ID，默认为-11（根目录）
+        in: query
+        name: parentId
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 获取文件列表成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/httpcontext.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/advance.getPersonFilesResponse'
+              type: object
+        "400":
+          description: 获取文件列表失败，code=8002
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "401":
+          description: 未授权访问
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 获取个人文件列表
+      tags:
+      - 存储管理-高级功能
+  /api/storage/advance/share_info:
+    get:
+      consumes:
+      - application/json
+      description: 根据分享码获取分享的详细信息，支持直接传入完整分享链接
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: 分享码或完整链接
+        example: '"https://cloud.189.cn/t/abc12345"'
+        in: query
+        name: shareCode
+        required: true
+        type: string
+      - description: 分享访问码
+        example: '"1234"'
+        in: query
+        name: shareAccessCode
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 获取分享信息成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/httpcontext.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/cloudbridge.ShareInfo'
+              type: object
+        "400":
+          description: 获取分享详情失败
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 获取分享信息
+      tags:
+      - 存储高级功能
+  /api/storage/batch_delete:
+    post:
+      consumes:
+      - application/json
+      description: 批量删除指定的存储挂载点，将任务推送到后台异步处理
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: 批量删除请求参数
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/storage.batchDeleteRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 删除任务已提交，后台处理中
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "400":
+          description: 发送清理任务失败，code=4024
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "401":
+          description: 未授权访问
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 批量删除存储挂载
+      tags:
+      - 存储管理
+  /api/storage/batch_parse_text:
+    post:
+      consumes:
+      - application/json
+      description: 解析文本内容（如分享链接），验证CloudToken，返回资源的真实名称和ID，但不创建挂载
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: 解析请求参数
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/topic.BatchParseTextRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 解析成功，data为解析结果列表
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "400":
+          description: 解析服务内部错误
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "401":
+          description: 未授权访问
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 批量解析文本（预览）
+      tags:
+      - 存储管理
+  /api/storage/delete:
+    post:
+      consumes:
+      - application/json
+      description: 删除指定的存储挂载点，同时清理相关文件
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: 删除请求参数
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/storage.deleteRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 存储挂载删除成功
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "400":
+          description: 发送清理任务失败，code=4024
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "401":
+          description: 未授权访问
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 删除存储挂载
+      tags:
+      - 存储管理
+  /api/storage/list:
+    get:
+      consumes:
+      - application/json
+      description: 分页获取存储挂载点列表，支持按路径过滤
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - default: 1
+        description: 当前页码，默认为1
+        in: query
+        name: currentPage
+        type: integer
+      - default: 10
+        description: 每页大小，默认为10
+        in: query
+        name: pageSize
+        type: integer
+      - description: 路径过滤
+        example: '"/aaa"'
+        in: query
+        name: path
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 获取存储挂载点列表成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/httpcontext.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/storage.listResponse'
+              type: object
+        "400":
+          description: 查询挂载点失败，code=3019
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "401":
+          description: 未授权访问
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 获取存储挂载点列表
+      tags:
+      - 存储管理
+  /api/storage/modify_token:
+    post:
+      consumes:
+      - application/json
+      description: 修改指定存储挂载点关联的云盘令牌
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: 修改令牌请求参数
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/storage.modifyTokenRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 令牌修改成功
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "400":
+          description: 修改令牌失败，code=4030
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "401":
+          description: 未授权访问
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 修改存储挂载点令牌
+      tags:
+      - 存储管理
+  /api/storage/refresh:
+    post:
+      consumes:
+      - application/json
+      description: 刷新指定的存储挂载点，触发文件扫描任务重新同步文件信息
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: 刷新请求参数
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/storage.refreshRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 存储挂载刷新成功
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "400":
+          description: 添加扫描任务失败，code=4015
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "401":
+          description: 未授权访问
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 刷新存储挂载
+      tags:
+      - 存储管理
+  /api/storage/select_list:
+    get:
+      consumes:
+      - application/json
+      description: 返回用于选择的简化数据（不分页），仅包含必要字段
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: 路径过滤（模糊匹配）
+        example: '"/aaa"'
+        in: query
+        name: path
+        type: string
+      - description: 名称过滤（模糊匹配）
+        example: '"挂载点"'
+        in: query
+        name: name
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 获取简化列表成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/httpcontext.Response'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/storage.selectItem'
+                  type: array
+              type: object
+        "400":
+          description: 查询挂载点失败，code=3019
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "401":
+          description: 未授权访问
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 获取存储挂载点简化列表
+      tags:
+      - 存储管理
+  /api/storage/toggle_auto_refresh:
+    post:
+      consumes:
+      - application/json
+      description: 启用或禁用存储挂载点的自动刷新功能，并可配置相关参数
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: 自动刷新配置信息
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/storage.toggleAutoRefreshRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 自动刷新配置更新成功
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "400":
+          description: 更新自动刷新开始时间失败，code=4029
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "401":
+          description: 未授权访问
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 切换自动刷新配置
+      tags:
+      - 存储管理
+  /api/task_state/file_log/list:
+    get:
+      consumes:
+      - application/json
+      description: 分页获取文件任务日志列表，支持多种筛选条件
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - default: 1
+        description: 当前页码，默认为1
+        in: query
+        name: currentPage
+        type: integer
+      - default: 10
+        description: 每页大小，默认为10
+        in: query
+        name: pageSize
+        type: integer
+      - default: false
+        description: 是否不分页，默认false
+        in: query
+        name: noPaginate
+        type: boolean
+      - description: 任务类型筛选
+        in: query
+        name: type
+        type: string
+      - description: 任务状态筛选(pending/running/completed/failed)
+        in: query
+        name: status
+        type: string
+      - description: 文件ID筛选
+        in: query
+        name: fileId
+        type: integer
+      - description: 用户ID筛选
+        in: query
+        name: userId
+        type: integer
+      - description: 任务标题模糊搜索
+        in: query
+        name: title
+        type: string
+      - description: '开始时间筛选(格式: 2006-01-02T15:04:05Z07:00)'
+        in: query
+        name: beginAt
+        type: string
+      - description: '结束时间筛选(格式: 2006-01-02T15:04:05Z07:00)'
+        in: query
+        name: endAt
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 获取任务日志列表成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/httpcontext.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/taskstate.fileLogListResponse'
+              type: object
+        "400":
+          description: 任务数量统计失败，code=7002
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "401":
+          description: 未授权访问
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 获取文件任务日志列表
+      tags:
+      - 任务状态管理
+  /api/task_state/task_engine/list:
+    get:
+      consumes:
+      - application/json
+      description: 获取任务引擎的统计信息和当前正在运行的任务列表
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 获取任务引擎状态成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/httpcontext.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/taskstate.taskEngineListResponse'
+              type: object
+        "400":
+          description: 获取任务引擎状态失败，code=7003
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "401":
+          description: 未授权访问
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 获取任务引擎状态
+      tags:
+      - 任务状态管理
+  /api/user/add:
+    post:
+      consumes:
+      - application/json
+      description: 创建新用户账户，需要管理员权限。
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: 用户信息
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/user.addRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 用户创建成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/httpcontext.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/user.addResponse'
+              type: object
+        "400":
+          description: 用户添加失败，code=1001
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "401":
+          description: 未授权访问
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 添加用户
+      tags:
+      - 用户管理
+  /api/user/bind_group:
+    post:
+      consumes:
+      - application/json
+      description: 将指定用户绑定到指定用户组，需要管理员权限。GroupID为0表示绑定到默认用户组
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: 绑定用户组请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/user.bindGroupRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 用户组绑定成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/httpcontext.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/user.bindGroupResponse'
+              type: object
+        "400":
+          description: 绑定用户组失败，code=1011
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "401":
+          description: 未授权访问
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "404":
+          description: 用户不存在或用户组不存在
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 绑定用户到用户组
+      tags:
+      - 用户管理
+  /api/user/del:
+    post:
+      consumes:
+      - application/json
+      description: 根据用户ID删除用户，需要管理员权限。注意：ID为1的创始人用户不能删除
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: 删除用户信息
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/user.delRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 用户删除成功
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "400":
+          description: 用户删除失败，code=1007
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "401":
+          description: 未授权访问
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 删除用户
+      tags:
+      - 用户管理
+  /api/user/info:
+    get:
+      consumes:
+      - application/json
+      description: 获取当前登录用户的详细信息，需要基础权限。从JWT token中获取用户ID
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 获取用户信息成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/httpcontext.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/user.userInfo'
+              type: object
+        "400":
+          description: 用户信息获取失败，code=1012
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "401":
+          description: 未授权访问
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 获取当前用户信息
+      tags:
+      - 用户管理
+  /api/user/list:
+    get:
+      consumes:
+      - application/json
+      description: 分页获取用户列表，支持按用户名模糊搜索，需要管理员权限
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - default: 1
+        description: 当前页码，默认为1
+        in: query
+        name: currentPage
+        type: integer
+      - default: 10
+        description: 每页大小，默认为10
+        in: query
+        name: pageSize
+        type: integer
+      - default: false
+        description: 是否不分页，默认false
+        in: query
+        name: noPaginate
+        type: boolean
+      - description: 用户名模糊搜索
+        in: query
+        name: username
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 获取用户列表成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/httpcontext.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/user.listResponse'
+              type: object
+        "400":
+          description: 用户列表获取失败，code=1009
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "401":
+          description: 未授权访问
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 获取用户列表
+      tags:
+      - 用户管理
+  /api/user/login:
+    post:
+      consumes:
+      - application/json
+      description: 用户通过用户名和密码登录系统，获取访问令牌
+      parameters:
+      - description: 登录信息
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/user.loginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 登录成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/httpcontext.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/user.loginResponse'
+              type: object
+        "400":
+          description: Token生成失败，code=1004
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 用户登录
+      tags:
+      - 用户认证
+  /api/user/modify_own_pass:
+    post:
+      consumes:
+      - application/json
+      description: 用户修改自己的密码，需要提供旧密码进行验证。需要基础权限，密码会进行MD5加密存储，同时会自动增加用户版本号
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: 修改密码请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/user.modifyOwnPassRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 密码修改成功
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "400":
+          description: 密码修改失败，code=1010（包括旧密码错误）
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "401":
+          description: 未授权访问
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "404":
+          description: 用户不存在
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 修改当前用户密码
+      tags:
+      - 用户管理
+  /api/user/modify_pass:
+    post:
+      consumes:
+      - application/json
+      description: 根据用户ID修改用户密码，需要管理员权限。密码会进行MD5加密存储，同时会自动增加用户版本号
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: 修改密码请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/user.modifyPassRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 密码修改成功
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "400":
+          description: 密码修改失败，code=1010
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "401":
+          description: 未授权访问
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "404":
+          description: 用户不存在
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 修改用户密码
+      tags:
+      - 用户管理
+  /api/user/refresh_token:
+    post:
+      consumes:
+      - application/json
+      description: 使用刷新令牌获取新的访问令牌和刷新令牌
+      parameters:
+      - description: 刷新令牌信息
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/user.refreshRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 令牌刷新成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/httpcontext.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/user.refreshResponse'
+              type: object
+        "400":
+          description: Token生成失败，code=1004
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 刷新访问令牌
+      tags:
+      - 用户认证
+  /api/user/toggle_status:
+    post:
+      consumes:
+      - application/json
+      description: 设置用户的启用/禁用状态，需要管理员权限。状态为1表示启用，状态为2表示禁用
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: 用户状态信息
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/user.toggleStatusRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 用户状态设置成功
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "400":
+          description: 用户更新失败，code=1008
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "401":
+          description: 未授权访问
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 切换用户状态
+      tags:
+      - 用户管理
+  /api/user/update:
+    post:
+      consumes:
+      - application/json
+      description: 根据用户ID更新用户权限等信息，需要管理员权限。目前支持更新权限字段
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: 更新用户信息
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/user.updateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 用户信息更新成功
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "400":
+          description: 用户更新失败，code=1008
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "401":
+          description: 未授权访问
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 更新用户信息
+      tags:
+      - 用户管理
+  /api/user_group/add:
+    post:
+      consumes:
+      - application/json
+      description: 创建新用户组，需要管理员权限
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: 用户组信息
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/usergroup.addRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 用户组创建成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/httpcontext.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/usergroup.addResponse'
+              type: object
+        "400":
+          description: 用户组添加失败，code=3001
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "401":
+          description: 未授权访问
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 添加用户组
+      tags:
+      - 用户组管理
+  /api/user_group/batch_bind_files:
+    post:
+      consumes:
+      - application/json
+      description: 批量绑定文件到指定用户组，会先删除该组的所有旧文件绑定关系，然后创建新的绑定关系。支持文件ID去重处理
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: 用户组ID和文件ID列表
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/usergroup.batchBindFilesRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 绑定成功
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "400":
+          description: 批量绑定文件失败，code=3004
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "401":
+          description: 未授权访问
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "404":
+          description: 用户组不存在
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 批量绑定文件到用户组
+      tags:
+      - 用户组管理
+  /api/user_group/bind_files:
+    get:
+      consumes:
+      - application/json
+      description: 获取指定用户组绑定的所有文件信息，包括文件ID、文件名等详细信息
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: 用户组ID
+        in: query
+        minimum: 1
+        name: groupId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 获取绑定文件成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/httpcontext.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/usergroup.getBindFilesResponse'
+              type: object
+        "400":
+          description: 获取绑定文件失败，code=3005
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "401":
+          description: 未授权访问
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 获取用户组绑定的文件列表
+      tags:
+      - 用户组管理
+  /api/user_group/delete:
+    post:
+      consumes:
+      - application/json
+      description: 删除指定用户组，需要管理员权限
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: 删除请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/usergroup.deleteRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 用户组删除成功
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "400":
+          description: 用户组删除失败，code=3002
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "401":
+          description: 未授权访问
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 删除用户组
+      tags:
+      - 用户组管理
+  /api/user_group/list:
+    get:
+      consumes:
+      - application/json
+      description: 获取用户组列表，支持分页和搜索
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - default: 1
+        description: 当前页码，默认为1
+        in: query
+        name: currentPage
+        type: integer
+      - default: 10
+        description: 每页大小，默认为10
+        in: query
+        name: pageSize
+        type: integer
+      - default: false
+        description: 是否不分页，默认false
+        in: query
+        name: noPaginate
+        type: boolean
+      - description: 用户组名称模糊搜索
+        in: query
+        name: name
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 获取用户组列表成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/httpcontext.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/usergroup.listResponse'
+              type: object
+        "400":
+          description: 用户组列表获取失败，code=3006
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "401":
+          description: 未授权访问
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 获取用户组列表
+      tags:
+      - 用户组管理
+  /api/user_group/modify_name:
+    post:
+      consumes:
+      - application/json
+      description: 修改指定用户组的名称，需要管理员权限
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: 修改名称请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/usergroup.modifyNameRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 用户组名称修改成功
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "400":
+          description: 用户组名称修改失败，code=3003
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "401":
+          description: 未授权访问
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/httpcontext.Response'
+      summary: 修改用户组名称
+      tags:
+      - 用户组管理
+swagger: "2.0"
