@@ -2,6 +2,7 @@ package mountpoint
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/xxcheng123/cloudpan189-share/internal/framework/context"
 	"github.com/xxcheng123/cloudpan189-share/internal/repository/models"
@@ -21,9 +22,10 @@ type ListRequest struct {
 	LastState         string `form:"lastState" binding:"omitempty" example:"成功"`                            // 按状态筛选：成功、失败等
 
 	// 新增：按字段排序与按最新任务状态筛选
-	SortBy          string `form:"sortBy" binding:"omitempty" example:"fileCount"`
-	SortOrder       string `form:"sortOrder" binding:"omitempty" example:"desc"`
-	TaskLogStatus   string `form:"taskLogStatus" binding:"omitempty" example:"completed"`
+	SortBy        string `form:"sortBy" binding:"omitempty" example:"fileCount"`
+	SortOrder     string `form:"sortOrder" binding:"omitempty" example:"desc"`
+	TaskLogStatus string `form:"taskLogStatus" binding:"omitempty" example:"completed"`
+	FailureKind   string `form:"failureKind" binding:"omitempty,oneof=permanent transient" example:"permanent"`
 }
 
 func (s *service) List(ctx context.Context, req *ListRequest) (list []*models.MountPoint, err error) {
@@ -92,12 +94,23 @@ func (s *service) getListQuery(ctx context.Context, req *ListRequest) *gorm.DB {
 	}
 
 	// 最新任务日志状态筛选：JOIN 子查询 last(id 最大)
-	if req.TaskLogStatus != "" {
+	needLastTaskJoin := req.TaskLogStatus != "" || req.FailureKind != ""
+	if needLastTaskJoin {
 		lastSub := s.svc.GetDB(ctx).Table("file_task_logs as fl1").
 			Select("fl1.id, fl1.file_id, fl1.status").
 			Joins("JOIN (SELECT file_id, MAX(id) AS max_id FROM file_task_logs GROUP BY file_id) t ON t.max_id = fl1.id")
 		query = query.Joins("LEFT JOIN (?) AS last ON last.file_id = m.file_id", lastSub)
+	}
+	if req.TaskLogStatus != "" {
 		query = query.Where("last.status = ?", req.TaskLogStatus)
+	}
+	if req.FailureKind != "" {
+		query = query.Where("last.status = ?", models.StatusFailed)
+		if req.FailureKind == "permanent" {
+			query = query.Where("(m.enable_auto_refresh = ? OR m.auto_refresh_begin_at IS NULL OR datetime(m.auto_refresh_begin_at, '+' || m.auto_refresh_days || ' days') < ?)", false, time.Now())
+		} else if req.FailureKind == "transient" {
+			query = query.Where("m.enable_auto_refresh = ?").Where("m.auto_refresh_begin_at IS NOT NULL").Where("m.auto_refresh_begin_at <= ?", time.Now()).Where("datetime(m.auto_refresh_begin_at, '+' || m.auto_refresh_days || ' days') >= ?", time.Now())
+		}
 	}
 
 	// 排序：fileCount 使用虚拟文件聚合子查询；其他列按 m.列 排

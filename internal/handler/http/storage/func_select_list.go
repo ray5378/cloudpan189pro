@@ -11,6 +11,10 @@ type selectListRequest struct {
 	Path string `form:"path" example:"/aaa"`
 	// Name 名称过滤，模糊匹配
 	Name string `form:"name" example:"挂载点名称"`
+	// TaskLogStatus 按任务状态筛选
+	TaskLogStatus string `form:"taskLogStatus" example:"failed"`
+	// FailureKind failed 时细分：permanent/transient
+	FailureKind string `form:"failureKind" binding:"omitempty,oneof=permanent transient" example:"permanent"`
 }
 
 // selectItem 下拉选择所需最简项
@@ -45,9 +49,11 @@ func (h *handler) SelectList() httpcontext.HandlerFunc {
 		}
 
 		mpReq := &mountpointSvi.ListRequest{
-			NoPaginate: true,
-			FullPath:   req.Path,
-			Name:       req.Name,
+			NoPaginate:    true,
+			FullPath:      req.Path,
+			Name:          req.Name,
+			TaskLogStatus: req.TaskLogStatus,
+			FailureKind:   req.FailureKind,
 		}
 
 		list, err := h.mountPointService.List(ctx.GetContext(), mpReq)

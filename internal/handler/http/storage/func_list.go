@@ -18,8 +18,9 @@ type listRequest struct {
 	Path        string `form:"path" example:"/aaa"`
 	// LastState     string `form:"lastState" example:"成功"`       // 按状态筛选：成功、失败等
 	TaskLogStatus string `form:"taskLogStatus" example:"failed"` // 按任务日志状态筛选：failed, completed等
-	SortBy       string `form:"sortBy" example:"fileCount"`
-	SortOrder    string `form:"sortOrder" example:"desc"`
+	FailureKind   string `form:"failureKind" binding:"omitempty,oneof=permanent transient" example:"permanent"`
+	SortBy        string `form:"sortBy" example:"fileCount"`
+	SortOrder     string `form:"sortOrder" example:"desc"`
 }
 
 type storageDTO struct {
@@ -76,6 +77,7 @@ func (h *handler) List() httpcontext.HandlerFunc {
 			SortBy:        req.SortBy,
 			SortOrder:     req.SortOrder,
 			TaskLogStatus: req.TaskLogStatus,
+			FailureKind:   req.FailureKind,
 		}
 
 		list, err = h.mountPointService.List(ctx.GetContext(), mountReq)

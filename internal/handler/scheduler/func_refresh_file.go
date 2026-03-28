@@ -30,6 +30,7 @@ type RefreshFileScheduler struct {
 	// 避免 scheduler 抖动或 doJob 耗时导致同一槽位重复触发。
 	lastTriggeredSlot      map[int64]int64
 	lastPersistentCheckKey string
+	lastAutoDeleteKey      string
 }
 
 func NewRefreshFileScheduler(mountPointService mountpoint.Service, taskEngine taskengine.TaskEngine) Scheduler {
@@ -105,6 +106,7 @@ func (s *RefreshFileScheduler) doJob() bool {
 			ctx.Debug("文件刷新执行器查询到挂载点数量", zap.Int("count", len(mountPoints)))
 			now := time.Now()
 			s.runPersistentCheck(ctx, now)
+			s.runAutoDeletePermanentInvalid(ctx, now)
 
 			for _, mp := range mountPoints {
 				if !mp.EnableAutoRefresh || mp.RefreshInterval <= 0 || mp.AutoRefreshBeginAt == nil {
@@ -185,6 +187,55 @@ func (s *RefreshFileScheduler) runPersistentCheck(ctx context.Context, now time.
 	}
 
 	ctx.Info("持久检测存储执行完成", zap.Int("count", count), zap.String("schedule_key", checkKey))
+}
+
+func (s *RefreshFileScheduler) runAutoDeletePermanentInvalid(ctx context.Context, now time.Time) {
+	if now.Hour() != 12 || now.Minute() != 0 {
+		return
+	}
+
+	checkKey := now.Format("2006-01-02 12:00")
+	s.mu.Lock()
+	if s.lastAutoDeleteKey == checkKey {
+		s.mu.Unlock()
+		return
+	}
+	s.lastAutoDeleteKey = checkKey
+	s.mu.Unlock()
+
+	list, err := s.mountPointService.List(ctx, &mountpoint.ListRequest{
+		NoPaginate:    true,
+		TaskLogStatus: models.StatusFailed,
+		FailureKind:   "permanent",
+	})
+	if err != nil {
+		ctx.Error("查询永久失效存储节点失败", zap.Error(err))
+		return
+	}
+	if len(list) == 0 {
+		ctx.Info("自动删除永久失效存储执行完成", zap.Int("count", 0), zap.String("schedule_key", checkKey))
+		return
+	}
+
+	ids := make([]int64, 0, len(list))
+	for _, mp := range list {
+		if mp == nil {
+			continue
+		}
+		ids = append(ids, mp.FileId)
+	}
+	if len(ids) == 0 {
+		return
+	}
+
+	taskReq := &topic.FileBatchDeleteRequest{IDs: ids}
+	body, _ := json.Marshal(taskReq)
+	taskCtx := ctx.WithValue(consts.CtxKeyInvokeHandlerName, "自动删除永久失效存储")
+	if err := s.taskEngine.PushMessage(taskCtx, taskReq.Topic(), body); err != nil {
+		ctx.Error("推送自动删除永久失效存储任务失败", zap.Error(err), zap.Int("count", len(ids)))
+		return
+	}
+	ctx.Info("自动删除永久失效存储执行完成", zap.Int("count", len(ids)), zap.String("schedule_key", checkKey))
 }
 
 func (s *RefreshFileScheduler) enqueueNormalRefresh(ctx context.Context, mp *models.MountPoint, invokeName string, fields ...zap.Field) {
