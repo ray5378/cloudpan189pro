@@ -22,6 +22,10 @@ type RefreshFileScheduler struct {
 	cancel            context.CancelFunc
 	mountPointService mountpoint.Service
 	taskEngine        taskengine.TaskEngine
+
+	// 进程内去重：记录每个挂载点最近已触发的 refresh slot，
+	// 避免 scheduler 抖动或 doJob 耗时导致同一槽位重复触发。
+	lastTriggeredSlot map[int64]int64
 }
 
 func NewRefreshFileScheduler(mountPointService mountpoint.Service, taskEngine taskengine.TaskEngine) Scheduler {
@@ -29,6 +33,7 @@ func NewRefreshFileScheduler(mountPointService mountpoint.Service, taskEngine ta
 		mountPointService: mountPointService,
 		taskEngine:        taskEngine,
 		running:           false,
+		lastTriggeredSlot: make(map[int64]int64),
 	}
 }
 
@@ -107,22 +112,44 @@ func (s *RefreshFileScheduler) doJob() bool {
 			}
 
 			// 以每个挂载点自己的 auto_refresh_begin_at 作为刷新节奏锚点，
-			// 避免所有同 interval 节点在全局整点被一起误刷。
+			// 并用“槽位(slot)”判断是否该刷新：
+			//   slot = floor((now - beginAt) / interval)
+			// 仅当当前时间位于该槽位开始后的 60 秒窗口内时才触发，
+			// 这样能容忍 scheduler 每分钟轮询的轻微漂移，不再依赖“恰好整除”。
 			beginAt := mp.AutoRefreshBeginAt.In(now.Location())
 			if now.Before(beginAt) {
 				continue
 			}
 
-			elapsedMin := int(now.Sub(beginAt).Minutes())
-			if elapsedMin < 0 || elapsedMin%mp.RefreshInterval != 0 {
+			interval := time.Duration(mp.RefreshInterval) * time.Minute
+			elapsed := now.Sub(beginAt)
+			if elapsed < 0 {
 				continue
 			}
+
+			slot := int64(elapsed / interval)
+			slotStart := beginAt.Add(time.Duration(slot) * interval)
+			if now.Sub(slotStart) >= time.Minute {
+				continue
+			}
+
+			// 同一进程内对每个 mount point 的同一 slot 只触发一次
+			s.mu.Lock()
+			lastSlot, exists := s.lastTriggeredSlot[mp.ID]
+			if exists && lastSlot == slot {
+				s.mu.Unlock()
+				continue
+			}
+			s.lastTriggeredSlot[mp.ID] = slot
+			s.mu.Unlock()
 
 			ctx.Info("文件扫描执行器触发",
 				zap.Int64("mount_point_id", mp.ID),
 				zap.Int64("file_id", mp.FileId),
 				zap.String("full_path", mp.FullPath),
-				zap.Int("refresh_interval", mp.RefreshInterval))
+				zap.Int("refresh_interval", mp.RefreshInterval),
+				zap.Int64("refresh_slot", slot),
+				zap.Time("slot_start", slotStart))
 
 			// 创建文件扫描任务
 			taskReq := &topic.FileScanFileRequest{
