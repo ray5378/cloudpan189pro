@@ -218,8 +218,8 @@ curl -X POST 'http://<ip>:<port>/api/external/create-storage' \
 
 ### 1. 克隆项目
 ```bash
-git clone https://github.com/xxcheng123/cloudpan189-share.git
-cd cloudpan189-share
+git clone https://github.com/ray154856235/cloudpan189pro.git
+cd cloudpan189pro
 ```
 
 ### 2. 后端部署
