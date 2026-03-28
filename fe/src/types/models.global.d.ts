@@ -132,6 +132,9 @@ declare namespace Models {
     persistentCheckEnabled?: boolean
     persistentCheckDay?: number
     persistentCheckTime?: string
+
+    autoDeleteInvalidStorageEnabled?: boolean
+    autoDeleteInvalidStorageKeywords?: string
   }
 
   // 任务引擎统计信息（对应后端 TaskStats）

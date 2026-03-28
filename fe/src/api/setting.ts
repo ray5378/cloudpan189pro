@@ -75,6 +75,9 @@ export interface ModifySettingAdditionRequest {
   persistentCheckEnabled?: boolean
   persistentCheckDay?: number
   persistentCheckTime?: string
+
+  autoDeleteInvalidStorageEnabled?: boolean
+  autoDeleteInvalidStorageKeywords?: string
 }
 
 export const modifySettingAddition = (data: ModifySettingAdditionRequest): Promise<ApiResponse> => {

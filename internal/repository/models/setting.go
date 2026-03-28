@@ -52,6 +52,9 @@ type SettingAddition struct {
 	PersistentCheckEnabled bool   `json:"persistentCheckEnabled"`
 	PersistentCheckDay     int    `json:"persistentCheckDay"`
 	PersistentCheckTime    string `json:"persistentCheckTime"`
+
+	AutoDeleteInvalidStorageEnabled  bool   `json:"autoDeleteInvalidStorageEnabled"`
+	AutoDeleteInvalidStorageKeywords string `json:"autoDeleteInvalidStorageKeywords"`
 }
 
 // applyDefaults 统一填充默认值，确保零值时也能获得期望配置
@@ -83,6 +86,9 @@ func (sa *SettingAddition) applyDefaults() {
 	}
 	if sa.PersistentCheckTime == "" {
 		sa.PersistentCheckTime = "03:00"
+	}
+	if sa.AutoDeleteInvalidStorageKeywords == "" {
+		sa.AutoDeleteInvalidStorageKeywords = "资源不存在|文件不存在|目录不存在|分享已失效|分享不存在"
 	}
 }
 

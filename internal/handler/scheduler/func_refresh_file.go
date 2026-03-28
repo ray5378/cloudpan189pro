@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"runtime/debug"
+	"strings"
 	"sync"
 	"time"
 
@@ -12,19 +13,23 @@ import (
 	"github.com/xxcheng123/cloudpan189-share/internal/framework/context"
 	"github.com/xxcheng123/cloudpan189-share/internal/pkgs/taskengine"
 	"github.com/xxcheng123/cloudpan189-share/internal/repository/models"
+	filetasklogSvi "github.com/xxcheng123/cloudpan189-share/internal/services/filetasklog"
 	"github.com/xxcheng123/cloudpan189-share/internal/services/mountpoint"
+	"github.com/xxcheng123/cloudpan189-share/internal/services/virtualfile"
 	"github.com/xxcheng123/cloudpan189-share/internal/shared"
 	"github.com/xxcheng123/cloudpan189-share/internal/types/topic"
 	"go.uber.org/zap"
 )
 
 type RefreshFileScheduler struct {
-	running           bool
-	mu                sync.Mutex
-	ctx               context.Context
-	cancel            context.CancelFunc
-	mountPointService mountpoint.Service
-	taskEngine        taskengine.TaskEngine
+	running            bool
+	mu                 sync.Mutex
+	ctx                context.Context
+	cancel             context.CancelFunc
+	mountPointService  mountpoint.Service
+	fileTaskLogService filetasklogSvi.Service
+	virtualFileService virtualfile.Service
+	taskEngine         taskengine.TaskEngine
 
 	// 进程内去重：记录每个挂载点最近已触发的 refresh slot，
 	// 避免 scheduler 抖动或 doJob 耗时导致同一槽位重复触发。
@@ -33,12 +38,14 @@ type RefreshFileScheduler struct {
 	lastAutoDeleteKey      string
 }
 
-func NewRefreshFileScheduler(mountPointService mountpoint.Service, taskEngine taskengine.TaskEngine) Scheduler {
+func NewRefreshFileScheduler(mountPointService mountpoint.Service, fileTaskLogService filetasklogSvi.Service, virtualFileService virtualfile.Service, taskEngine taskengine.TaskEngine) Scheduler {
 	return &RefreshFileScheduler{
-		mountPointService: mountPointService,
-		taskEngine:        taskEngine,
-		running:           false,
-		lastTriggeredSlot: make(map[int64]int64),
+		mountPointService:  mountPointService,
+		fileTaskLogService: fileTaskLogService,
+		virtualFileService: virtualFileService,
+		taskEngine:         taskEngine,
+		running:            false,
+		lastTriggeredSlot:  make(map[int64]int64),
 	}
 }
 
@@ -190,6 +197,10 @@ func (s *RefreshFileScheduler) runPersistentCheck(ctx context.Context, now time.
 }
 
 func (s *RefreshFileScheduler) runAutoDeletePermanentInvalid(ctx context.Context, now time.Time) {
+	cfg := shared.SettingAddition
+	if !cfg.AutoDeleteInvalidStorageEnabled {
+		return
+	}
 	if now.Hour() != 12 || now.Minute() != 0 {
 		return
 	}
@@ -203,39 +214,83 @@ func (s *RefreshFileScheduler) runAutoDeletePermanentInvalid(ctx context.Context
 	s.lastAutoDeleteKey = checkKey
 	s.mu.Unlock()
 
-	list, err := s.mountPointService.List(ctx, &mountpoint.ListRequest{
-		NoPaginate:    true,
-		TaskLogStatus: models.StatusFailed,
-		FailureKind:   "permanent",
-	})
+	keywords := splitKeywords(cfg.AutoDeleteInvalidStorageKeywords)
+	mounts, err := s.mountPointService.List(ctx, &mountpoint.ListRequest{NoPaginate: true})
 	if err != nil {
-		ctx.Error("查询永久失效存储节点失败", zap.Error(err))
+		ctx.Error("查询存储节点失败", zap.Error(err))
 		return
 	}
-	if len(list) == 0 {
-		ctx.Info("自动删除永久失效存储执行完成", zap.Int("count", 0), zap.String("schedule_key", checkKey))
+	if len(mounts) == 0 {
+		ctx.Info("自动删除失效存储执行完成", zap.Int("count", 0), zap.String("schedule_key", checkKey))
 		return
 	}
 
-	ids := make([]int64, 0, len(list))
-	for _, mp := range list {
+	fileIds := make([]int64, 0, len(mounts))
+	for _, mp := range mounts {
 		if mp == nil {
 			continue
 		}
-		ids = append(ids, mp.FileId)
+		fileIds = append(fileIds, mp.FileId)
 	}
-	if len(ids) == 0 {
+
+	lastLogs := make(map[int64]*models.FileTaskLog)
+	if len(fileIds) > 0 {
+		logs, logErr := s.fileTaskLogService.List(ctx, &filetasklogSvi.ListRequest{NoPaginate: true, FileIdList: fileIds, DescList: []string{"id"}})
+		if logErr != nil {
+			ctx.Error("查询失效存储最新任务日志失败", zap.Error(logErr))
+			return
+		}
+		for _, logItem := range logs {
+			if logItem == nil || logItem.FileId == 0 {
+				continue
+			}
+			if _, exists := lastLogs[logItem.FileId]; !exists {
+				lastLogs[logItem.FileId] = logItem
+			}
+		}
+	}
+
+	fileCountMap := make(map[int64]int64)
+	counts, countErr := s.virtualFileService.GroupCountByTopId(ctx, &virtualfile.GroupCountByTopIdRequest{TopIdList: fileIds})
+	if countErr != nil {
+		ctx.Error("查询失效存储文件数量失败", zap.Error(countErr))
+		return
+	}
+	for _, item := range counts {
+		if item == nil {
+			continue
+		}
+		fileCountMap[item.TopId] = item.Count
+	}
+
+	deleteIDs := make([]int64, 0)
+	for _, mp := range mounts {
+		if mp == nil {
+			continue
+		}
+		lastLog := lastLogs[mp.FileId]
+		matchedKeyword := lastLog != nil && logMatchesAnyKeyword(lastLog, keywords)
+		expiredOrDisabled := !mp.EnableAutoRefresh || !mp.IsInAutoRefreshPeriod()
+		zeroFiles := fileCountMap[mp.FileId] == 0
+
+		if matchedKeyword || (expiredOrDisabled && zeroFiles) {
+			deleteIDs = append(deleteIDs, mp.FileId)
+		}
+	}
+
+	if len(deleteIDs) == 0 {
+		ctx.Info("自动删除失效存储执行完成", zap.Int("count", 0), zap.String("schedule_key", checkKey))
 		return
 	}
 
-	taskReq := &topic.FileBatchDeleteRequest{IDs: ids}
+	taskReq := &topic.FileBatchDeleteRequest{IDs: deleteIDs}
 	body, _ := json.Marshal(taskReq)
-	taskCtx := ctx.WithValue(consts.CtxKeyInvokeHandlerName, "自动删除永久失效存储")
+	taskCtx := ctx.WithValue(consts.CtxKeyInvokeHandlerName, "自动删除失效存储")
 	if err := s.taskEngine.PushMessage(taskCtx, taskReq.Topic(), body); err != nil {
-		ctx.Error("推送自动删除永久失效存储任务失败", zap.Error(err), zap.Int("count", len(ids)))
+		ctx.Error("推送自动删除失效存储任务失败", zap.Error(err), zap.Int("count", len(deleteIDs)))
 		return
 	}
-	ctx.Info("自动删除永久失效存储执行完成", zap.Int("count", len(ids)), zap.String("schedule_key", checkKey))
+	ctx.Info("自动删除失效存储执行完成", zap.Int("count", len(deleteIDs)), zap.String("schedule_key", checkKey))
 }
 
 func (s *RefreshFileScheduler) enqueueNormalRefresh(ctx context.Context, mp *models.MountPoint, invokeName string, fields ...zap.Field) {
@@ -256,6 +311,32 @@ func (s *RefreshFileScheduler) enqueueNormalRefresh(ctx context.Context, mp *mod
 		return
 	}
 	ctx.Info("下发文件扫描任务成功", baseFields...)
+}
+
+func splitKeywords(raw string) []string {
+	parts := strings.Split(raw, "|")
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		result = append(result, part)
+	}
+	return result
+}
+
+func logMatchesAnyKeyword(logItem *models.FileTaskLog, keywords []string) bool {
+	if logItem == nil || len(keywords) == 0 {
+		return false
+	}
+	text := strings.ToLower(logItem.ErrorMsg + "\n" + logItem.Result + "\n" + logItem.Desc + "\n" + logItem.Title)
+	for _, keyword := range keywords {
+		if strings.Contains(text, strings.ToLower(keyword)) {
+			return true
+		}
+	}
+	return false
 }
 
 func parseClockHM(value string) (hour, minute int, ok bool) {

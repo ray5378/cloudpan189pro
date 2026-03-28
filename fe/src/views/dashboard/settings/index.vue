@@ -198,6 +198,32 @@
         </div>
       </div>
 
+      <div class="setting-item">
+        <div class="item-left">
+          <div class="item-title">自动删除失效存储</div>
+          <div class="item-desc">每天中午 12:00 自动删除符合规则的存储：1）最新失败日志命中关键词；2）未启用自动刷新或已过期，且文件数量为 0。关键词支持用 | 分隔多个字眼。</div>
+        </div>
+        <div class="item-right">
+          <div class="right-inline right-inline-wrap">
+            <n-switch v-model:value="additionForm.autoDeleteInvalidStorageEnabled" />
+            <n-input
+              v-model:value="additionForm.autoDeleteInvalidStorageKeywords"
+              placeholder="例如：资源不存在|文件不存在|分享已失效"
+              clearable
+              style="width: 420px"
+            />
+            <n-button
+              size="small"
+              type="primary"
+              :loading="savingAutoDeleteInvalidStorage"
+              @click="handleSaveAutoDeleteInvalidStorage"
+            >
+              保存
+            </n-button>
+          </div>
+        </div>
+      </div>
+
       <n-divider />
 
       <!-- 用户认证 -->
@@ -420,6 +446,9 @@ const additionForm = reactive<Models.SettingAddition>({
   persistentCheckEnabled: false,
   persistentCheckDay: 1,
   persistentCheckTime: '03:00',
+
+  autoDeleteInvalidStorageEnabled: false,
+  autoDeleteInvalidStorageKeywords: '资源不存在|文件不存在|目录不存在|分享已失效|分享不存在',
 })
 
 // 初始化完成标记，防止初始渲染触发自动保存
@@ -440,6 +469,7 @@ const loadingCloudTokens = ref(false)
 const savingDefaultToken = ref(false)
 const savingExternalAutoRefresh = ref(false)
 const savingPersistentCheck = ref(false)
+const savingAutoDeleteInvalidStorage = ref(false)
 
 const generateExternalApiKey = () => {
   // 32 chars strong random (URL-safe-ish + symbols)
@@ -547,6 +577,28 @@ const handleSavePersistentCheck = () => {
     })
     .finally(() => {
       savingPersistentCheck.value = false
+    })
+}
+
+const handleSaveAutoDeleteInvalidStorage = () => {
+  savingAutoDeleteInvalidStorage.value = true
+  modifySettingAddition({
+    autoDeleteInvalidStorageEnabled: !!additionForm.autoDeleteInvalidStorageEnabled,
+    autoDeleteInvalidStorageKeywords: (additionForm.autoDeleteInvalidStorageKeywords || '').trim(),
+  })
+    .then((res) => {
+      if (res.code === 200) {
+        message.success('已保存')
+        originalAddition.value = { ...additionForm }
+      } else {
+        message.error(res.msg || '保存失败')
+      }
+    })
+    .catch((err) => {
+      message.error(err instanceof Error ? err.message : '网络错误')
+    })
+    .finally(() => {
+      savingAutoDeleteInvalidStorage.value = false
     })
 }
 
@@ -784,6 +836,10 @@ onMounted(() => {
           (res.data.persistentCheckEnabled ?? false) as boolean
         additionForm.persistentCheckDay = res.data.persistentCheckDay ?? 1
         additionForm.persistentCheckTime = res.data.persistentCheckTime ?? '03:00'
+        additionForm.autoDeleteInvalidStorageEnabled =
+          (res.data.autoDeleteInvalidStorageEnabled ?? false) as boolean
+        additionForm.autoDeleteInvalidStorageKeywords =
+          res.data.autoDeleteInvalidStorageKeywords ?? '资源不存在|文件不存在|目录不存在|分享已失效|分享不存在'
       } else {
         message.error(res.msg || '获取附加设置失败')
       }
@@ -865,6 +921,11 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.right-inline-wrap {
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 /* Switch/Slider 细节优化 */

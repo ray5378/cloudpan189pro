@@ -14,6 +14,7 @@ import (
 	cloudtokenSvi "github.com/xxcheng123/cloudpan189-share/internal/services/cloudtoken"
 	filetasklogSvi "github.com/xxcheng123/cloudpan189-share/internal/services/filetasklog"
 	mountpointSvi "github.com/xxcheng123/cloudpan189-share/internal/services/mountpoint"
+	virtualfileSvi "github.com/xxcheng123/cloudpan189-share/internal/services/virtualfile"
 
 	stdContext "context"
 )
@@ -47,6 +48,7 @@ func Start(svc bootstrap.ServiceContext) (func(), error) {
 		mountPointService     = mountpointSvi.NewService(svc, cloudTokenService, cloudBridgeService)
 		autoIngestPlanService = autoingestplanSvi.NewService(svc)
 		autoIngestLogService  = autoingestlogSvi.NewService(svc)
+		virtualFileService    = virtualfileSvi.NewService(svc)
 
 		taskEngine = svc.GetTaskEngine()
 	)
@@ -56,7 +58,7 @@ func Start(svc bootstrap.ServiceContext) (func(), error) {
 		errs = append(errs, err)
 	}
 
-	refreshFileScheduler := NewRefreshFileScheduler(mountPointService, taskEngine)
+	refreshFileScheduler := NewRefreshFileScheduler(mountPointService, fileTaskLogService, virtualFileService, taskEngine)
 	if err := refreshFileScheduler.Start(ctx); err != nil {
 		errs = append(errs, err)
 	}

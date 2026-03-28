@@ -26,6 +26,9 @@ type modifyAdditionRequest struct {
 	PersistentCheckEnabled *bool   `json:"persistentCheckEnabled"`
 	PersistentCheckDay     *int    `json:"persistentCheckDay" binding:"omitempty,min=1,max=28"`
 	PersistentCheckTime    *string `json:"persistentCheckTime" binding:"omitempty,len=5"`
+
+	AutoDeleteInvalidStorageEnabled  *bool   `json:"autoDeleteInvalidStorageEnabled"`
+	AutoDeleteInvalidStorageKeywords *string `json:"autoDeleteInvalidStorageKeywords"`
 }
 
 // ModifyAddition 修改系统附加设置（可选字段更新）
@@ -110,6 +113,12 @@ func (h *handler) ModifyAddition() httpcontext.HandlerFunc {
 			}
 			merged.PersistentCheckTime = *req.PersistentCheckTime
 		}
+		if req.AutoDeleteInvalidStorageEnabled != nil {
+			merged.AutoDeleteInvalidStorageEnabled = *req.AutoDeleteInvalidStorageEnabled
+		}
+		if req.AutoDeleteInvalidStorageKeywords != nil {
+			merged.AutoDeleteInvalidStorageKeywords = *req.AutoDeleteInvalidStorageKeywords
+		}
 
 		// 更新数据库
 		if err := h.settingService.Update(ctx.GetContext(),
@@ -122,19 +131,21 @@ func (h *handler) ModifyAddition() httpcontext.HandlerFunc {
 
 		// 同步内存态
 		shared.SettingAddition = models.SettingAddition{
-			LocalProxy:                 merged.LocalProxy,
-			MultipleStream:             merged.MultipleStream,
-			MultipleStreamThreadCount:  merged.MultipleStreamThreadCount,
-			MultipleStreamChunkSize:    merged.MultipleStreamChunkSize,
-			TaskThreadCount:            merged.TaskThreadCount,
-			ExternalAPIKey:             merged.ExternalAPIKey,
-			DefaultTokenId:             merged.DefaultTokenId,
-			ExternalAutoRefreshEnabled: merged.ExternalAutoRefreshEnabled,
-			ExternalRefreshIntervalMin: merged.ExternalRefreshIntervalMin,
-			ExternalAutoRefreshDays:    merged.ExternalAutoRefreshDays,
-			PersistentCheckEnabled:     merged.PersistentCheckEnabled,
-			PersistentCheckDay:         merged.PersistentCheckDay,
-			PersistentCheckTime:        merged.PersistentCheckTime,
+			LocalProxy:                       merged.LocalProxy,
+			MultipleStream:                   merged.MultipleStream,
+			MultipleStreamThreadCount:        merged.MultipleStreamThreadCount,
+			MultipleStreamChunkSize:          merged.MultipleStreamChunkSize,
+			TaskThreadCount:                  merged.TaskThreadCount,
+			ExternalAPIKey:                   merged.ExternalAPIKey,
+			DefaultTokenId:                   merged.DefaultTokenId,
+			ExternalAutoRefreshEnabled:       merged.ExternalAutoRefreshEnabled,
+			ExternalRefreshIntervalMin:       merged.ExternalRefreshIntervalMin,
+			ExternalAutoRefreshDays:          merged.ExternalAutoRefreshDays,
+			PersistentCheckEnabled:           merged.PersistentCheckEnabled,
+			PersistentCheckDay:               merged.PersistentCheckDay,
+			PersistentCheckTime:              merged.PersistentCheckTime,
+			AutoDeleteInvalidStorageEnabled:  merged.AutoDeleteInvalidStorageEnabled,
+			AutoDeleteInvalidStorageKeywords: merged.AutoDeleteInvalidStorageKeywords,
 		}
 
 		ctx.Success()
