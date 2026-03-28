@@ -1,63 +1,81 @@
-# CloudPan189 Share
+# CloudPan189 Pro
 
-一个基于天翼云盘的文件分享和管理系统，提供 WebDAV 接口和 Web 管理界面。
+一个基于天翼云盘分享链接的文件挂载、WebDAV、媒体映射与自动化管理系统。
 
-## 🚧 提示
-自动刷新有点问题，正在重构，有问题先提issue
+当前主仓库：
+- GitHub: `https://github.com/ray154856235/cloudpan189pro`
+- Docker: `ray5378/cloudpan189-share`
 
-## 🚀 项目简介
+---
 
-## 🧾 版本记录
+## 项目现状
 
-- v3.0.9
-  - 新增对外接口：POST /api/external/create-storage（外部创建挂载），默认异步 202，返回 { taskId }
-  - 每次直读系统设置 Addition，不依赖内存；鉴权使用 External API Key（Header: X-API-Key 或 Body: apiKey/api-key）
-  - 仅支持天翼 cloud.189.cn 分享链接；解析兼容“存储管理 → 文件分享”的混合文本（含访问码等）
-  - 系统设置页新增：External API Key 输入/生成/保存（掩码回显）、默认云盘令牌（tianyi）下拉、外部创建默认自动刷新三项
-  - Dockerfile 前端构建阶段修正（避免 corepack prepare 直连 registry.npmjs.org）
-  - 镜像：ray5378/cloudpan189-share:v3.0.9（digest: sha256:ab2dc4daccbc8b985b03ace088bc8050e4d84ab6a871a0105a6702063ea1ad31）
+这份仓库当前已经包含以下增强能力：
 
-- v2.0.2
-  - 存储管理：后端支持按文件数量(fileCount)排序 + 分页（低内存，零表结构改动）
-  - 前端：去除前端全量拉取排序，改为 sortBy/sortOrder 服务端排序
-  - Docker：修复静态资源拷贝（fe/dist→/app/public），解决 404
-  - Tag：ray5378/cloudpan189-share:v2.0.2
+- 外部接口创建存储：`POST /api/external/create-storage`
+- 外部创建默认自动刷新策略（系统设置可配置）
+- 自动刷新调度修复：按每个节点自己的开始时间 + 间隔计算，不再按全局整点误刷
+- 批量刷新 / 批量改 token / 批量开关自动刷新 的并发统计修复
+- 存储节点“持久检测存储”：每月指定日期和时间，对未启用自动刷新或已过期节点执行一次普通刷新
+- 自动删除失效存储：支持关键词规则 + 成功刷新后 0 文件规则
+- 自动删除前记录命中原因日志，便于审计和回溯
 
+---
 
-CloudPan189 Share 是一款专为天翼云盘设计的智能文件分享管理工具。该系统能够将天翼云盘的分享链接转换为标准的目录结构，并通过 WebDAV 协议提供统一的文件访问接口。
+## 版本与发布
 
-## ✨ 核心功能
+### 当前推荐版本
 
-**🔄 智能链接转换**
-- 解析天翼云盘分享链接，转换为标准目录树结构
-- 支持多层级文件夹映射，保持原有组织架构
+- Git tag: `r0.06`
+- Docker tag: `ray5378/cloudpan189-share:r0.06`
+- Docker latest: `ray5378/cloudpan189-share:latest`
 
-**🌐 WebDAV 统一接口**
-- 提供标准 WebDAV 协议支持，兼容主流客户端
-- 统一文件访问入口，简化多链接管理流程
-- 完整的文件锁定机制，确保并发安全
+已发布 digest：
 
-**💻 全功能网页端**
-- 现代化文件浏览器界面，支持文件夹导航
-- 支持在线下载、搜索功能
-- 内置媒体播放器，支持视频、音频在线预览
+- `ray5378/cloudpan189-share:r0.06`
+  - `sha256:78e97cb693c89a696a63c754f8ce0834108b616148024a831ec7ef6d8388247a`
+- `ray5378/cloudpan189-share:latest`
+  - `sha256:c339b4c7108955267456e2f0817bd3b6676a43669f0461bc1c3690a00e7a890e`
 
-**⚡ 高性能流媒体**
-- 多线程并发传输，提升大文件访问速度
-- 流式播放技术，实现视频无缓冲即时观看
-- 智能带宽适配，确保播放流畅度
+### 历史标签
 
-**📁 媒体目录映射**
-- 将云盘文件通过strm形式映射到本地media_dir目录
-- 完美兼容Emby、Jellyfin、Plex等媒体服务器
-- 可自定义支持的视频格式列表
-- 支持一键重建和批量管理
+- `re0.01`
+- `re0.03`
+- `r0.06`
 
-## 🚀 快速开始
+---
 
-### Docker 部署（推荐）
+## 核心能力
 
-```sh
+### 1. 存储挂载
+- 将天翼云盘分享链接挂载为站内目录
+- 支持目录化浏览、文件统计、Web 管理
+- 支持普通刷新 / 深度刷新
+
+### 2. WebDAV
+- 暴露标准 WebDAV 接口
+- 可直接挂载到桌面系统、文件管理器、媒体工具
+
+### 3. 媒体映射
+- 可将云盘文件映射为 `strm`
+- 可对接 Emby / Jellyfin / Plex
+
+### 4. 外部自动化接入
+- 提供 `POST /api/external/create-storage`
+- 可由你自己的脚本、Webhook、外部任务系统直接创建存储节点
+
+### 5. 自动运维能力
+- 自动刷新
+- 持久检测存储
+- 自动删除失效存储
+
+---
+
+## 快速开始
+
+## Docker 部署（推荐）
+
+```bash
 docker run -d \
   --name cloudpan189-share \
   -p 12395:12395 \
@@ -70,18 +88,27 @@ docker run -d \
   -v $(pwd)/data:/app/data \
   -v $(pwd)/media_dir:/app/media_dir \
   --restart unless-stopped \
-  ray5378/cloudpan189-share:v3.0.9
+  ray5378/cloudpan189-share:latest
 ```
-> 如需固定镜像内容，可使用 digest：`ray5378/cloudpan189-share@sha256:ab2dc4daccbc8b985b03ace088bc8050e4d84ab6a871a0105a6702063ea1ad31`
 
-更多请参考文档：[CloudPan189 Share 快速开始文档](docs/1.quick_start.md)
+如需固定镜像内容，也可以直接使用 digest：
 
-### docker-compose 示例
+```bash
+docker run -d \
+  --name cloudpan189-share \
+  -p 12395:12395 \
+  -v $(pwd)/data:/app/data \
+  -v $(pwd)/media_dir:/app/media_dir \
+  --restart unless-stopped \
+  ray5378/cloudpan189-share@sha256:c339b4c7108955267456e2f0817bd3b6676a43669f0461bc1c3690a00e7a890e
+```
+
+## docker-compose 示例
 
 ```yaml
 services:
   189cloudshare:
-    image: ray5378/cloudpan189-share:v3.0.9
+    image: ray5378/cloudpan189-share:latest
     container_name: 189cloudshare
     environment:
       - GOMEMLIMIT=250MiB
@@ -93,76 +120,106 @@ services:
     ports:
       - "12395:12395"
     volumes:
-      - /vol1/1000/SSD/docker/189cloudshare/data:/app/data
-      - /vol1/1000/SSD/docker/189cloudshare/media_dir:/app/media_dir
+      - ./data:/app/data
+      - ./media_dir:/app/media_dir
     restart: always
 ```
 
-### 访问系统
-- Web 界面: `http://服务器IP:12395`
-- WebDAV 地址: `http://服务器IP:12395/dav`
+### 访问地址
 
-### 初始化设置
-1. 首次打开会进入初始化页面
-2. 登录后在"令牌管理"中添加天翼云盘令牌
-3. 在"系统设置 → External API" 配置 External API Key / 默认云盘令牌（tianyi）/ 外部创建默认自动刷新
-4. 在"存储管理"中配置或查看存储源
+- Web 界面：`http://服务器IP:12395`
+- WebDAV：`http://服务器IP:12395/dav`
 
-## 📁 WebDAV 挂载说明
+---
 
-### 挂载地址格式
+## 初始化步骤
+
+1. 首次打开进入初始化页面
+2. 登录后台
+3. 在 **令牌管理** 中添加天翼云盘令牌
+4. 在 **系统设置** 中按需配置：
+   - External API Key
+   - 默认云盘令牌（tianyi）
+   - 外部创建默认自动刷新
+   - 持久检测存储
+   - 自动删除失效存储
+5. 在 **存储管理** 中添加或查看挂载点
+
+---
+
+## WebDAV 使用
+
+### 地址格式
+
+```text
+http(s)://你的域名或IP:端口/dav
 ```
-http(s)://你的网站地址/dav
-```
 
-### 示例地址
-```
+示例：
+
+```text
 http://localhost:12395/dav
 ```
 
-### 支持的客户端
-- **Windows**: 网络驱动器映射、RaiDrive、WinSCP
-- **macOS**: Finder 连接服务器、Cyberduck
-- **Linux**: davfs2、文件管理器（Nautilus、Dolphin）
-- **移动端**: ES文件浏览器、Solid Explorer、FE文件管理器
-- **专业工具**: Cyberduck、FileZilla Pro
+### 支持客户端
 
-### 挂载步骤
-1. 打开支持 WebDAV 的客户端
-2. 输入服务器地址：`http://你的域名或IP:端口/dav`
-3. 输入认证信息（如需要）
-4. 连接成功后即可像本地磁盘一样使用
+- Windows：网络驱动器、RaiDrive、WinSCP
+- macOS：Finder、Cyberduck
+- Linux：davfs2、Nautilus、Dolphin
+- 移动端：ES 文件浏览器、Solid Explorer、FE 文件管理器
 
-### 注意事项
-- 确保服务正常运行且端口可访问
-- 部分客户端可能需要启用不安全连接（HTTP）
-- 建议在生产环境中使用 HTTPS 协议
+---
 
-## 🌐 外部接口（External API）
+## External API
 
-默认异步（202 Accepted），用于将“分享链接”挂载到指定目录。
+## 创建存储
+
+默认异步返回 `202 Accepted`。
 
 - 路径：`POST /api/external/create-storage`
-- 鉴权：系统设置页的 External API Key
-  - Header: `X-API-Key: <key>`
-  - Body: `apiKey` 或 `api-key`
-- 入参（JSON）：
-  - `delayTime?` number，默认 0（秒）
-  - `shareLink | 分享链接` string（支持 cloud.189.cn 分享链接、纯分享码、含访问码混合文本）
-  - `targetDir | 目标文件夹` string（必须以 `/` 开头，拒绝 `..`、非法路径）
-  - `tokenId?` number（可选；默认使用“默认云盘令牌（tianyi）”）
-- 返回：
-  - 202 Accepted：`{ "taskId": number }`
-  - 401 Unauthorized：API Key 无效
-  - 403 Forbidden：未配置 External API Key
-  - 400 Bad Request：参数不合法
-- 幂等与兼容：
-  - 链接解析兼容“存储管理 → 文件分享”；仅支持天翼 cloud.189.cn 分享
-  - 同一路径已有挂载时由内部流程防重（若重复将记录在任务日志）
+- 鉴权：External API Key
+  - Header: `X-API-Key`
+  - 或 Body: `apiKey` / `api-key`
 
-示例
+### 请求参数
 
-- 使用 Header 传 Key：
+支持这些字段：
+
+- `delayTime?`：延迟秒数，默认 0
+- `shareLink` / `分享链接`
+- `targetDir` / `目标文件夹`
+- `tokenId?`
+
+### shareLink 兼容格式
+
+当前实现兼容以下输入：
+
+- 标准链接
+  - `https://cloud.189.cn/t/aiUVZz3QZjAn`
+- 纯分享码
+  - `aiUVZz3QZjAn`
+- 混合文本
+  - `网盘（tianyi）:https://cloud.189.cn/t/aiUVZz3QZjAn`
+- 携带访问码文本
+  - `aiUVZz3QZjAn（访问码：1234）`
+  - `code:1234`
+
+### 返回
+
+- `202 Accepted`
+
+示例：
+
+```json
+{
+  "taskId": 123
+}
+```
+
+### curl 示例
+
+#### Header 传 API Key
+
 ```bash
 curl -X POST 'http://<ip>:<port>/api/external/create-storage' \
   -H 'Content-Type: application/json' \
@@ -172,10 +229,10 @@ curl -X POST 'http://<ip>:<port>/api/external/create-storage' \
     "shareLink": "https://cloud.189.cn/t/aiUVZz3QZjAn",
     "targetDir": "/手动2026/隐身的名字 (2026)"
   }'
-# => 202 Accepted { "taskId": 123 }
 ```
 
-- 使用 Body 传 Key（兼容中文键名）：
+#### Body 传 API Key（兼容中文键名）
+
 ```bash
 curl -X POST 'http://<ip>:<port>/api/external/create-storage' \
   -H 'Content-Type: application/json' \
@@ -185,168 +242,211 @@ curl -X POST 'http://<ip>:<port>/api/external/create-storage' \
     "分享链接": "网盘（tianyi）:https://cloud.189.cn/t/aiUVZz3QZjAn",
     "目标文件夹": "/手动2026/隐身的名字 (2026)"
   }'
-# => 202 Accepted { "taskId": 123 }
 ```
 
-任务查询
-- 系统 → 任务状态 → 文件任务日志（类型：external_create_storage）
+### 任务查看
 
-系统设置页（前端已提供）
-- External API Key：输入/显示隐藏/生成（32 位强随机）/保存
-- 默认云盘令牌（tianyi）：下拉选择（无分页加载）
-- 外部创建默认自动刷新：Enabled / Interval(默认60分钟) / Days(默认60天)
+当前可以在页面中查看：
+- **任务状态 → 文件任务日志**
+- external create-storage 任务会记录到任务日志中
 
-## 🛠️ 技术栈
+---
 
-### 后端
-- **语言**: Go 1.25
-- **框架**: Gin
-- **数据库**: SQLite (GORM)
-- **认证**: JWT
+## 系统设置说明
 
-### 前端
-- **框架**: Vue 3 + TypeScript
-- **构建工具**: Vite
-- **状态管理**: Pinia
+## 1. External API Key
+用于 `/api/external/create-storage` 的鉴权。
 
-## 📦 开发部署
+前端已支持：
+- 输入
+- 显示/隐藏
+- 自动生成
+- 保存
+
+## 2. 默认云盘令牌（tianyi）
+用于 external create-storage 未显式传 `tokenId` 时的默认令牌。
+
+## 3. 外部创建默认自动刷新
+用于 external 接口新建挂载时的默认自动刷新配置：
+- 是否开启
+- 刷新间隔（分钟）
+- 生效天数
+
+## 4. 持久检测存储
+用于每月指定日期、指定时间，对以下节点执行一次**普通刷新**：
+
+- 未启用自动刷新
+- 自动刷新日期已过期
+
+用途：
+- 检查文件是否仍然存在
+- 对长期不活跃节点做低频巡检
+
+## 5. 自动删除失效存储
+用于每天中午 `12:00` 自动删除符合规则的节点。
+
+支持两类规则：
+
+### 规则 A：失败关键词命中
+根据存储节点**最新失败日志**里的内容进行匹配。
+
+匹配字段：
+- `errorMsg`
+- `result`
+- `desc`
+- `title`
+
+关键词输入框支持：
+
+```text
+资源不存在|文件不存在|目录不存在|分享已失效|分享不存在
+```
+
+使用 `|` 分隔多个字眼。
+
+### 规则 B：成功刷新后仍然 0 文件
+只有同时满足以下条件才会删除：
+
+- 未启用自动刷新，或自动刷新已过期
+- 文件数量 = 0
+- 最新刷新状态 = 成功
+
+这样可以避免因为网络波动、临时失败导致误删。
+
+### 删除前日志
+自动删除前会先记录一条任务日志，写明命中原因，例如：
+
+- `命中自动删除关键词: 资源不存在`
+- `未启用自动刷新或已过期，且最新刷新成功后文件数量仍为0`
+
+---
+
+## 自动刷新说明
+
+当前自动刷新逻辑已经修复为：
+
+- 以每个挂载点自己的 `AutoRefreshBeginAt` 为锚点
+- 按 `RefreshInterval` 计算 slot
+- 同一 slot 在单进程内只触发一次
+
+这比“按当天零点全局整除”的老逻辑更稳定，不会误刷同 interval 的其他节点。
+
+---
+
+## 存储节点状态说明
+
+当前后端已经支持：
+
+- 最新任务状态筛选：`taskLogStatus`
+- 失败细分筛选：`failureKind=permanent|transient`
+
+语义如下：
+
+### permanent
+- 最新任务失败
+- 且不在自动刷新有效期内
+
+### transient
+- 最新任务失败
+- 但仍在自动刷新有效期内
+
+---
+
+## 开发部署
 
 ### 环境要求
+
 - Go 1.25+
 - Node.js 22+
-- npm 或 yarn 或 pnpm
+- pnpm 10+
+- SQLite / MySQL（按配置）
 
-### 1. 克隆项目
+### 克隆项目
+
 ```bash
 git clone https://github.com/ray154856235/cloudpan189pro.git
 cd cloudpan189pro
 ```
 
-### 2. 后端部署
+### 后端开发
+
 ```bash
-# 安装依赖
 go mod tidy
-
-# 构建项目
-make build
-
-# 或直接运行
 go run cmd/main.go
 ```
 
-### 3. 前端部署
+### 前端开发
+
 ```bash
-# 进入前端目录
 cd fe
-
-# 安装依赖
-npm install
-
-# 开发模式
-npm run dev
-
-# 构建生产版本
-npm run build
+pnpm install
+pnpm dev
 ```
 
-### 4. 配置文件
+### 前端构建
 
-编辑 `etc/config.yaml` 配置文件：
+```bash
+cd fe
+pnpm build
+```
+
+### 配置文件
+
+编辑 `etc/config.yaml`：
 
 ```yaml
-port: 12395          # 服务端口
-dbFile: "data/share.db"   # 数据库文件路径
-logFile: "logs/share.log" # 日志文件路径
-mediaDir: "media_dir"  # 媒体文件映射目录
+port: 12395
+dbFile: "data/share.db"
+logFile: "logs/share.log"
+mediaDir: "media_dir"
 ```
-
-### 5. 启动服务
-```bash
-# 启动后端服务
-go run cmd/main.go
-
-# 启动前端开发服务器（另一个终端）
-cd fe && npm run dev
-```
-
-### 6. 访问开发环境
-- 前端界面: http://localhost:5173
-- 后端 API: http://localhost:12395
-- WebDAV 地址: http://localhost:12395/dav
-
-## 🔧 开发指南
-
-### 项目结构
-```
-cloudpan189-share/
-├── cmd/                 # 主程序入口
-├── configs/             # 配置管理
-├── etc/                 # 配置文件
-├── fe/                  # 前端项目
-│   ├── src/
-│   │   ├── api/         # API 接口
-│   │   ├── components/  # 组件
-│   │   ├── stores/      # 状态管理
-│   │   ├── utils/       # 工具函数
-│   │   └── views/       # 页面组件
-├── internal/            # 内部模块
-│   ├── jobs/           # 后台任务
-│   ├── models/         # 数据模型
-│   ├── router/         # 路由
-│   └── services/       # 业务服务
-└── logs/               # 日志文件
-```
-
-### API 接口
-- `/api/user/*` - 用户管理
-- `/api/cloudtoken/*` - 令牌管理
-- `/api/storage/*` - 存储管理
-- `/api/setting/*` - 系统设置
-- `/api/external/create-storage` - 外部创建挂载（默认 202 异步）
-- `/dav/*` - WebDAV 接口
-
-## ❓ 常见问题
-
-### WebDAV 连接失败
-- 检查防火墙设置，确保端口开放
-- 某些客户端需要在地址末尾添加 `/`
-- Windows 网络驱动器可能需要启用基本认证
-
-### 文件播放卡顿
-- 检查网络带宽和服务器性能
-- 尝试降低播放质量
-- 确保天翼云盘令牌有效
-
-### 令牌失效问题
-- 定期检查令牌状态
-- 及时更新过期令牌
-- 建议配置多个备用令牌
-
-### Docker 相关问题
-- 确保 Docker 服务正常运行
-- 检查端口映射是否正确
-- 数据卷挂载路径是否有权限
-
-## 🤝 贡献
-
-我们欢迎各种形式的贡献，包括但不限于提交 Bug 报告、功能请求、文档改进和代码贡献。请在提交之前阅读我们的贡献指南（如果可用）。
-
-## 📄 许可证
-
-本项目采用 MIT 许可证。详情请参阅 `LICENSE` 文件。
-
-## 🙏 致谢
-
-感谢所有为本项目做出贡献的开发者和社区成员。
-
-## 💬 支持
-
-如果您在使用过程中遇到任何问题，可以通过以下方式获得支持：
-
-- 提交 GitHub Issue
-- 查阅项目文档
-- 参与社区讨论
 
 ---
 
-⭐ 如果这个项目对您有帮助，请给它一个 Star！
+## 项目结构
+
+```text
+cloudpan189pro/
+├── cmd/
+├── etc/
+├── fe/
+├── internal/
+├── docs/
+├── Dockerfile
+├── Makefile
+└── README.md
+```
+
+---
+
+## 常见问题
+
+### 1. WebDAV 连接失败
+- 检查端口映射和防火墙
+- 检查 `/dav` 路径是否正确
+- Windows 某些客户端需要启用基础认证
+
+### 2. 令牌失效
+- 到“令牌管理”里重新登录或更新 token
+- 建议保留备用 token
+
+### 3. 外部接口创建失败
+- 检查 External API Key
+- 检查默认 token 是否配置
+- 检查 `targetDir` 是否以 `/` 开头
+- 检查 shareLink 是否为天翼云盘分享链接或可解析文本
+
+### 4. 自动删除误删担忧
+当前规则已经尽量收紧：
+- 关键词规则可控
+- 0 文件删除要求“最新刷新成功”
+- 删除前写明命中原因日志
+
+---
+
+## 支持与反馈
+
+如有问题，可在新仓库反馈：
+- `https://github.com/ray154856235/cloudpan189pro`
+
+如果这个项目对你有帮助，欢迎 Star。
