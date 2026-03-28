@@ -264,24 +264,45 @@ func (s *RefreshFileScheduler) runAutoDeletePermanentInvalid(ctx context.Context
 	}
 
 	deleteIDs := make([]int64, 0)
+	deleteReasons := make(map[int64]string)
 	for _, mp := range mounts {
 		if mp == nil {
 			continue
 		}
 		lastLog := lastLogs[mp.FileId]
-		matchedKeyword := lastLog != nil && logMatchesAnyKeyword(lastLog, keywords)
+		matchedKeyword, matchedKeywordText := logMatchesAnyKeyword(lastLog, keywords)
 		expiredOrDisabled := !mp.EnableAutoRefresh || !mp.IsInAutoRefreshPeriod()
 		zeroFiles := fileCountMap[mp.FileId] == 0
 		latestRefreshSucceeded := lastLog != nil && lastLog.Status == models.StatusCompleted
 
-		if matchedKeyword || (expiredOrDisabled && zeroFiles && latestRefreshSucceeded) {
+		if matchedKeyword {
 			deleteIDs = append(deleteIDs, mp.FileId)
+			deleteReasons[mp.FileId] = fmt.Sprintf("命中自动删除关键词: %s", matchedKeywordText)
+			continue
+		}
+		if expiredOrDisabled && zeroFiles && latestRefreshSucceeded {
+			deleteIDs = append(deleteIDs, mp.FileId)
+			deleteReasons[mp.FileId] = "未启用自动刷新或已过期，且最新刷新成功后文件数量仍为0"
 		}
 	}
 
 	if len(deleteIDs) == 0 {
 		ctx.Info("自动删除失效存储执行完成", zap.Int("count", 0), zap.String("schedule_key", checkKey))
 		return
+	}
+
+	for _, fileID := range deleteIDs {
+		reason := deleteReasons[fileID]
+		tracker, createErr := s.fileTaskLogService.Create(
+			ctx,
+			"自动删除失效存储",
+			"自动删除失效存储",
+			filetasklogSvi.WithFile(fileID),
+			filetasklogSvi.WithDesc(reason),
+		)
+		if createErr == nil && tracker != nil {
+			_ = s.fileTaskLogService.Completed(ctx, tracker)
+		}
 	}
 
 	taskReq := &topic.FileBatchDeleteRequest{IDs: deleteIDs}
@@ -327,17 +348,17 @@ func splitKeywords(raw string) []string {
 	return result
 }
 
-func logMatchesAnyKeyword(logItem *models.FileTaskLog, keywords []string) bool {
+func logMatchesAnyKeyword(logItem *models.FileTaskLog, keywords []string) (bool, string) {
 	if logItem == nil || len(keywords) == 0 {
-		return false
+		return false, ""
 	}
 	text := strings.ToLower(logItem.ErrorMsg + "\n" + logItem.Result + "\n" + logItem.Desc + "\n" + logItem.Title)
 	for _, keyword := range keywords {
 		if strings.Contains(text, strings.ToLower(keyword)) {
-			return true
+			return true, keyword
 		}
 	}
-	return false
+	return false, ""
 }
 
 func parseClockHM(value string) (hour, minute int, ok bool) {
