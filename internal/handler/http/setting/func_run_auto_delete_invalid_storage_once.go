@@ -84,23 +84,7 @@ func (h *handler) RunAutoDeleteInvalidStorageOnce() httpcontext.HandlerFunc {
 			fileCountMap[item.TopId] = item.Count
 		}
 
-		candidateMounts := make([]*models.MountPoint, 0)
-		candidateFileIDs := make([]int64, 0)
-		for _, mp := range mounts {
-			if mp == nil {
-				continue
-			}
-			if fileCountMap[mp.FileId] == 0 {
-				candidateMounts = append(candidateMounts, mp)
-				candidateFileIDs = append(candidateFileIDs, mp.FileId)
-			}
-		}
-		if len(candidateMounts) == 0 {
-			ctx.Success(map[string]any{"count": 0, "message": "没有文件数量为 0 的候选节点"})
-			return
-		}
-
-		lastLogs, err := h.fileTaskLogService.LatestByFileIDs(ctx.GetContext(), candidateFileIDs)
+		lastLogs, err := h.fileTaskLogService.LatestByFileIDs(ctx.GetContext(), allFileIDs)
 		if err != nil {
 			ctx.Fail(codeQueryFailed.WithError(err))
 			return
@@ -109,7 +93,7 @@ func (h *handler) RunAutoDeleteInvalidStorageOnce() httpcontext.HandlerFunc {
 		keywords := splitAutoDeleteKeywords(cfg.AutoDeleteInvalidStorageKeywords)
 		deleteIDs := make([]int64, 0)
 		deleteReasons := make(map[int64]string)
-		for _, mp := range candidateMounts {
+		for _, mp := range mounts {
 			if mp == nil {
 				continue
 			}

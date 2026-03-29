@@ -201,7 +201,7 @@
       <div class="setting-item">
         <div class="item-left">
           <div class="item-title">自动删除失效存储</div>
-          <div class="item-desc">每天中午 12:00 自动删除符合规则的存储：1）最新失败日志命中关键词；2）未启用自动刷新或已过期，且文件数量为 0、最新刷新成功。支持手动触发执行一次，关键词支持用 | 分隔多个字眼。</div>
+          <div class="item-desc">每天中午 12:00 自动删除符合规则的存储：满足任一条件即可删除——1）最新失败日志命中关键词；2）未启用自动刷新或已过期，且文件数量为 0、最新刷新成功。手动触发执行一次与自动删除使用相同判断逻辑，关键词支持用 | 分隔多个字眼。</div>
         </div>
         <div class="item-right">
           <div class="right-inline right-inline-wrap">
