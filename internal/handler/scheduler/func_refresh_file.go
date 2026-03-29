@@ -309,16 +309,25 @@ func (s *RefreshFileScheduler) collectRule2FileCounts(ctx context.Context, mount
 		return fileCountMap, true
 	}
 
-	counts, countErr := s.virtualFileService.GroupCountByTopId(ctx, &virtualfile.GroupCountByTopIdRequest{TopIdList: fileIDs})
-	if countErr != nil {
-		ctx.Error("查询失效存储文件数量失败", zap.Error(countErr))
-		return nil, false
-	}
-	for _, item := range counts {
-		if item == nil {
-			continue
+	const batchSize = 200
+	for start := 0; start < len(fileIDs); start += batchSize {
+		end := start + batchSize
+		if end > len(fileIDs) {
+			end = len(fileIDs)
 		}
-		fileCountMap[item.TopId] = item.Count
+		batch := fileIDs[start:end]
+
+		counts, countErr := s.virtualFileService.GroupCountByTopId(ctx, &virtualfile.GroupCountByTopIdRequest{TopIdList: batch})
+		if countErr != nil {
+			ctx.Error("查询失效存储文件数量失败", zap.Error(countErr))
+			return nil, false
+		}
+		for _, item := range counts {
+			if item == nil {
+				continue
+			}
+			fileCountMap[item.TopId] = item.Count
+		}
 	}
 
 	return fileCountMap, true
