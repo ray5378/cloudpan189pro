@@ -21,7 +21,7 @@ func (s *service) BatchDelete(ctx context.Context, ids []int64) error {
 	}
 
 	sampleIDs := lo.Slice(ids, 0, lo.Ternary(len(ids) > 10, 10, len(ids)))
-	db := s.getDB(ctx).Debug().Unscoped().Where("file_id IN ?", ids).Delete(&models.MountPoint{})
+	db := s.getDB(ctx).Unscoped().Where("file_id IN ?", ids).Delete(&models.MountPoint{})
 
 	if db.Error != nil {
 		ctx.Error("批量删除挂载点失败",
