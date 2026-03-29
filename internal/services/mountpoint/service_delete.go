@@ -8,7 +8,7 @@ import (
 )
 
 func (s *service) Delete(ctx context.Context, fileId int64) error {
-	if err := s.getDB(ctx).Debug().Unscoped().Where("file_id = ?", fileId).Delete(&models.MountPoint{}).Error; err != nil {
+	if err := s.getDB(ctx).Unscoped().Where("file_id = ?", fileId).Delete(&models.MountPoint{}).Error; err != nil {
 		ctx.Error("删除挂载点失败", zap.Error(err), zap.Int64("fileId", fileId))
 		return err
 	}
