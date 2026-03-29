@@ -201,14 +201,14 @@
       <div class="setting-item">
         <div class="item-left">
           <div class="item-title">自动删除失效存储</div>
-          <div class="item-desc">每天中午 12:00 自动删除符合规则的存储：1）最新失败日志命中关键词；2）未启用自动刷新或已过期，且最新刷新状态为成功、文件数量为 0。关键词支持用 | 分隔多个字眼。</div>
+          <div class="item-desc">每天中午 12:00 自动删除符合规则的存储：1）最新失败日志命中关键词；2）未启用自动刷新或已过期，且最新刷新成功后文件数量为 0，并进入每 10 分钟一轮、共 6 轮的深度刷新确认，6 轮都成功且仍为 0 才删除。关键词支持用 | 分隔多个字眼。</div>
         </div>
         <div class="item-right">
           <div class="right-inline right-inline-wrap">
             <n-switch v-model:value="additionForm.autoDeleteInvalidStorageEnabled" />
             <n-input
               v-model:value="additionForm.autoDeleteInvalidStorageKeywords"
-              placeholder="例如：资源不存在|文件不存在|分享已失效"
+              placeholder="例如：已失效|不存在|取消|没有"
               clearable
               style="width: 420px"
             />
@@ -448,7 +448,7 @@ const additionForm = reactive<Models.SettingAddition>({
   persistentCheckTime: '03:00',
 
   autoDeleteInvalidStorageEnabled: false,
-  autoDeleteInvalidStorageKeywords: '资源不存在|文件不存在|目录不存在|分享已失效|分享不存在',
+  autoDeleteInvalidStorageKeywords: '已失效|不存在|取消|没有',
 })
 
 // 初始化完成标记，防止初始渲染触发自动保存
@@ -839,7 +839,7 @@ onMounted(() => {
         additionForm.autoDeleteInvalidStorageEnabled =
           (res.data.autoDeleteInvalidStorageEnabled ?? false) as boolean
         additionForm.autoDeleteInvalidStorageKeywords =
-          res.data.autoDeleteInvalidStorageKeywords ?? '资源不存在|文件不存在|目录不存在|分享已失效|分享不存在'
+          res.data.autoDeleteInvalidStorageKeywords ?? '已失效|不存在|取消|没有'
       } else {
         message.error(res.msg || '获取附加设置失败')
       }
