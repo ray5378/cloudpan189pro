@@ -195,12 +195,7 @@ const router = createRouter({
     },
     {
       path: '/',
-      name: 'FileBrowser',
-      component: () => import('@/views/file-browser/index.vue'),
-      meta: {
-        title: '文件浏览',
-        requiresAuth: true,
-      },
+      redirect: '/@dashboard',
     },
     {
       path: '/:pathMatch(.*)*',
