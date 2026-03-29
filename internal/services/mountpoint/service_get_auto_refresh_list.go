@@ -39,7 +39,7 @@ func (s *service) GetAutoRefreshList(ctx context.Context, req *GetAutoRefreshLis
 		return nil, err
 	}
 
-	ctx.Info("查询到需要自动刷新的挂载点", zap.Int("count", len(list)))
+	ctx.Debug("查询到需要自动刷新的挂载点", zap.Int("count", len(list)))
 
 	return list, nil
 }
