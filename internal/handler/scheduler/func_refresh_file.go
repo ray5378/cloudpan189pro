@@ -236,49 +236,14 @@ func (s *RefreshFileScheduler) runAutoDeletePermanentInvalid(ctx context.Context
 		return
 	}
 
-	// 先只筛出文件数量为 0 的 file_id，后续仅针对这些对象查日志与判定自动删除。
-	allFileIDs := make([]int64, 0, len(mounts))
-	for _, mp := range mounts {
-		if mp == nil {
-			continue
-		}
-		allFileIDs = append(allFileIDs, mp.FileId)
-	}
-	counts, countErr := s.virtualFileService.GroupCountByTopId(ctx, &virtualfile.GroupCountByTopIdRequest{TopIdList: allFileIDs})
-	if countErr != nil {
-		ctx.Error("查询失效存储文件数量失败", zap.Error(countErr))
-		return
-	}
-	fileCountMap := make(map[int64]int64, len(allFileIDs))
-	for _, item := range counts {
-		if item == nil {
-			continue
-		}
-		fileCountMap[item.TopId] = item.Count
-	}
-
-	candidateMounts := make([]*models.MountPoint, 0)
-	for _, mp := range mounts {
-		if mp == nil {
-			continue
-		}
-		if fileCountMap[mp.FileId] == 0 {
-			candidateMounts = append(candidateMounts, mp)
-		}
-	}
-	if len(candidateMounts) == 0 {
-		ctx.Info("自动删除失效存储执行完成", zap.Int("count", 0), zap.String("schedule_key", checkKey))
-		return
-	}
-
-	_, lastLogs, candidateFileCountMap, ok := s.collectAutoDeleteState(ctx, candidateMounts)
+	_, lastLogs, fileCountMap, ok := s.collectAutoDeleteState(ctx, mounts)
 	if !ok {
 		return
 	}
 
 	deleteIDs := make([]int64, 0)
 	deleteReasons := make(map[int64]string)
-	for _, mp := range candidateMounts {
+	for _, mp := range mounts {
 		if mp == nil {
 			continue
 		}
@@ -292,7 +257,7 @@ func (s *RefreshFileScheduler) runAutoDeletePermanentInvalid(ctx context.Context
 
 		expiredOrDisabled := !mp.EnableAutoRefresh || !mp.IsInAutoRefreshPeriod()
 		latestRefreshSucceeded := lastLog != nil && lastLog.Status == models.StatusCompleted
-		if expiredOrDisabled && candidateFileCountMap[mp.FileId] == 0 && latestRefreshSucceeded {
+		if expiredOrDisabled && fileCountMap[mp.FileId] == 0 && latestRefreshSucceeded {
 			deleteIDs = append(deleteIDs, mp.FileId)
 			deleteReasons[mp.FileId] = "未启用自动刷新或已过期，且文件数量为0、最新刷新成功"
 		}
