@@ -21,6 +21,13 @@ import (
 	"go.uber.org/zap"
 )
 
+type autoDeleteConfirmationState struct {
+	RoundsTriggered   int
+	RoundsConfirmed   int
+	LastObservedLogID int64
+	NextRunAt         time.Time
+}
+
 type RefreshFileScheduler struct {
 	running            bool
 	mu                 sync.Mutex
@@ -33,19 +40,21 @@ type RefreshFileScheduler struct {
 
 	// 进程内去重：记录每个挂载点最近已触发的 refresh slot，
 	// 避免 scheduler 抖动或 doJob 耗时导致同一槽位重复触发。
-	lastTriggeredSlot      map[int64]int64
-	lastPersistentCheckKey string
-	lastAutoDeleteKey      string
+	lastTriggeredSlot       map[int64]int64
+	lastPersistentCheckKey  string
+	lastAutoDeleteKey       string
+	autoDeleteConfirmations map[int64]*autoDeleteConfirmationState
 }
 
 func NewRefreshFileScheduler(mountPointService mountpoint.Service, fileTaskLogService filetasklogSvi.Service, virtualFileService virtualfile.Service, taskEngine taskengine.TaskEngine) Scheduler {
 	return &RefreshFileScheduler{
-		mountPointService:  mountPointService,
-		fileTaskLogService: fileTaskLogService,
-		virtualFileService: virtualFileService,
-		taskEngine:         taskEngine,
-		running:            false,
-		lastTriggeredSlot:  make(map[int64]int64),
+		mountPointService:       mountPointService,
+		fileTaskLogService:      fileTaskLogService,
+		virtualFileService:      virtualFileService,
+		taskEngine:              taskEngine,
+		running:                 false,
+		lastTriggeredSlot:       make(map[int64]int64),
+		autoDeleteConfirmations: make(map[int64]*autoDeleteConfirmationState),
 	}
 }
 
@@ -201,18 +210,6 @@ func (s *RefreshFileScheduler) runAutoDeletePermanentInvalid(ctx context.Context
 	if !cfg.AutoDeleteInvalidStorageEnabled {
 		return
 	}
-	if now.Hour() != 12 || now.Minute() != 0 {
-		return
-	}
-
-	checkKey := now.Format("2006-01-02 12:00")
-	s.mu.Lock()
-	if s.lastAutoDeleteKey == checkKey {
-		s.mu.Unlock()
-		return
-	}
-	s.lastAutoDeleteKey = checkKey
-	s.mu.Unlock()
 
 	keywords := splitKeywords(cfg.AutoDeleteInvalidStorageKeywords)
 	mounts, err := s.mountPointService.List(ctx, &mountpoint.ListRequest{NoPaginate: true})
@@ -221,15 +218,69 @@ func (s *RefreshFileScheduler) runAutoDeletePermanentInvalid(ctx context.Context
 		return
 	}
 	if len(mounts) == 0 {
-		ctx.Info("自动删除失效存储执行完成", zap.Int("count", 0), zap.String("schedule_key", checkKey))
 		return
 	}
 
+	mountByFileID, lastLogs, fileCountMap, ok := s.collectAutoDeleteState(ctx, mounts)
+	if !ok {
+		return
+	}
+
+	// 1) 每天 12:00 先做首轮筛选：关键词立即删；规则B进入深度刷新确认队列
+	if now.Hour() == 12 && now.Minute() == 0 {
+		checkKey := now.Format("2006-01-02 12:00")
+		s.mu.Lock()
+		alreadyHandled := s.lastAutoDeleteKey == checkKey
+		if !alreadyHandled {
+			s.lastAutoDeleteKey = checkKey
+		}
+		s.mu.Unlock()
+		if !alreadyHandled {
+			deleteIDs := make([]int64, 0)
+			deleteReasons := make(map[int64]string)
+			for _, mp := range mounts {
+				if mp == nil {
+					continue
+				}
+				lastLog := lastLogs[mp.FileId]
+				matchedKeyword, matchedKeywordText := logMatchesAnyKeyword(lastLog, keywords)
+				if matchedKeyword {
+					deleteIDs = append(deleteIDs, mp.FileId)
+					deleteReasons[mp.FileId] = fmt.Sprintf("命中自动删除关键词: %s", matchedKeywordText)
+					continue
+				}
+
+				expiredOrDisabled := !mp.EnableAutoRefresh || !mp.IsInAutoRefreshPeriod()
+				zeroFiles := fileCountMap[mp.FileId] == 0
+				latestRefreshSucceeded := lastLog != nil && lastLog.Status == models.StatusCompleted
+				if expiredOrDisabled && zeroFiles && latestRefreshSucceeded {
+					s.mu.Lock()
+					s.autoDeleteConfirmations[mp.FileId] = &autoDeleteConfirmationState{
+						RoundsTriggered:   0,
+						RoundsConfirmed:   0,
+						LastObservedLogID: lastLog.ID,
+						NextRunAt:         now,
+					}
+					s.mu.Unlock()
+					ctx.Info("自动删除失效存储进入深度刷新确认流程", zap.Int64("file_id", mp.FileId), zap.String("full_path", mp.FullPath))
+				}
+			}
+			s.deleteMountsWithReasons(ctx, deleteIDs, deleteReasons, checkKey)
+		}
+	}
+
+	// 2) 处理规则B的 10分钟 * 6轮 深度刷新确认
+	s.processAutoDeleteConfirmations(ctx, now, mountByFileID, lastLogs, fileCountMap)
+}
+
+func (s *RefreshFileScheduler) collectAutoDeleteState(ctx context.Context, mounts []*models.MountPoint) (map[int64]*models.MountPoint, map[int64]*models.FileTaskLog, map[int64]int64, bool) {
+	mountByFileID := make(map[int64]*models.MountPoint, len(mounts))
 	fileIds := make([]int64, 0, len(mounts))
 	for _, mp := range mounts {
 		if mp == nil {
 			continue
 		}
+		mountByFileID[mp.FileId] = mp
 		fileIds = append(fileIds, mp.FileId)
 	}
 
@@ -238,7 +289,7 @@ func (s *RefreshFileScheduler) runAutoDeletePermanentInvalid(ctx context.Context
 		logs, logErr := s.fileTaskLogService.List(ctx, &filetasklogSvi.ListRequest{NoPaginate: true, FileIdList: fileIds, DescList: []string{"id"}})
 		if logErr != nil {
 			ctx.Error("查询失效存储最新任务日志失败", zap.Error(logErr))
-			return
+			return nil, nil, nil, false
 		}
 		for _, logItem := range logs {
 			if logItem == nil || logItem.FileId == 0 {
@@ -254,7 +305,7 @@ func (s *RefreshFileScheduler) runAutoDeletePermanentInvalid(ctx context.Context
 	counts, countErr := s.virtualFileService.GroupCountByTopId(ctx, &virtualfile.GroupCountByTopIdRequest{TopIdList: fileIds})
 	if countErr != nil {
 		ctx.Error("查询失效存储文件数量失败", zap.Error(countErr))
-		return
+		return nil, nil, nil, false
 	}
 	for _, item := range counts {
 		if item == nil {
@@ -263,34 +314,96 @@ func (s *RefreshFileScheduler) runAutoDeletePermanentInvalid(ctx context.Context
 		fileCountMap[item.TopId] = item.Count
 	}
 
+	return mountByFileID, lastLogs, fileCountMap, true
+}
+
+func (s *RefreshFileScheduler) processAutoDeleteConfirmations(ctx context.Context, now time.Time, mountByFileID map[int64]*models.MountPoint, lastLogs map[int64]*models.FileTaskLog, fileCountMap map[int64]int64) {
+	s.mu.Lock()
+	pending := make(map[int64]*autoDeleteConfirmationState, len(s.autoDeleteConfirmations))
+	for fileID, state := range s.autoDeleteConfirmations {
+		pending[fileID] = &autoDeleteConfirmationState{
+			RoundsTriggered:   state.RoundsTriggered,
+			RoundsConfirmed:   state.RoundsConfirmed,
+			LastObservedLogID: state.LastObservedLogID,
+			NextRunAt:         state.NextRunAt,
+		}
+	}
+	s.mu.Unlock()
+
 	deleteIDs := make([]int64, 0)
 	deleteReasons := make(map[int64]string)
-	for _, mp := range mounts {
-		if mp == nil {
-			continue
-		}
-		lastLog := lastLogs[mp.FileId]
-		matchedKeyword, matchedKeywordText := logMatchesAnyKeyword(lastLog, keywords)
-		expiredOrDisabled := !mp.EnableAutoRefresh || !mp.IsInAutoRefreshPeriod()
-		zeroFiles := fileCountMap[mp.FileId] == 0
-		latestRefreshSucceeded := lastLog != nil && lastLog.Status == models.StatusCompleted
 
-		if matchedKeyword {
-			deleteIDs = append(deleteIDs, mp.FileId)
-			deleteReasons[mp.FileId] = fmt.Sprintf("命中自动删除关键词: %s", matchedKeywordText)
+	for fileID, state := range pending {
+		mp := mountByFileID[fileID]
+		if mp == nil {
+			s.mu.Lock()
+			delete(s.autoDeleteConfirmations, fileID)
+			s.mu.Unlock()
 			continue
 		}
-		if expiredOrDisabled && zeroFiles && latestRefreshSucceeded {
-			deleteIDs = append(deleteIDs, mp.FileId)
-			deleteReasons[mp.FileId] = "未启用自动刷新或已过期，且最新刷新成功后文件数量仍为0"
+
+		lastLog := lastLogs[fileID]
+		if state.RoundsTriggered == 0 {
+			if now.Before(state.NextRunAt) {
+				continue
+			}
+			s.enqueueRefresh(ctx, mp, "自动删除失效存储-深度确认", true, zap.Int("confirm_round", 1), zap.Int("confirm_round_total", 6))
+			state.RoundsTriggered = 1
+			state.NextRunAt = now.Add(10 * time.Minute)
+			if lastLog != nil {
+				state.LastObservedLogID = lastLog.ID
+			}
+			s.mu.Lock()
+			s.autoDeleteConfirmations[fileID] = state
+			s.mu.Unlock()
+			continue
 		}
+
+		if now.Before(state.NextRunAt) {
+			continue
+		}
+
+		if lastLog == nil || lastLog.ID <= state.LastObservedLogID {
+			continue
+		}
+
+		expiredOrDisabled := !mp.EnableAutoRefresh || !mp.IsInAutoRefreshPeriod()
+		zeroFiles := fileCountMap[fileID] == 0
+		if lastLog.Status != models.StatusCompleted || !expiredOrDisabled || !zeroFiles {
+			ctx.Info("自动删除失效存储取消深度确认流程", zap.Int64("file_id", fileID), zap.String("full_path", mp.FullPath))
+			s.mu.Lock()
+			delete(s.autoDeleteConfirmations, fileID)
+			s.mu.Unlock()
+			continue
+		}
+
+		state.RoundsConfirmed++
+		state.LastObservedLogID = lastLog.ID
+		if state.RoundsConfirmed >= 6 {
+			deleteIDs = append(deleteIDs, fileID)
+			deleteReasons[fileID] = "未启用自动刷新或已过期，且连续6轮深度刷新（每10分钟一轮）均成功且文件数量仍为0"
+			s.mu.Lock()
+			delete(s.autoDeleteConfirmations, fileID)
+			s.mu.Unlock()
+			continue
+		}
+
+		nextRound := state.RoundsConfirmed + 1
+		s.enqueueRefresh(ctx, mp, "自动删除失效存储-深度确认", true, zap.Int("confirm_round", nextRound), zap.Int("confirm_round_total", 6))
+		state.RoundsTriggered = nextRound
+		state.NextRunAt = now.Add(10 * time.Minute)
+		s.mu.Lock()
+		s.autoDeleteConfirmations[fileID] = state
+		s.mu.Unlock()
 	}
 
+	s.deleteMountsWithReasons(ctx, deleteIDs, deleteReasons, now.Format("2006-01-02 15:04"))
+}
+
+func (s *RefreshFileScheduler) deleteMountsWithReasons(ctx context.Context, deleteIDs []int64, deleteReasons map[int64]string, scheduleKey string) {
 	if len(deleteIDs) == 0 {
-		ctx.Info("自动删除失效存储执行完成", zap.Int("count", 0), zap.String("schedule_key", checkKey))
 		return
 	}
-
 	for _, fileID := range deleteIDs {
 		reason := deleteReasons[fileID]
 		tracker, createErr := s.fileTaskLogService.Create(
@@ -312,20 +425,21 @@ func (s *RefreshFileScheduler) runAutoDeletePermanentInvalid(ctx context.Context
 		ctx.Error("推送自动删除失效存储任务失败", zap.Error(err), zap.Int("count", len(deleteIDs)))
 		return
 	}
-	ctx.Info("自动删除失效存储执行完成", zap.Int("count", len(deleteIDs)), zap.String("schedule_key", checkKey))
+	ctx.Info("自动删除失效存储执行完成", zap.Int("count", len(deleteIDs)), zap.String("schedule_key", scheduleKey))
 }
 
-func (s *RefreshFileScheduler) enqueueNormalRefresh(ctx context.Context, mp *models.MountPoint, invokeName string, fields ...zap.Field) {
+func (s *RefreshFileScheduler) enqueueRefresh(ctx context.Context, mp *models.MountPoint, invokeName string, deep bool, fields ...zap.Field) {
 	baseFields := []zap.Field{
 		zap.Int64("mount_point_id", mp.ID),
 		zap.Int64("file_id", mp.FileId),
 		zap.String("full_path", mp.FullPath),
 		zap.String("invoke_name", invokeName),
+		zap.Bool("deep", deep),
 	}
 	baseFields = append(baseFields, fields...)
 	ctx.Info("文件扫描执行器触发", baseFields...)
 
-	taskReq := &topic.FileScanFileRequest{FileId: mp.FileId, Deep: false}
+	taskReq := &topic.FileScanFileRequest{FileId: mp.FileId, Deep: deep}
 	body, _ := json.Marshal(taskReq)
 	taskCtx := ctx.WithValue(consts.CtxKeyFullPath, mp.FullPath).WithValue(consts.CtxKeyInvokeHandlerName, invokeName)
 	if err := s.taskEngine.PushMessage(taskCtx, taskReq.Topic(), body); err != nil {
@@ -333,6 +447,10 @@ func (s *RefreshFileScheduler) enqueueNormalRefresh(ctx context.Context, mp *mod
 		return
 	}
 	ctx.Info("下发文件扫描任务成功", baseFields...)
+}
+
+func (s *RefreshFileScheduler) enqueueNormalRefresh(ctx context.Context, mp *models.MountPoint, invokeName string, fields ...zap.Field) {
+	s.enqueueRefresh(ctx, mp, invokeName, false, fields...)
 }
 
 func splitKeywords(raw string) []string {

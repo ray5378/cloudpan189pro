@@ -88,7 +88,7 @@ func (sa *SettingAddition) applyDefaults() {
 		sa.PersistentCheckTime = "03:00"
 	}
 	if sa.AutoDeleteInvalidStorageKeywords == "" {
-		sa.AutoDeleteInvalidStorageKeywords = "资源不存在|文件不存在|目录不存在|分享已失效|分享不存在"
+		sa.AutoDeleteInvalidStorageKeywords = "已失效|不存在|取消|没有"
 	}
 }
 
