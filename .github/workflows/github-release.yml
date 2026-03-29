@@ -12,7 +12,7 @@ on:
         type: string
 
 env:
-  PROJECT_NAME: cloudpan189-share
+  PROJECT_NAME: cloudpan189pro
   MODULE_NAME: github.com/xxcheng123/cloudpan189-share
   BINARY_NAME: share
   GO_VERSION: '1.25'

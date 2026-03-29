@@ -4,7 +4,7 @@
 
 当前主仓库：
 - GitHub: `https://github.com/ray154856235/cloudpan189pro`
-- Docker: `ray5378/cloudpan189-share`
+- Docker: `ray5378/cloudpan189pro`
 
 ---
 
@@ -27,14 +27,14 @@
 ### 当前推荐版本
 
 - Git tag: `r0.06`
-- Docker tag: `ray5378/cloudpan189-share:r0.06`
-- Docker latest: `ray5378/cloudpan189-share:latest`
+- Docker tag: `ray5378/cloudpan189pro:r0.06`
+- Docker latest: `ray5378/cloudpan189pro:latest`
 
 已发布 digest：
 
-- `ray5378/cloudpan189-share:r0.06`
+- `ray5378/cloudpan189pro:r0.06`
   - `sha256:78e97cb693c89a696a63c754f8ce0834108b616148024a831ec7ef6d8388247a`
-- `ray5378/cloudpan189-share:latest`
+- `ray5378/cloudpan189pro:latest`
   - `sha256:c339b4c7108955267456e2f0817bd3b6676a43669f0461bc1c3690a00e7a890e`
 
 ### 历史标签
@@ -77,7 +77,7 @@
 
 ```bash
 docker run -d \
-  --name cloudpan189-share \
+  --name cloudpan189pro \
   -p 12395:12395 \
   -e GOMEMLIMIT=250MiB \
   -e GOGC=100 \
@@ -88,19 +88,19 @@ docker run -d \
   -v $(pwd)/data:/app/data \
   -v $(pwd)/media_dir:/app/media_dir \
   --restart unless-stopped \
-  ray5378/cloudpan189-share:latest
+  ray5378/cloudpan189pro:latest
 ```
 
 如需固定镜像内容，也可以直接使用 digest：
 
 ```bash
 docker run -d \
-  --name cloudpan189-share \
+  --name cloudpan189pro \
   -p 12395:12395 \
   -v $(pwd)/data:/app/data \
   -v $(pwd)/media_dir:/app/media_dir \
   --restart unless-stopped \
-  ray5378/cloudpan189-share@sha256:c339b4c7108955267456e2f0817bd3b6676a43669f0461bc1c3690a00e7a890e
+  ray5378/cloudpan189pro@sha256:c339b4c7108955267456e2f0817bd3b6676a43669f0461bc1c3690a00e7a890e
 ```
 
 ## docker-compose 示例
@@ -108,7 +108,7 @@ docker run -d \
 ```yaml
 services:
   189cloudshare:
-    image: ray5378/cloudpan189-share:latest
+    image: ray5378/cloudpan189pro:latest
     container_name: 189cloudshare
     environment:
       - GOMEMLIMIT=250MiB
