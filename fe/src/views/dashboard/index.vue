@@ -46,6 +46,9 @@
             <n-descriptions-item label="运行时间">
               <n-text>{{ systemInfo.runTimeHuman || '-' }}</n-text>
             </n-descriptions-item>
+            <n-descriptions-item label="当前版本">
+              <n-tag type="info" size="small">{{ appVersion }}</n-tag>
+            </n-descriptions-item>
             <n-descriptions-item label="WebDAV认证">
               <n-tag :type="systemInfo.enableAuth ? 'success' : 'warning'" size="small">
                 {{ systemInfo.enableAuth ? '需要认证' : '无需认证' }}
@@ -64,6 +67,7 @@ import { useSystemStore, useUserStore } from '@/stores'
 
 const userStore = useUserStore()
 const systemStore = useSystemStore()
+const appVersion = (import.meta.env.VITE_APP_VERSION as string) || 'v3.0.5'
 
 // 用户信息
 const userInfo = userStore.get()

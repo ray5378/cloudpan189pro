@@ -106,6 +106,8 @@ const emits = defineEmits<{
 }>()
 
 const message = useMessage()
+const SEARCH_CACHE_KEY = 'file-search-dialog-cache'
+const SEARCH_CACHE_TTL = 10 * 60 * 1000
 
 const show = ref<boolean>(props.show)
 const keyword = ref<string>('')
@@ -123,17 +125,61 @@ const totalPages = computed(() => {
   return Math.max(1, Math.ceil(total.value / pageSize.value))
 })
 
+const clearSearchCache = () => {
+  localStorage.removeItem(SEARCH_CACHE_KEY)
+}
+
+const persistSearchCache = () => {
+  const payload = {
+    savedAt: Date.now(),
+    keyword: keyword.value,
+    globalSearch: globalSearch.value,
+    list: list.value,
+    total: total.value,
+    currentPage: currentPage.value,
+    pageSize: pageSize.value,
+    jumpPage: jumpPage.value,
+  }
+  localStorage.setItem(SEARCH_CACHE_KEY, JSON.stringify(payload))
+}
+
+const restoreSearchCache = () => {
+  const raw = localStorage.getItem(SEARCH_CACHE_KEY)
+  if (!raw) return false
+  try {
+    const cache = JSON.parse(raw)
+    if (!cache?.savedAt || Date.now() - Number(cache.savedAt) > SEARCH_CACHE_TTL) {
+      clearSearchCache()
+      return false
+    }
+    keyword.value = cache.keyword || ''
+    globalSearch.value = cache.globalSearch !== false
+    list.value = Array.isArray(cache.list) ? cache.list : []
+    total.value = Number(cache.total) || 0
+    currentPage.value = Number(cache.currentPage) || 1
+    pageSize.value = Number(cache.pageSize) || props.pageSize || 15
+    jumpPage.value = cache.jumpPage || ''
+    return true
+  } catch {
+    clearSearchCache()
+    return false
+  }
+}
+
 watch(
   () => props.show,
   (val) => {
     show.value = val
     if (val) {
-      // 重置分页、列表
-      currentPage.value = 1
-      list.value = []
-      total.value = 0
-      jumpPage.value = ''
-      globalSearch.value = true
+      const restored = restoreSearchCache()
+      if (!restored) {
+        // 重置分页、列表
+        currentPage.value = 1
+        list.value = []
+        total.value = 0
+        jumpPage.value = ''
+        globalSearch.value = true
+      }
     }
   }
 )
@@ -189,6 +235,7 @@ const rowProps = (row: FileSearchItem) => {
   return {
     style: 'cursor: pointer;',
     onClick: () => {
+      persistSearchCache()
       emits('select', row)
       emits('update:show', false)
     },
@@ -228,6 +275,7 @@ const doSearch = () => {
         total.value = data.total || 0
         currentPage.value = data.currentPage || query.currentPage
         pageSize.value = data.pageSize || query.pageSize
+        persistSearchCache()
       } else {
         message.error(res.msg || '搜索失败')
       }
