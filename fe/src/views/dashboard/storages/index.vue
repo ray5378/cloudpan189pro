@@ -379,6 +379,7 @@
         :item-count="paginationReactive.itemCount"
         :page-sizes="paginationReactive.pageSizes"
         show-size-picker
+        show-quick-jumper
         @update:page="handlePageChange"
         @update:page-size="handlePageSizeChange"
       >
