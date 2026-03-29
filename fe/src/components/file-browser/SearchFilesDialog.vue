@@ -98,7 +98,7 @@ const message = useMessage()
 
 const show = ref<boolean>(props.show)
 const keyword = ref<string>('')
-const globalSearch = ref<boolean>(false)
+const globalSearch = ref<boolean>(true)
 const searching = ref<boolean>(false)
 
 const list = ref<FileSearchItem[]>([])
@@ -120,6 +120,7 @@ watch(
       currentPage.value = 1
       list.value = []
       total.value = 0
+      globalSearch.value = true
     }
   }
 )
@@ -249,13 +250,30 @@ const nextPage = () => {
   align-items: center;
   margin-bottom: 16px;
   padding: 10px;
-  background: #f7f8fa;
-  border: 1px solid #eef0f3;
+  background: var(--n-color-embedded);
+  border: 1px solid var(--n-border-color);
   border-radius: 8px;
 }
 
 .keyword-input {
   flex: 1;
+}
+
+:deep(.keyword-input .n-input) {
+  --n-color: var(--n-card-color);
+  --n-color-focus: var(--n-card-color);
+  --n-text-color: var(--n-text-color);
+  --n-placeholder-color: var(--n-text-color-disabled);
+  --n-caret-color: var(--n-primary-color);
+  --n-border: 1px solid var(--n-border-color);
+  --n-border-hover: 1px solid var(--n-primary-color-hover);
+  --n-border-focus: 1px solid var(--n-primary-color);
+  --n-box-shadow-focus: 0 0 0 2px rgb(24 160 88 / 15%);
+}
+
+:deep(.keyword-input .n-input__input-el) {
+  color: var(--n-text-color) !important;
+  -webkit-text-fill-color: var(--n-text-color);
 }
 
 .dialog-section {
