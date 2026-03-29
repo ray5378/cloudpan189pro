@@ -286,18 +286,11 @@ func (s *RefreshFileScheduler) collectAutoDeleteState(ctx context.Context, mount
 
 	lastLogs := make(map[int64]*models.FileTaskLog)
 	if len(fileIds) > 0 {
-		logs, logErr := s.fileTaskLogService.List(ctx, &filetasklogSvi.ListRequest{NoPaginate: true, FileIdList: fileIds, DescList: []string{"id"}})
+		var logErr error
+		lastLogs, logErr = s.fileTaskLogService.LatestByFileIDs(ctx, fileIds)
 		if logErr != nil {
 			ctx.Error("查询失效存储最新任务日志失败", zap.Error(logErr))
 			return nil, nil, nil, false
-		}
-		for _, logItem := range logs {
-			if logItem == nil || logItem.FileId == 0 {
-				continue
-			}
-			if _, exists := lastLogs[logItem.FileId]; !exists {
-				lastLogs[logItem.FileId] = logItem
-			}
 		}
 	}
 
