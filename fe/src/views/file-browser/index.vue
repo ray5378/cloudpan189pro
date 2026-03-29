@@ -35,12 +35,6 @@
           </template>
           返回上级
         </n-button>
-        <n-button text @click="goAdmin">
-          <template #icon>
-            <n-icon :component="SettingsOutline" />
-          </template>
-          后台
-        </n-button>
         <n-button text @click="showSearch = true">
           <template #icon>
             <n-icon :component="SearchOutline" />
@@ -109,7 +103,6 @@ import {
   RefreshOutline,
   ArrowUndoOutline,
   SearchOutline,
-  SettingsOutline,
   TrashOutline, // 引入删除图标
 } from '@vicons/ionicons5'
 import {
@@ -170,18 +163,15 @@ const handleFileClick = (file: FileChild) => {
 }
 
 const navigateToPath = (path: string) => {
+  const targetPath = route.path.startsWith('/@dashboard/file-browser') ? '/@dashboard/file-browser' : '/'
   router.push({
-    path: '/',
+    path: targetPath,
     query: { path: path },
   })
 }
 
 const refreshCurrentPath = () => {
   loadPath(currentPath.value)
-}
-
-const goAdmin = () => {
-  router.push({ path: '/@dashboard' })
 }
 
 // 新增：处理批量删除

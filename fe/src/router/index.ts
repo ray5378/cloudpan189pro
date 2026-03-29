@@ -109,6 +109,15 @@ const router = createRouter({
           },
         },
         {
+          path: 'file-browser',
+          name: 'DashboardFileBrowser',
+          component: () => import('@/views/file-browser/index.vue'),
+          meta: {
+            title: '文件浏览',
+            requiresAuth: true,
+          },
+        },
+        {
           path: 'extensions',
           name: 'Extensions',
           component: () => import('@/views/dashboard/extensions/index.vue'),
