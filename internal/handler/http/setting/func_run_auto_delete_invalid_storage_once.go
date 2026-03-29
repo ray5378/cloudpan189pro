@@ -108,7 +108,7 @@ func (h *handler) RunAutoDeleteInvalidStorageOnce() httpcontext.HandlerFunc {
 
 		fileCountMap := make(map[int64]int64, len(rule2FileIDs))
 		if len(rule2FileIDs) > 0 {
-			const batchSize = 200
+			const batchSize = 100
 			for start := 0; start < len(rule2FileIDs); start += batchSize {
 				end := start + batchSize
 				if end > len(rule2FileIDs) {

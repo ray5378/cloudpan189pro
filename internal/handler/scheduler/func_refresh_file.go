@@ -309,7 +309,7 @@ func (s *RefreshFileScheduler) collectRule2FileCounts(ctx context.Context, mount
 		return fileCountMap, true
 	}
 
-	const batchSize = 200
+	const batchSize = 100
 	for start := 0; start < len(fileIDs); start += batchSize {
 		end := start + batchSize
 		if end > len(fileIDs) {

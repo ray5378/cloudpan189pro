@@ -6,7 +6,7 @@ import (
 	"github.com/xxcheng123/cloudpan189-share/internal/repository/models"
 )
 
-const latestByFileIDsBatchSize = 200
+const latestByFileIDsBatchSize = 100
 
 // LatestByFileIDs 按 file_id 批量查询每个文件最新一条任务日志。
 func (s *service) LatestByFileIDs(ctx context.Context, fileIDs []int64) (map[int64]*models.FileTaskLog, error) {
