@@ -79,7 +79,7 @@ func Start(svc bootstrap.ServiceContext) {
 
 	var (
 		userHandler           = user.NewHandler(userService, userGroupService, loginLogService)
-		settingHandler        = setting.NewHandler(userService, settingService)
+		settingHandler        = setting.NewHandler(userService, settingService, mountPointService, fileTaskLogService, virtualFileService, taskEngine)
 		userGroupHandler      = usergroup.NewHandler(userGroupService, group2FileService, userService)
 		storageHandler        = storage.NewHandler(taskEngine, virtualFileService, cloudBridgeService, cloudTokenService, mountPointService, fileTaskLogService, storageFacadeService)
 		storageAdvanceHandler = advance.NewHandler(cloudBridgeService, cloudTokenService)
@@ -224,6 +224,7 @@ func Start(svc bootstrap.ServiceContext) {
 			settingAdminRouter.POST("/modify_base_url", wrap(settingHandler.ModifyBaseURL()))
 			settingAdminRouter.POST("/toggle_enable_auth", wrap(settingHandler.ToggleEnableAuth()))
 			settingAdminRouter.POST("/modify_addition", wrap(settingHandler.ModifyAddition()))
+			settingAdminRouter.POST("/run_auto_delete_invalid_storage_once", wrap(settingHandler.RunAutoDeleteInvalidStorageOnce()))
 		}
 	}
 
@@ -294,4 +295,3 @@ func Start(svc bootstrap.ServiceContext) {
 		}
 	}
 }
-
