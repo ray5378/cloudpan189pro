@@ -236,13 +236,15 @@ func (s *RefreshFileScheduler) runAutoDeletePermanentInvalid(ctx context.Context
 		return
 	}
 
-	_, lastLogs, fileCountMap, ok := s.collectAutoDeleteState(ctx, mounts)
-	if !ok {
+	lastLogs, err := s.collectLatestLogs(ctx, mounts)
+	if err != nil {
+		ctx.Error("查询失效存储最新任务日志失败", zap.Error(err))
 		return
 	}
 
 	deleteIDs := make([]int64, 0)
 	deleteReasons := make(map[int64]string)
+	rule2Candidates := make([]*models.MountPoint, 0)
 	for _, mp := range mounts {
 		if mp == nil {
 			continue
@@ -255,9 +257,22 @@ func (s *RefreshFileScheduler) runAutoDeletePermanentInvalid(ctx context.Context
 			continue
 		}
 
-		expiredOrDisabled := !mp.EnableAutoRefresh || !mp.IsInAutoRefreshPeriod()
+		if !mp.EnableAutoRefresh || !mp.IsInAutoRefreshPeriod() {
+			rule2Candidates = append(rule2Candidates, mp)
+		}
+	}
+
+	fileCountMap, ok := s.collectRule2FileCounts(ctx, rule2Candidates)
+	if !ok {
+		return
+	}
+	for _, mp := range rule2Candidates {
+		if mp == nil {
+			continue
+		}
+		lastLog := lastLogs[mp.FileId]
 		latestRefreshSucceeded := lastLog != nil && lastLog.Status == models.StatusCompleted
-		if expiredOrDisabled && fileCountMap[mp.FileId] == 0 && latestRefreshSucceeded {
+		if fileCountMap[mp.FileId] == 0 && latestRefreshSucceeded {
 			deleteIDs = append(deleteIDs, mp.FileId)
 			deleteReasons[mp.FileId] = "未启用自动刷新或已过期，且文件数量为0、最新刷新成功"
 		}
@@ -266,32 +281,38 @@ func (s *RefreshFileScheduler) runAutoDeletePermanentInvalid(ctx context.Context
 	s.deleteMountsWithReasons(ctx, deleteIDs, deleteReasons, checkKey)
 }
 
-func (s *RefreshFileScheduler) collectAutoDeleteState(ctx context.Context, mounts []*models.MountPoint) (map[int64]*models.MountPoint, map[int64]*models.FileTaskLog, map[int64]int64, bool) {
-	mountByFileID := make(map[int64]*models.MountPoint, len(mounts))
-	fileIds := make([]int64, 0, len(mounts))
+func (s *RefreshFileScheduler) collectLatestLogs(ctx context.Context, mounts []*models.MountPoint) (map[int64]*models.FileTaskLog, error) {
+	fileIDs := make([]int64, 0, len(mounts))
 	for _, mp := range mounts {
 		if mp == nil {
 			continue
 		}
-		mountByFileID[mp.FileId] = mp
-		fileIds = append(fileIds, mp.FileId)
+		fileIDs = append(fileIDs, mp.FileId)
 	}
+	if len(fileIDs) == 0 {
+		return make(map[int64]*models.FileTaskLog), nil
+	}
+	return s.fileTaskLogService.LatestByFileIDs(ctx, fileIDs)
+}
 
-	lastLogs := make(map[int64]*models.FileTaskLog)
-	if len(fileIds) > 0 {
-		var logErr error
-		lastLogs, logErr = s.fileTaskLogService.LatestByFileIDs(ctx, fileIds)
-		if logErr != nil {
-			ctx.Error("查询失效存储最新任务日志失败", zap.Error(logErr))
-			return nil, nil, nil, false
+func (s *RefreshFileScheduler) collectRule2FileCounts(ctx context.Context, mounts []*models.MountPoint) (map[int64]int64, bool) {
+	fileIDs := make([]int64, 0, len(mounts))
+	for _, mp := range mounts {
+		if mp == nil {
+			continue
 		}
+		fileIDs = append(fileIDs, mp.FileId)
 	}
 
-	fileCountMap := make(map[int64]int64)
-	counts, countErr := s.virtualFileService.GroupCountByTopId(ctx, &virtualfile.GroupCountByTopIdRequest{TopIdList: fileIds})
+	fileCountMap := make(map[int64]int64, len(fileIDs))
+	if len(fileIDs) == 0 {
+		return fileCountMap, true
+	}
+
+	counts, countErr := s.virtualFileService.GroupCountByTopId(ctx, &virtualfile.GroupCountByTopIdRequest{TopIdList: fileIDs})
 	if countErr != nil {
 		ctx.Error("查询失效存储文件数量失败", zap.Error(countErr))
-		return nil, nil, nil, false
+		return nil, false
 	}
 	for _, item := range counts {
 		if item == nil {
@@ -300,7 +321,7 @@ func (s *RefreshFileScheduler) collectAutoDeleteState(ctx context.Context, mount
 		fileCountMap[item.TopId] = item.Count
 	}
 
-	return mountByFileID, lastLogs, fileCountMap, true
+	return fileCountMap, true
 }
 
 func (s *RefreshFileScheduler) processAutoDeleteConfirmations(ctx context.Context, now time.Time, mountByFileID map[int64]*models.MountPoint, lastLogs map[int64]*models.FileTaskLog, fileCountMap map[int64]int64) {
