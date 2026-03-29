@@ -47,6 +47,17 @@
           <n-button size="small" tertiary :disabled="currentPage <= 1" @click="prevPage"
             >上一页</n-button
           >
+          <div class="page-jumper">
+            <span class="jumper-label">跳至</span>
+            <n-input
+              v-model:value="jumpPage"
+              size="small"
+              class="jump-input"
+              placeholder="页码"
+              @keyup.enter="jumpToPage"
+            />
+            <n-button size="small" type="primary" ghost @click="jumpToPage">跳转</n-button>
+          </div>
           <n-button
             size="small"
             type="primary"
@@ -105,6 +116,7 @@ const list = ref<FileSearchItem[]>([])
 const total = ref<number>(0)
 const currentPage = ref<number>(1)
 const pageSize = ref<number>(props.pageSize ?? 15)
+const jumpPage = ref<string>('')
 
 const totalPages = computed(() => {
   if (total.value === 0) return 1
@@ -120,6 +132,7 @@ watch(
       currentPage.value = 1
       list.value = []
       total.value = 0
+      jumpPage.value = ''
       globalSearch.value = true
     }
   }
@@ -241,6 +254,18 @@ const nextPage = () => {
     doSearch()
   }
 }
+
+const jumpToPage = () => {
+  const target = Number.parseInt(jumpPage.value, 10)
+  if (!Number.isFinite(target)) {
+    message.warning('请输入正确页码')
+    return
+  }
+  const page = Math.min(Math.max(target, 1), totalPages.value)
+  if (page === currentPage.value) return
+  currentPage.value = page
+  doSearch()
+}
 </script>
 
 <style scoped>
@@ -328,5 +353,32 @@ const nextPage = () => {
 .pager {
   display: flex;
   gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.page-jumper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.jumper-label {
+  font-size: 12px;
+  color: var(--n-text-color-secondary);
+}
+
+.jump-input {
+  width: 84px;
+}
+
+:deep(.jump-input .n-input) {
+  --n-color: var(--n-card-color);
+  --n-color-focus: var(--n-card-color);
+  --n-text-color: var(--n-text-color);
+  --n-placeholder-color: var(--n-text-color-disabled);
+  --n-border: 1px solid var(--n-border-color);
+  --n-border-hover: 1px solid var(--n-primary-color-hover);
+  --n-border-focus: 1px solid var(--n-primary-color);
 }
 </style>
