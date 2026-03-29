@@ -279,20 +279,31 @@ const nextPage = () => {
 .dialog-section {
   max-height: 60vh;
   overflow: auto;
-  border: 1px solid #eef0f3;
+  border: 1px solid var(--n-border-color);
   border-radius: 8px;
+  background: var(--n-card-color);
 }
 
 :deep(.n-data-table) {
   --td-padding: 10px 12px;
+  --n-merged-th-color: var(--n-color-embedded);
+  --n-th-color: var(--n-color-embedded);
+  --n-td-color: var(--n-card-color);
+  --n-border-color: var(--n-border-color);
 }
 
 :deep(.n-data-table .n-data-table-th) {
-  background: #fafafa;
+  background: var(--n-color-embedded);
+  color: var(--n-text-color-base);
 }
 
-:deep(.n-data-table .n-data-table-tr:hover) {
-  background: #f7f9fc;
+:deep(.n-data-table .n-data-table-th__title),
+:deep(.n-data-table .n-data-table-td) {
+  color: var(--n-text-color-base);
+}
+
+:deep(.n-data-table .n-data-table-tr:hover td) {
+  background: var(--n-color-hover);
 }
 
 .loading-container {
