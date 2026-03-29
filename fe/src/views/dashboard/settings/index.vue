@@ -201,7 +201,7 @@
       <div class="setting-item">
         <div class="item-left">
           <div class="item-title">自动删除失效存储</div>
-          <div class="item-desc">每天中午 12:00 自动删除符合规则的存储：1）最新失败日志命中关键词；2）未启用自动刷新或已过期，且最新刷新成功后文件数量为 0，并进入每 10 分钟一轮、共 6 轮的深度刷新确认，6 轮都成功且仍为 0 才删除。关键词支持用 | 分隔多个字眼。</div>
+          <div class="item-desc">每天中午 12:00 自动删除符合规则的存储：1）最新失败日志命中关键词；2）未启用自动刷新或已过期，且文件数量为 0、最新刷新成功。支持手动触发执行一次，关键词支持用 | 分隔多个字眼。</div>
         </div>
         <div class="item-right">
           <div class="right-inline right-inline-wrap">
@@ -212,6 +212,13 @@
               clearable
               style="width: 420px"
             />
+            <n-button
+              size="small"
+              :loading="runningAutoDeleteInvalidStorageOnce"
+              @click="handleRunAutoDeleteInvalidStorageOnce"
+            >
+              手动执行一次
+            </n-button>
             <n-button
               size="small"
               type="primary"
@@ -378,6 +385,7 @@ import {
   getSystemInfo,
   getSettingAddition,
   modifySettingAddition,
+  runAutoDeleteInvalidStorageOnce,
   toggleSystemEnableAuth,
 } from '@/api/setting'
 import { getCloudTokenList } from '@/api/cloudtoken'
@@ -470,6 +478,7 @@ const savingDefaultToken = ref(false)
 const savingExternalAutoRefresh = ref(false)
 const savingPersistentCheck = ref(false)
 const savingAutoDeleteInvalidStorage = ref(false)
+const runningAutoDeleteInvalidStorageOnce = ref(false)
 
 const generateExternalApiKey = () => {
   // 32 chars strong random (URL-safe-ish + symbols)
@@ -599,6 +608,30 @@ const handleSaveAutoDeleteInvalidStorage = () => {
     })
     .finally(() => {
       savingAutoDeleteInvalidStorage.value = false
+    })
+}
+
+const handleRunAutoDeleteInvalidStorageOnce = () => {
+  runningAutoDeleteInvalidStorageOnce.value = true
+  runAutoDeleteInvalidStorageOnce()
+    .then((res) => {
+      if (res.code === 200) {
+        const data = (res.data || {}) as { count?: number; message?: string }
+        const count = Number(data.count || 0)
+        if (count > 0) {
+          message.success(`已手动触发，本次命中 ${count} 个待删除节点`)
+        } else {
+          message.success(data.message || '本次未命中可删除节点')
+        }
+      } else {
+        message.error(res.msg || '执行失败')
+      }
+    })
+    .catch((err) => {
+      message.error(err instanceof Error ? err.message : '网络错误')
+    })
+    .finally(() => {
+      runningAutoDeleteInvalidStorageOnce.value = false
     })
 }
 

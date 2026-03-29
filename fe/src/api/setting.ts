@@ -83,3 +83,7 @@ export interface ModifySettingAdditionRequest {
 export const modifySettingAddition = (data: ModifySettingAdditionRequest): Promise<ApiResponse> => {
   return api.post('/setting/modify_addition', data).then((res) => res.data)
 }
+
+export const runAutoDeleteInvalidStorageOnce = (): Promise<ApiResponse> => {
+  return api.post('/setting/run_auto_delete_invalid_storage_once').then((res) => res.data)
+}

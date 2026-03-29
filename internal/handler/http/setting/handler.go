@@ -5,9 +5,13 @@ import (
 
 	"github.com/xxcheng123/cloudpan189-share/internal/consts"
 	"github.com/xxcheng123/cloudpan189-share/internal/framework/httpcontext"
+	"github.com/xxcheng123/cloudpan189-share/internal/pkgs/taskengine"
 
+	filetasklogSvi "github.com/xxcheng123/cloudpan189-share/internal/services/filetasklog"
+	mountpointSvi "github.com/xxcheng123/cloudpan189-share/internal/services/mountpoint"
 	settingSvi "github.com/xxcheng123/cloudpan189-share/internal/services/setting"
 	userSvi "github.com/xxcheng123/cloudpan189-share/internal/services/user"
+	virtualfileSvi "github.com/xxcheng123/cloudpan189-share/internal/services/virtualfile"
 )
 
 type Handler interface {
@@ -18,6 +22,7 @@ type Handler interface {
 	ToggleEnableAuth() httpcontext.HandlerFunc
 	ModifyAddition() httpcontext.HandlerFunc
 	Addition() httpcontext.HandlerFunc
+	RunAutoDeleteInvalidStorageOnce() httpcontext.HandlerFunc
 }
 
 var bi = httpcontext.NewBusinessGenerator(consts.BusCodeSettingStartCode)
@@ -33,15 +38,23 @@ var (
 )
 
 type handler struct {
-	userService    userSvi.Service
-	settingService settingSvi.Service
-	initTime       time.Time
+	userService        userSvi.Service
+	settingService     settingSvi.Service
+	mountPointService  mountpointSvi.Service
+	fileTaskLogService filetasklogSvi.Service
+	virtualFileService virtualfileSvi.Service
+	taskEngine         taskengine.TaskEngine
+	initTime           time.Time
 }
 
-func NewHandler(userService userSvi.Service, settingService settingSvi.Service) Handler {
+func NewHandler(userService userSvi.Service, settingService settingSvi.Service, mountPointService mountpointSvi.Service, fileTaskLogService filetasklogSvi.Service, virtualFileService virtualfileSvi.Service, taskEngine taskengine.TaskEngine) Handler {
 	return &handler{
-		userService:    userService,
-		settingService: settingService,
-		initTime:       time.Now(),
+		userService:        userService,
+		settingService:     settingService,
+		mountPointService:  mountPointService,
+		fileTaskLogService: fileTaskLogService,
+		virtualFileService: virtualFileService,
+		taskEngine:         taskEngine,
+		initTime:           time.Now(),
 	}
 }
