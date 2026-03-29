@@ -210,6 +210,11 @@ func (s *RefreshFileScheduler) runAutoDeletePermanentInvalid(ctx context.Context
 	if !cfg.AutoDeleteInvalidStorageEnabled {
 		return
 	}
+	// 仅在每天 12 点这一时段内按 10 分钟步进执行：12:00, 12:10, ... , 12:50。
+	// 避免把自动删除确认流程变成全天候巡检。
+	if now.Hour() != 12 || now.Minute()%10 != 0 {
+		return
+	}
 
 	keywords := splitKeywords(cfg.AutoDeleteInvalidStorageKeywords)
 	mounts, err := s.mountPointService.List(ctx, &mountpoint.ListRequest{NoPaginate: true})
