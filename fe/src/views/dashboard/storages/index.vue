@@ -804,10 +804,12 @@ const fetchStorageList = async () => {
   if (selectedTaskLogStatus.value) {
     if (selectedTaskLogStatus.value === 'completed') {
       baseParams.taskLogStatus = 'completed'
+    } else if (selectedTaskLogStatus.value === 'failed') {
+      baseParams.taskLogStatus = 'failed'
     } else if (selectedTaskLogStatus.value.startsWith('failed:')) {
       baseParams.taskLogStatus = 'failed'
       const kind = selectedTaskLogStatus.value.split(':')[1]
-      if (kind === 'transient' || kind === 'permanent') baseParams.failureKind = kind
+      if (kind === 'permanent') baseParams.failureKind = kind
     }
   }
 
@@ -844,7 +846,7 @@ import type { SelectOption, SelectGroupOption } from 'naive-ui'
 const taskLogStatusOptions: Array<SelectOption | SelectGroupOption> = [
   { label: '全部', value: '' },
   { label: '成功', value: 'completed' },
-  { label: '临时失效', value: 'failed:transient' },
+  { label: '临时失效', value: 'failed' },
   { label: '永久失效', value: 'failed:permanent' },
   { type: 'group', label: '排序', children: [
       { label: '按文件数量升序', value: 'sort:fileCount:asc' },
