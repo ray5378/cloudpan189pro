@@ -71,19 +71,6 @@ func (h *handler) RunAutoDeleteInvalidStorageOnce() httpcontext.HandlerFunc {
 			allFileIDs = append(allFileIDs, mp.FileId)
 		}
 
-		counts, err := h.virtualFileService.GroupCountByTopId(ctx.GetContext(), &virtualfileSvi.GroupCountByTopIdRequest{TopIdList: allFileIDs})
-		if err != nil {
-			ctx.Fail(codeQueryFailed.WithError(err))
-			return
-		}
-		fileCountMap := make(map[int64]int64, len(allFileIDs))
-		for _, item := range counts {
-			if item == nil {
-				continue
-			}
-			fileCountMap[item.TopId] = item.Count
-		}
-
 		lastLogs, err := h.fileTaskLogService.LatestByFileIDs(ctx.GetContext(), allFileIDs)
 		if err != nil {
 			ctx.Fail(codeQueryFailed.WithError(err))
@@ -93,6 +80,7 @@ func (h *handler) RunAutoDeleteInvalidStorageOnce() httpcontext.HandlerFunc {
 		keywords := splitAutoDeleteKeywords(cfg.AutoDeleteInvalidStorageKeywords)
 		deleteIDs := make([]int64, 0)
 		deleteReasons := make(map[int64]string)
+		rule2Candidates := make([]*models.MountPoint, 0)
 		for _, mp := range mounts {
 			if mp == nil {
 				continue
@@ -105,9 +93,50 @@ func (h *handler) RunAutoDeleteInvalidStorageOnce() httpcontext.HandlerFunc {
 				continue
 			}
 
-			expiredOrDisabled := !mp.EnableAutoRefresh || !mp.IsInAutoRefreshPeriod()
+			if !mp.EnableAutoRefresh || !mp.IsInAutoRefreshPeriod() {
+				rule2Candidates = append(rule2Candidates, mp)
+			}
+		}
+
+		rule2FileIDs := make([]int64, 0, len(rule2Candidates))
+		for _, mp := range rule2Candidates {
+			if mp == nil {
+				continue
+			}
+			rule2FileIDs = append(rule2FileIDs, mp.FileId)
+		}
+
+		fileCountMap := make(map[int64]int64, len(rule2FileIDs))
+		if len(rule2FileIDs) > 0 {
+			const batchSize = 200
+			for start := 0; start < len(rule2FileIDs); start += batchSize {
+				end := start + batchSize
+				if end > len(rule2FileIDs) {
+					end = len(rule2FileIDs)
+				}
+				batch := rule2FileIDs[start:end]
+
+				counts, err := h.virtualFileService.GroupCountByTopId(ctx.GetContext(), &virtualfileSvi.GroupCountByTopIdRequest{TopIdList: batch})
+				if err != nil {
+					ctx.Fail(codeQueryFailed.WithError(err))
+					return
+				}
+				for _, item := range counts {
+					if item == nil {
+						continue
+					}
+					fileCountMap[item.TopId] = item.Count
+				}
+			}
+		}
+
+		for _, mp := range rule2Candidates {
+			if mp == nil {
+				continue
+			}
+			lastLog := lastLogs[mp.FileId]
 			latestRefreshSucceeded := lastLog != nil && lastLog.Status == models.StatusCompleted
-			if expiredOrDisabled && fileCountMap[mp.FileId] == 0 && latestRefreshSucceeded {
+			if fileCountMap[mp.FileId] == 0 && latestRefreshSucceeded {
 				deleteIDs = append(deleteIDs, mp.FileId)
 				deleteReasons[mp.FileId] = "未启用自动刷新或已过期，且文件数量为0、最新刷新成功"
 			}
