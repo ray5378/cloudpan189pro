@@ -67,7 +67,7 @@ import { useSystemStore, useUserStore } from '@/stores'
 
 const userStore = useUserStore()
 const systemStore = useSystemStore()
-const appVersion = (import.meta.env.VITE_APP_VERSION as string) || 'v3.0.5'
+const appVersion = (import.meta.env.VITE_APP_VERSION as string) || 'unknown'
 
 // 用户信息
 const userInfo = userStore.get()
