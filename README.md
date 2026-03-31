@@ -184,6 +184,10 @@ http://localhost:12395/dav
 
 ## External API
 
+在cloudsaver中使用示例:
+添加自定义推送配置,设置自定义字符串
+<img width="588" height="532" alt="PixPin_2026-03-31_11-52-08" src="https://github.com/user-attachments/assets/90bc0afe-874d-4881-be9e-8204fa2d816b" />
+
 ## 创建存储
 
 默认异步返回 `202 Accepted`。
@@ -283,6 +287,8 @@ curl -X POST 'http://<ip>:<port>/api/external/create-storage' \
 - 是否开启
 - 刷新间隔（分钟）
 - 生效天数
+
+- 
 
 ## 4. 持久检测存储
 用于每月指定日期、指定时间，对以下节点执行一次**普通刷新**：
