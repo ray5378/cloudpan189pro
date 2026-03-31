@@ -91,7 +91,7 @@ VITE_APP_VERSION=v3.0.11
 docker run -d \
   --name cloudpan189pro \
   -p 12395:12395 \
-  -e GOMEMLIMIT=250MiB \
+  -e GOMEMLIMIT=200MiB \
   -e GOGC=100 \
   -e HTTP_READ_HEADER_TIMEOUT=30s \
   -e HTTP_READ_TIMEOUT=5h \
@@ -123,7 +123,7 @@ services:
     image: ray5378/cloudpan189pro:latest
     container_name: 189cloudshare
     environment:
-      - GOMEMLIMIT=250MiB
+      - GOMEMLIMIT=200MiB
       - GOGC=100
       - HTTP_READ_HEADER_TIMEOUT=30s
       - HTTP_READ_TIMEOUT=5h
@@ -478,3 +478,7 @@ cloudpan189pro/
 - `https://github.com/ray154856235/cloudpan189pro`
 
 如果这个项目对你有帮助，欢迎 Star。
+
+
+感谢原项目作者的工作:
+https://github.com/xxcheng123/cloudpan189-share
