@@ -69,6 +69,10 @@ services:
       - LOGINLOG_RETENTION_DAYS=15
       # 可选：更积极归还空闲内存给 OS
       # - GODEBUG=madvdontneed=1
+      # 可选：周期性内存修剪（默认关闭，按需开启）
+      # - MEM_TRIM_ENABLE=true
+      # - MEM_TRIM_INTERVAL_MIN=10
+      # - MEM_TRIM_THRESHOLD_MB=128
     ports:
       - "12395:12395"
     volumes:
@@ -104,6 +108,7 @@ services:
 - PPROF_DISABLE=1：关闭 pprof（仅排障时临时开启）
 - TASKLOG_RETENTION_DAYS / LOGINLOG_RETENTION_DAYS：日志保留天数
 - GODEBUG=madvdontneed=1：更积极归还空闲堆内存给 OS（可选）
+- MEM_TRIM_ENABLE / MEM_TRIM_INTERVAL_MIN / MEM_TRIM_THRESHOLD_MB：周期性内存修剪（可选，默认关闭）
 
 ---
 
