@@ -29,6 +29,12 @@ type HTTPLogConfig struct {
 
 // DefaultHTTPLogConfig 默认HTTP日志配置
 func DefaultHTTPLogConfig() *HTTPLogConfig {
+	size := 512
+	if v := getenvDefault("HTTP_LOG_MAX_BODY", "512"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			size = n
+		}
+	}
 	return &HTTPLogConfig{
 		EnableRequestLog:  true,
 		EnableResponseLog: true,
@@ -36,7 +42,7 @@ func DefaultHTTPLogConfig() *HTTPLogConfig {
 		LogLevel:          getenvDefault("HTTP_LOG_LEVEL", "info"),
 		LogHeaders:        true,
 		LogBody:           true,
-		MaxBodySize:       func() int { if v := getenvDefault("HTTP_LOG_MAX_BODY", "512"); n, err := strconv.Atoi(v); if err == nil { return n }; return 512 }(),
+		MaxBodySize:       size,
 		SensitiveHeaders: []string{
 			"authorization", "cookie", "x-auth-token",
 			"x-api-key", "token", "password",
