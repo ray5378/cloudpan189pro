@@ -10,6 +10,7 @@ import (
 type Handler interface {
 	FileLogList() httpcontext.HandlerFunc
 	TaskEngineList() httpcontext.HandlerFunc
+	CleanupFileLogs() httpcontext.HandlerFunc
 }
 
 var bi = httpcontext.NewBusinessGenerator(consts.BusCodeTaskStateStartCode)

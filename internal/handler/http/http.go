@@ -195,6 +195,7 @@ func Start(svc bootstrap.ServiceContext) {
 		{
 			taskStateRouter.GET("/file_log/list", wrap(taskStateHandler.FileLogList()))
 			taskStateRouter.GET("/task_engine/list", wrap(taskStateHandler.TaskEngineList()))
+			taskStateRouter.POST("/file_log/cleanup", wrap(taskStateHandler.CleanupFileLogs()))
 		}
 	}
 
