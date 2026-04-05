@@ -1,6 +1,7 @@
 package scheduler
 
 import (
+	stdcontext "context"
 	"database/sql"
 	"fmt"
 	"os"
@@ -23,7 +24,7 @@ type VacuumScheduler struct {
 
 func NewVacuumScheduler(svc bootstrap.ServiceContext) Scheduler {
 	// 用一个无业务负载的 Context 包装（仅用到 DB 对象，不传播生命周期）
-	ctx := context.NewContext(context.Background())
+	ctx := context.NewContext(stdcontext.Background())
 	return &VacuumScheduler{db: svc.GetDB(ctx)}
 }
 
