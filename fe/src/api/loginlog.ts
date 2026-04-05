@@ -25,3 +25,8 @@ export const getLoginLogList = (
 ): Promise<ApiResponse<Models.PaginationResponse<Models.LoginLog>>> => {
   return api.get('/login_log/list', { params }).then((res) => res.data)
 }
+
+// 清理登录日志
+export const cleanupLoginLogs = (): Promise<ApiResponse<{ deleted: number; retentionDays: number }>> => {
+  return api.post('/login_log/cleanup').then((res) => res.data)
+}

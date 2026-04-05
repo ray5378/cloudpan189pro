@@ -37,14 +37,22 @@
         <n-button @click="handleReset">重置</n-button>
       </div>
       <div class="header-right">
-        <n-button @click="handleRefresh">
-          <template #icon>
-            <n-icon>
-              <RefreshOutline />
-            </n-icon>
-          </template>
-          刷新
-        </n-button>
+        <n-space>
+          <n-button @click="handleRefresh">
+            <template #icon>
+              <n-icon>
+                <RefreshOutline />
+              </n-icon>
+            </template>
+            刷新
+          </n-button>
+          <n-popconfirm positive-text="清除" negative-text="取消" @positive-click="handleCleanup">
+            <template #trigger>
+              <n-button type="error" quaternary>清除登录日志</n-button>
+            </template>
+            确认按保留策略清理历史登录日志？
+          </n-popconfirm>
+        </n-space>
       </div>
     </div>
 
@@ -72,6 +80,8 @@ import {
   NSelect,
   NTag,
   NText,
+  NSpace,
+  NPopconfirm,
   useMessage,
   type DataTableColumns,
   type PaginationProps,
@@ -88,7 +98,7 @@ import {
   CloseCircleOutline,
   RefreshCircleOutline,
 } from '@vicons/ionicons5'
-import { getLoginLogList, type LoginLogListQuery } from '@/api/loginlog'
+import { getLoginLogList, cleanupLoginLogs, type LoginLogListQuery } from '@/api/loginlog'
 import { formatDate } from '@/utils/format'
 import {
   LOGIN_EVENT_OPTIONS,
@@ -285,6 +295,23 @@ const handleReset = () => {
   fetchList()
 }
 const handleRefresh = () => fetchList()
+
+// 清理登录日志
+const handleCleanup = async () => {
+  try {
+    state.loading = true
+    const res = await cleanupLoginLogs()
+    const deleted = (res.data as any)?.deleted ?? 0
+    const days = (res.data as any)?.retentionDays ?? 15
+    message.success(`已清理 ${deleted} 条（保留 ${days} 天）`)
+    fetchList()
+  } catch (e: any) {
+    console.error(e)
+    message.error(e?.message || '清理登录日志失败')
+  } finally {
+    state.loading = false
+  }
+}
 
 // 仅在组件挂载时发起请求，配合 Tabs 的 v-if 保证按需加载
 onMounted(() => {

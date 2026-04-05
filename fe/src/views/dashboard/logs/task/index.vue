@@ -37,14 +37,22 @@
         <n-button @click="handleReset"> 重置 </n-button>
       </div>
       <div class="header-right">
-        <n-button :loading="state.loading" @click="handleRefresh">
-          <template #icon>
-            <n-icon>
-              <RefreshOutline />
-            </n-icon>
-          </template>
-          刷新
-        </n-button>
+        <n-space>
+          <n-button :loading="state.loading" @click="handleRefresh">
+            <template #icon>
+              <n-icon>
+                <RefreshOutline />
+              </n-icon>
+            </template>
+            刷新
+          </n-button>
+          <n-popconfirm positive-text="清除" negative-text="取消" @positive-click="handleCleanup">
+            <template #trigger>
+              <n-button type="error" quaternary>清除任务日志</n-button>
+            </template>
+            确认按保留策略清理历史任务日志？
+          </n-popconfirm>
+        </n-space>
       </div>
     </div>
 
@@ -161,6 +169,8 @@ import {
   NCode,
   NAlert,
   NProgress,
+  NPopconfirm,
+  NSpace,
   useMessage,
   type DataTableColumns,
   type PaginationProps,
@@ -173,7 +183,7 @@ import {
   TimeOutline,
   PlayOutline,
 } from '@vicons/ionicons5'
-import { getFileLogList } from '@/api/taskstate'
+import { getFileLogList, cleanupFileLogs } from '@/api/taskstate'
 import { formatDate } from '@/utils/format'
 import {
   TASK_TYPE_OPTIONS,
@@ -284,6 +294,23 @@ const handleReset = () => {
 // 刷新
 const handleRefresh = () => {
   fetchTaskLogList()
+}
+
+// 清理任务日志
+const handleCleanup = async () => {
+  try {
+    state.loading = true
+    const res = await cleanupFileLogs()
+    const deleted = (res.data as any)?.deleted ?? 0
+    const days = (res.data as any)?.retentionDays ?? 15
+    message.success(`已清理 ${deleted} 条（保留 ${days} 天）`)
+    fetchTaskLogList()
+  } catch (e: any) {
+    console.error(e)
+    message.error(e?.message || '清理任务日志失败')
+  } finally {
+    state.loading = false
+  }
 }
 
 // 查看详情

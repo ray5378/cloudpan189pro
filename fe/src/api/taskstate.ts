@@ -45,3 +45,8 @@ export const getFileLogList = (
 export const getTaskEngineList = (): Promise<ApiResponse<TaskEngineListResponse>> => {
   return api.get('/task_state/task_engine/list').then((res) => res.data)
 }
+
+// 触发任务日志清理
+export const cleanupFileLogs = (): Promise<ApiResponse<{ deleted: number; retentionDays: number }>> => {
+  return api.post('/task_state/file_log/cleanup').then((res) => res.data)
+}
