@@ -75,6 +75,11 @@ func Start(svc bootstrap.ServiceContext) (func(), error) {
 		errs = append(errs, err)
 	}
 
+	memTrimScheduler := NewMemTrimScheduler()
+	if err := memTrimScheduler.Start(ctx); err != nil {
+		errs = append(errs, err)
+	}
+
 	refreshCloudTokenScheduler := NewRefreshCloudTokenScheduler(cloudTokenService)
 	if err := refreshCloudTokenScheduler.Start(ctx); err != nil {
 		errs = append(errs, err)
@@ -94,6 +99,8 @@ func Start(svc bootstrap.ServiceContext) (func(), error) {
 		fileTaskLogCheckScheduler,
 		refreshFileScheduler,
 		autoIngestRefreshScheduler,
+		vacuumScheduler,
+		memTrimScheduler,
 		refreshCloudTokenScheduler,
 		cleanupTaskLogScheduler,
 		cleanupLoginLogScheduler,
