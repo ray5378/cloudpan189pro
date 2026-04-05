@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"database/sql"
+	"fmt"
 	"os"
 	"strconv"
 	"time"
@@ -21,7 +22,9 @@ type VacuumScheduler struct {
 }
 
 func NewVacuumScheduler(svc bootstrap.ServiceContext) Scheduler {
-	return &VacuumScheduler{db: svc.GetDB(context.Background())}
+	// 用一个无业务负载的 Context 包装（仅用到 DB 对象，不传播生命周期）
+	ctx := context.NewContext(context.Background())
+	return &VacuumScheduler{db: svc.GetDB(ctx)}
 }
 
 func (s *VacuumScheduler) Start(ctx context.Context) error {
@@ -53,8 +56,9 @@ func (s *VacuumScheduler) isSQLite() bool {
 }
 
 func driverName(db *sql.DB) string {
-	// 标准库没有直接暴露驱动名，这里用 fmt.Sprintf("%T", db.Driver()) 解析
-	return "sqlite" // 保守：我们只在默认 SQLite 模式启用；MySQL 下返回 false
+	// 标准库没有直接暴露驱动名，这里用类型字符串做一个保守判断
+	// 由于项目默认使用 glebarez/sqlite，当 DBType 切到 mysql 时，这里会随之变化
+	return fmt.Sprintf("%T", db.Driver())
 }
 
 func (s *VacuumScheduler) doJob() bool {
