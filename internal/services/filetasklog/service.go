@@ -25,6 +25,8 @@ type Service interface {
 	FindStaleTasksByDuration(ctx context.Context, duration time.Duration) ([]*models.FileTaskLog, error)
 	LatestByFileIDs(ctx context.Context, fileIDs []int64) (map[int64]*models.FileTaskLog, error)
 
+	CleanupOlderThan(ctx context.Context, before time.Time) (int64, error)
+
 	WithError(ctx context.Context, key LogKey, err error) error
 	WithErrorAndFail(ctx context.Context, key LogKey, err error) error
 }
