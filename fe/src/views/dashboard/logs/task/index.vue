@@ -37,23 +37,25 @@
         <n-button @click="handleReset"> 重置 </n-button>
       </div>
       <div class="header-right">
-        <n-space>
-          <n-button :loading="state.loading" @click="handleRefresh">
-            <template #icon>
-              <n-icon>
-                <RefreshOutline />
-              </n-icon>
-            </template>
-            刷新
-          </n-button>
-          <n-popconfirm positive-text="清除" negative-text="取消" @positive-click="handleCleanup">
-            <template #trigger>
-              <n-button type="error" quaternary>清除任务日志</n-button>
-            </template>
-            确认按保留策略清理历史任务日志？
-          </n-popconfirm>
-        </n-space>
+        <n-button :loading="state.loading" @click="handleRefresh">
+          <template #icon>
+            <n-icon>
+              <RefreshOutline />
+            </n-icon>
+          </template>
+          刷新
+        </n-button>
       </div>
+    </div>
+
+    <!-- 次行操作：清除任务日志 -->
+    <div class="sub-actions">
+      <n-popconfirm positive-text="清除" negative-text="取消" @positive-click="handleCleanup">
+        <template #trigger>
+          <n-button type="error" quaternary>清除任务日志</n-button>
+        </template>
+        确认按保留策略清理历史任务日志？
+      </n-popconfirm>
     </div>
 
     <!-- 任务日志列表表格 -->
@@ -521,6 +523,10 @@ onMounted(() => {
 .header-right {
   display: flex;
   align-items: center;
+}
+
+.sub-actions {
+  margin: 8px 0 16px;
 }
 
 .task-logs-table {
