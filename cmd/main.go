@@ -4,6 +4,7 @@ import (
 	"fmt"
 	stdhttp "net/http"
 	_ "net/http/pprof"
+	"os"
 
 	"github.com/xxcheng123/cloudpan189-share/internal/bootstrap"
 	"github.com/xxcheng123/cloudpan189-share/internal/configs"
@@ -47,7 +48,7 @@ func main() {
 
 	go func() {
 		// pprof on localhost (disable by PPROF_DISABLE=1)
-		if getenvDefault("PPROF_DISABLE", "0") != "1" {
+		if func() string { if v := os.Getenv("PPROF_DISABLE"); v != "" { return v }; return "0" }() != "1" {
 			go func() { _ = stdhttp.ListenAndServe("127.0.0.1:6060", nil) }()
 		}
 		// replace gin.Engine.Run with custom http.Server (long timeouts, idle GC)
