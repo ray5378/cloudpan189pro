@@ -158,8 +158,14 @@ type responseWriter struct {
 }
 
 func (w responseWriter) Write(data []byte) (int, error) {
-	// 如果还没超限，就记录日志
-	if w.b.Len() <= 1024*1024 {
+	// 如果还没超限，就记录日志（默认 64KB，可通过 LOG_RESP_BUFFER_SIZE 调整）
+	max := 64 * 1024
+	if v := os.Getenv("LOG_RESP_BUFFER_SIZE"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			max = n
+		}
+	}
+	if w.b.Len() <= max {
 		w.b.Write(data)
 	}
 

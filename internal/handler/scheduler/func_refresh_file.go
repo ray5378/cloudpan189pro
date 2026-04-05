@@ -119,6 +119,23 @@ func (s *RefreshFileScheduler) doJob() bool {
 				continue
 			}
 
+			// prune 内存常驻 map，防止随时间累积
+			activeFileIDs := make(map[int64]struct{}, len(mountPoints))
+			activeMountIDs := make(map[int64]struct{}, len(mountPoints))
+			for _, mp := range mountPoints {
+				if mp == nil { continue }
+				activeFileIDs[mp.FileId] = struct{}{}
+				activeMountIDs[mp.ID] = struct{}{}
+			}
+			s.mu.Lock()
+			for id := range s.lastTriggeredSlot {
+				if _, ok := activeMountIDs[id]; !ok { delete(s.lastTriggeredSlot, id) }
+			}
+			for fid := range s.autoDeleteConfirmations {
+				if _, ok := activeFileIDs[fid]; !ok { delete(s.autoDeleteConfirmations, fid) }
+			}
+			s.mu.Unlock()
+
 			ctx.Debug("文件刷新执行器查询到挂载点数量", zap.Int("count", len(mountPoints)))
 			now := time.Now()
 			s.runPersistentCheck(ctx, now)

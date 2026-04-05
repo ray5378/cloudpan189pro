@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -30,11 +32,11 @@ func DefaultHTTPLogConfig() *HTTPLogConfig {
 	return &HTTPLogConfig{
 		EnableRequestLog:  true,
 		EnableResponseLog: true,
-		EnableTraceLog:    true, // 默认启用 trace 记录
-		LogLevel:          "info",
+		EnableTraceLog:    getenvDefault("HTTP_TRACE_LOG", "false") == "true", // 默认关闭，可用环境变量开启
+		LogLevel:          getenvDefault("HTTP_LOG_LEVEL", "info"),
 		LogHeaders:        true,
 		LogBody:           true,
-		MaxBodySize:       1024, // 1KB
+		MaxBodySize:       func() int { if v := getenvDefault("HTTP_LOG_MAX_BODY", "512"); n, err := strconv.Atoi(v); if err == nil { return n }; return 512 }(),
 		SensitiveHeaders: []string{
 			"authorization", "cookie", "x-auth-token",
 			"x-api-key", "token", "password",

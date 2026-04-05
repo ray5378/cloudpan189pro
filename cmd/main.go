@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	stdhttp "net/http"
+	_ "net/http/pprof"
 
 	"github.com/xxcheng123/cloudpan189-share/internal/bootstrap"
 	"github.com/xxcheng123/cloudpan189-share/internal/configs"
@@ -45,6 +46,10 @@ func main() {
 	dav.Start(svc)
 
 	go func() {
+		// pprof on localhost (disable by PPROF_DISABLE=1)
+		if getenvDefault("PPROF_DISABLE", "0") != "1" {
+			go func() { _ = stdhttp.ListenAndServe("127.0.0.1:6060", nil) }()
+		}
 		// replace gin.Engine.Run with custom http.Server (long timeouts, idle GC)
 		server := httpx.NewServer(httpEngine, fmt.Sprintf(":%d", port))
 		if err = server.ListenAndServe(); err != nil && err != stdhttp.ErrServerClosed {

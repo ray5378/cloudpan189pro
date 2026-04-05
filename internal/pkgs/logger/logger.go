@@ -93,8 +93,8 @@ func WithFileRotationP(file string) Option {
 		opt.file = &lumberjack.Logger{ // concurrent-safed
 			Filename:   file, // 文件路径
 			MaxSize:    64,   // 单个文件最大尺寸，默认单位 M
-			MaxBackups: 8,    // 最多保留 300 个备份
-			MaxAge:     30,   // 最大时间，默认单位 day
+			MaxBackups: 8,    // 最多保留 8 个备份
+			MaxAge:     15,   // 保留 15 天
 			LocalTime:  true, // 使用本地时间
 			Compress:   true, // 是否压缩 disabled by default
 		}
