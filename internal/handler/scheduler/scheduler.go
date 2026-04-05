@@ -70,6 +70,11 @@ func Start(svc bootstrap.ServiceContext) (func(), error) {
 		errs = append(errs, err)
 	}
 
+	vacuumScheduler := NewVacuumScheduler(svc)
+	if err := vacuumScheduler.Start(ctx); err != nil {
+		errs = append(errs, err)
+	}
+
 	refreshCloudTokenScheduler := NewRefreshCloudTokenScheduler(cloudTokenService)
 	if err := refreshCloudTokenScheduler.Start(ctx); err != nil {
 		errs = append(errs, err)
