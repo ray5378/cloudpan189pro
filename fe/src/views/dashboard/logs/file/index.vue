@@ -48,6 +48,16 @@
       </div>
     </div>
 
+    <!-- 次行操作：清除任务日志 -->
+    <div class="sub-actions">
+      <n-popconfirm positive-text="清除" negative-text="取消" @positive-click="handleCleanup">
+        <template #trigger>
+          <n-button type="error" quaternary>清除任务日志</n-button>
+        </template>
+        确认按保留策略清理历史任务日志？
+      </n-popconfirm>
+    </div>
+
     <!-- 任务日志列表表格 -->
     <n-data-table
       :columns="columns"
@@ -161,6 +171,7 @@ import {
   NCode,
   NAlert,
   NProgress,
+  NPopconfirm,
   useMessage,
   type DataTableColumns,
   type PaginationProps,
@@ -173,7 +184,7 @@ import {
   TimeOutline,
   PlayOutline,
 } from '@vicons/ionicons5'
-import { getFileLogList } from '@/api/taskstate'
+import { getFileLogList, cleanupFileLogs } from '@/api/taskstate'
 import { formatDate } from '@/utils/format'
 import {
   TASK_TYPE_OPTIONS,
@@ -284,6 +295,23 @@ const handleReset = () => {
 // 刷新
 const handleRefresh = () => {
   fetchTaskLogList()
+}
+
+// 清理任务日志
+const handleCleanup = async () => {
+  try {
+    state.loading = true
+    const res = await cleanupFileLogs()
+    const deleted = (res.data as any)?.deleted ?? 0
+    const days = (res.data as any)?.retentionDays ?? 15
+    message.success(`已清理 ${deleted} 条（保留 ${days} 天）`)
+    fetchTaskLogList()
+  } catch (e: any) {
+    console.error(e)
+    message.error(e?.message || '清理任务日志失败')
+  } finally {
+    state.loading = false
+  }
 }
 
 // 查看详情
