@@ -15,6 +15,13 @@ import (
 	"resty.dev/v3"
 )
 
+func getenvDefault(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
+}
+
 // HTTPLogConfig HTTP日志配置
 type HTTPLogConfig struct {
 	EnableRequestLog  bool     // 是否启用请求日志
