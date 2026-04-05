@@ -23,6 +23,9 @@ type Service interface {
 
 	// Count 统计数量
 	Count(ctx context.Context, req *ListRequest) (int64, error)
+
+	// CleanupOlderThan 清理早于指定时间的登录日志
+	CleanupOlderThan(ctx context.Context, before time.Time) (int64, error)
 }
 
 type service struct {
