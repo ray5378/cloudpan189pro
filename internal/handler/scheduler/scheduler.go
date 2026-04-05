@@ -49,6 +49,7 @@ func Start(svc bootstrap.ServiceContext) (func(), error) {
 		autoIngestPlanService = autoingestplanSvi.NewService(svc)
 		autoIngestLogService  = autoingestlogSvi.NewService(svc)
 		virtualFileService    = virtualfileSvi.NewService(svc)
+		loginLogService      = loginlogSvi.NewService(svc)
 
 		taskEngine = svc.GetTaskEngine()
 	)

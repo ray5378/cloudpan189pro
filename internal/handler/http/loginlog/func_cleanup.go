@@ -17,7 +17,7 @@ func (h *handler) Cleanup() httpcontext.HandlerFunc {
 			if n, err := strconv.Atoi(v); err == nil && n > 0 { ret = n }
 		}
 		before := time.Now().Add(-time.Duration(ret) * 24 * time.Hour)
-		deleted, err := h.service.CleanupOlderThan(ctx.GetContext(), before)
+		deleted, err := h.loginLogService.CleanupOlderThan(ctx.GetContext(), before)
 		if err != nil {
 			ctx.Response(http.StatusBadRequest, http.StatusBadRequest, "cleanup failed", map[string]any{"error": err.Error()})
 			return
