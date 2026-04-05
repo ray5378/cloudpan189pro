@@ -1,0 +1,34 @@
+version: "3.8"
+
+services:
+  189cloudshare:
+    image: ray5378/cloudpan189pro:latest
+    container_name: 189cloudshare
+    restart: always
+    environment:
+      # Go 运行时内存控制（按需调整）
+      - GOMEMLIMIT=200MiB
+      - GOGC=100
+      # 运行模式/日志与诊断
+      - GIN_MODE=release
+      - HTTP_TRACE_LOG=false
+      - LOG_RESP_BUFFER_SIZE=65536
+      - PPROF_DISABLE=1
+      # 日志保留天数（后端每日自动清理）
+      - TASKLOG_RETENTION_DAYS=15
+      - LOGINLOG_RETENTION_DAYS=15
+      # 可选：更积极归还空闲堆内存给 OS（观察 RSS 曲线更干净）
+      # - GODEBUG=madvdontneed=1
+    ports:
+      - "12395:12395"
+    volumes:
+      - ./data:/app/data
+      - ./media_dir:/app/media_dir
+    # 如需自定义配置文件，解除下一行注释并提供 etc/config.yaml
+    # - ./etc/config.yaml:/app/etc/config.yaml:ro
+
+# 备注：
+# - Web 界面: http://localhost:12395
+# - WebDAV:   http://localhost:12395/dav
+# - 任务日志手动清理: POST /api/task_state/file_log/cleanup
+# - 登录日志手动清理: POST /api/login_log/cleanup
