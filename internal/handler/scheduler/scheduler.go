@@ -78,12 +78,18 @@ func Start(svc bootstrap.ServiceContext) (func(), error) {
 		errs = append(errs, err)
 	}
 
+	cleanupLoginLogScheduler := NewCleanupLoginLogScheduler(loginLogService)
+	if err := cleanupLoginLogScheduler.Start(ctx); err != nil {
+		errs = append(errs, err)
+	}
+
 	schedulers := []Scheduler{
 		fileTaskLogCheckScheduler,
 		refreshFileScheduler,
 		autoIngestRefreshScheduler,
 		refreshCloudTokenScheduler,
 		cleanupTaskLogScheduler,
+		cleanupLoginLogScheduler,
 	}
 
 	return closeBar(schedulers), errors2.Join(errs...)

@@ -247,6 +247,7 @@ func Start(svc bootstrap.ServiceContext) {
 		loginLogRouter := openapiRouter.Group("/login_log", wrap(userMiddleware.Auth(true)))
 		{
 			loginLogRouter.GET("/list", wrap(loginLogHandler.List()))
+			loginLogRouter.POST("/cleanup", wrap(loginLogHandler.Cleanup()))
 		}
 	}
 

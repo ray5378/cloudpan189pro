@@ -10,6 +10,8 @@ import (
 type Handler interface {
 	// List 登录日志列表
 	List() httpcontext.HandlerFunc
+	// Cleanup 登录日志清理
+	Cleanup() httpcontext.HandlerFunc
 }
 
 var bi = httpcontext.NewBusinessGenerator(consts.BusCodeLoginLogStartCode)
