@@ -95,10 +95,10 @@ func (a *familyRestoreAdapter) TryRestore(
 	}
 
 	if err := a.copyFamilyFileToPersonal(session, familyID, familyFileID, targetFolderID, fileName); err != nil {
-		_ = a.safeDeleteFamilyFile(panClient, familyID, familyFileID, fileName)
+		_ = a.safeDeleteFamilyFile(session, familyID, familyFileID, fileName)
 		return nil, err
 	}
-	_ = a.safeDeleteFamilyFile(panClient, familyID, familyFileID, fileName)
+	_ = a.safeDeleteFamilyFile(session, familyID, familyFileID, fileName)
 	return result, nil
 }
 
@@ -320,17 +320,23 @@ func (a *familyRestoreAdapter) waitForBatchTask(accessToken, taskType, taskID st
 	return fmt.Errorf("家庭中转批量任务超时 taskStatus=%d", lastStatus)
 }
 
-func (a *familyRestoreAdapter) safeDeleteFamilyFile(panClient *cloudpan.PanClient, familyID int64, fileID, fileName string) error {
-	_, apiErr := panClient.AppCreateBatchTask(familyID, &cloudpan.BatchTaskParam{
-		TypeFlag: cloudpan.BatchTaskTypeDelete,
-		TaskInfos: cloudpan.BatchTaskInfoList{&cloudpan.BatchTaskInfo{
-			FileId:   fileID,
-			FileName: fileName,
-			IsFolder: 0,
-		}},
-	})
-	if apiErr != nil {
-		return apiErr
+func (a *familyRestoreAdapter) safeDeleteFamilyFile(session *appsession.Session, familyID int64, fileID, fileName string) error {
+	accessToken := strings.TrimSpace(session.Token.AccessToken)
+	if accessToken == "" {
+		return fmt.Errorf("家庭中转清理失败: 无法获取AccessToken")
+	}
+	params := map[string]string{
+		"type":           "DELETE",
+		"taskInfos":      fmt.Sprintf(`[{"fileId":"%s","fileName":"%s","isFolder":0}]`, fileID, escapeJSONString(fileName)),
+		"targetFolderId": "",
+		"familyId":       strconv.FormatInt(familyID, 10),
+	}
+	resp := new(batchTaskCreateResp)
+	if err := doAccessTokenFormJSONRequest(accessToken, familyBatchAPIBase+"/open/batch/createBatchTask.action", params, 30*time.Second, resp); err != nil {
+		return err
+	}
+	if batchRespError(resp.ResCode, resp.ResMessage) {
+		return fmt.Errorf("家庭中转清理失败: %s", resp.ResMessage)
 	}
 	return nil
 }

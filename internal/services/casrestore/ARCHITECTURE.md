@@ -37,3 +37,33 @@ Examples:
 
 When editing this module, always keep comments around `UploadRoute`, `DestinationType`, and `TargetFolderID`.
 They exist specifically to prevent semantic confusion.
+
+## Reference implementation is the only source of truth
+
+For all cloud-disk operations in this module, the implementation target is **reference-flow replication**, not "equivalent behavior".
+
+Reference files:
+
+- `/root/.openclaw/workspace/cloud189-auto-save/src/services/casService.js`
+- `/root/.openclaw/workspace/cloud189-auto-save/src/services/cloud189.js`
+- `/root/.openclaw/workspace/cloud189-auto-save/src/utils/UploadCryptoUtils.js`
+
+Hard rule:
+
+- command / action names must follow the reference
+- endpoint paths must follow the reference
+- parameter names and values must follow the reference
+- response field extraction order must follow the reference
+- signature strategy must follow the reference
+- retry conditions and delays must follow the reference
+- polling logic must follow the reference
+- cleanup order must follow the reference
+- family / person route chain must follow the reference
+
+What must not happen:
+
+- do **not** replace the reference flow with a "similar" SDK call just because it looks equivalent
+- do **not** rename cloud operations into local abstractions that hide the original command chain
+- do **not** simplify protocol steps without explicit evidence from the reference implementation
+
+In short: this module is a Go translation of the working JS reference flow, not an independent redesign.

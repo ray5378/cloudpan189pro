@@ -6,6 +6,32 @@
 
 目标很单纯：先手动打通 cloud189 `.cas` 恢复链。
 
+## 实现约束（重要）
+
+这条恢复链当前的实现目标不是“做一个差不多能工作的版本”，而是：
+
+- **严格复刻参考实现**
+
+参考文件：
+
+- `/root/.openclaw/workspace/cloud189-auto-save/src/services/casService.js`
+- `/root/.openclaw/workspace/cloud189-auto-save/src/services/cloud189.js`
+- `/root/.openclaw/workspace/cloud189-auto-save/src/utils/UploadCryptoUtils.js`
+
+因此凡是涉及云盘操作的：
+
+- 命令名称
+- 接口路径
+- 参数名
+- 字段提取顺序
+- 签名方式
+- 重试条件
+- 轮询逻辑
+- cleanup 顺序
+- family / person 逻辑链路
+
+都必须照参考实现搬，不接受“看起来等价”的 SDK 替代路线。
+
 ---
 
 ## 先记住两个概念
