@@ -1,16 +1,23 @@
 package media
 
 import (
+	"fmt"
+
 	"github.com/xxcheng123/cloudpan189-share/internal/framework/httpcontext"
 	casrestoreSvi "github.com/xxcheng123/cloudpan189-share/internal/services/casrestore"
 )
 
 // restoreCasRequest 手动触发 CAS 恢复。
 // 注意：uploadRoute 表示秒传/上传路线；destinationType 表示最终目录归属。
+// 为了便于手动联调，接口支持两种模式：
+// 1. 最简模式：只传 casVirtualId + destinationType + targetFolderId（其余上下文自动反查）
+// 2. 显式模式：把 storageId / mountPointId / casFileId / casFileName 一起传进来
+//
+// 这里的 storageId 兜底取挂载点根 file_id，和现有 storage/list 返回的 id 语义保持一致。
 type restoreCasRequest struct {
-	StorageID       int64                         `json:"storageId" binding:"required" example:"1"`
-	MountPointID    int64                         `json:"mountPointId" binding:"required" example:"1"`
-	CasFileID       string                        `json:"casFileId" binding:"required" example:"123456789"`
+	StorageID       int64                         `json:"storageId" binding:"omitempty" example:"1"`
+	MountPointID    int64                         `json:"mountPointId" binding:"omitempty" example:"1"`
+	CasFileID       string                        `json:"casFileId" binding:"omitempty" example:"123456789"`
 	CasFileName     string                        `json:"casFileName" binding:"omitempty" example:"movie.cas"`
 	CasVirtualID    int64                         `json:"casVirtualId" binding:"required" example:"1001"`
 	UploadRoute     casrestoreSvi.UploadRoute     `json:"uploadRoute" binding:"omitempty,oneof=family person" example:"family"`
@@ -40,15 +47,10 @@ func (h *handler) RestoreCas() httpcontext.HandlerFunc {
 			return
 		}
 
-		restoreReq := casrestoreSvi.RestoreRequest{
-			StorageID:       req.StorageID,
-			MountPointID:    req.MountPointID,
-			CasFileID:       req.CasFileID,
-			CasFileName:     req.CasFileName,
-			CasVirtualID:    req.CasVirtualID,
-			UploadRoute:     req.UploadRoute,
-			DestinationType: req.DestinationType,
-			TargetFolderID:  req.TargetFolderID,
+		restoreReq, err := h.buildRestoreRequest(ctx, req)
+		if err != nil {
+			ctx.Fail(codeRestoreCasFailed.WithError(err))
+			return
 		}
 		if restoreReq.UploadRoute == "" {
 			restoreReq.UploadRoute = casrestoreSvi.UploadRouteFamily
@@ -62,4 +64,54 @@ func (h *handler) RestoreCas() httpcontext.HandlerFunc {
 
 		ctx.Success(resp)
 	}
+}
+
+func (h *handler) buildRestoreRequest(ctx *httpcontext.Context, req *restoreCasRequest) (casrestoreSvi.RestoreRequest, error) {
+	restoreReq := casrestoreSvi.RestoreRequest{
+		StorageID:       req.StorageID,
+		MountPointID:    req.MountPointID,
+		CasFileID:       req.CasFileID,
+		CasFileName:     req.CasFileName,
+		CasVirtualID:    req.CasVirtualID,
+		UploadRoute:     req.UploadRoute,
+		DestinationType: req.DestinationType,
+		TargetFolderID:  req.TargetFolderID,
+	}
+
+	vf, err := h.virtualfileService.Query(ctx.GetContext(), req.CasVirtualID)
+	if err != nil {
+		return casrestoreSvi.RestoreRequest{}, err
+	}
+	if restoreReq.CasFileID == "" {
+		restoreReq.CasFileID = vf.CloudId
+	}
+	if restoreReq.CasFileName == "" {
+		restoreReq.CasFileName = vf.Name
+	}
+
+	top, err := h.virtualfileService.QueryTop(ctx.GetContext(), req.CasVirtualID)
+	if err != nil {
+		return casrestoreSvi.RestoreRequest{}, err
+	}
+	if top == nil {
+		return casrestoreSvi.RestoreRequest{}, fmt.Errorf("无法定位CAS文件所属挂载点")
+	}
+
+	mp, err := h.mountpointService.Query(ctx.GetContext(), top.ID)
+	if err != nil {
+		return casrestoreSvi.RestoreRequest{}, err
+	}
+	if mp == nil {
+		return casrestoreSvi.RestoreRequest{}, fmt.Errorf("无法定位CAS文件挂载点记录")
+	}
+
+	if restoreReq.MountPointID == 0 {
+		restoreReq.MountPointID = mp.ID
+	}
+	if restoreReq.StorageID == 0 {
+		// 这里沿用 storage/list 的 ID 语义：storageId 对应 mount point root file_id。
+		restoreReq.StorageID = mp.FileId
+	}
+
+	return restoreReq, nil
 }
