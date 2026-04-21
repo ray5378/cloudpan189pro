@@ -103,6 +103,17 @@ func (h *handler) RefreshSubscribe() taskcontext.HandlerFunc {
 
 				logger.Debug("发现新的待入库文件", zap.String("name", item.Name))
 
+				// CAS 自动归集：仅在订阅刷新主链中，对顶层 .cas 分享资源做最小自动转存。
+				if err := h.tryCollectSubscribeCAS(ctx.GetContext(), path.Join(plan.ParentPath, item.Name), item); err != nil {
+					logger.Error("自动归集CAS失败", zap.String("name", item.Name), zap.Error(err))
+					if _, logErr := h.authIngestLogService.Create(ctx.GetContext(),
+						req.PlanId, autoingest.LogLevelError,
+						fmt.Sprintf("CAS自动归集失败：%s, 错误信息：%s", item.Name, err.Error()),
+					); logErr != nil {
+						logger.Error("创建入库日志失败", zap.Error(logErr))
+					}
+				}
+
 				// 检查这个文件存不存在先
 				fullPath := path.Join(plan.ParentPath, item.Name)
 				if _, err := h.virtualFileService.QueryByPath(ctx.GetContext(), fullPath); err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
