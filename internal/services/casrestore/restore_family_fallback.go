@@ -79,6 +79,11 @@ func (a *familyRestoreAdapter) TryRestore(
 	familyFolderID := ""
 	if destinationType == DestinationTypeFamily {
 		familyFolderID = normalizeFamilyFolderID(targetFolderID)
+	} else {
+		familyFolderID, err = a.getFamilyRootFolderID(session, familyID)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	familyFileID, err := a.familyRapidUpload(session, familyID, familyFolderID, info, fileName)

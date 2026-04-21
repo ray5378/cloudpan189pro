@@ -4,17 +4,17 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math/rand"
 	"net/http"
 	"net/url"
-	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/tickstep/cloudpan189-api/cloudpan/apiutil"
 	cpcrypto "github.com/tickstep/library-go/crypto"
-	"github.com/tickstep/library-go/requester"
 	"github.com/xxcheng123/cloudpan189-share/internal/services/appsession"
 )
 
@@ -27,6 +27,11 @@ const (
 	rsaKeyTTL       = 5 * time.Minute
 	uploadAppKey    = "600100422"
 )
+
+var uploadRSAKeyCache = struct {
+	sync.Mutex
+	items map[string]*rsaKeyInfo
+}{items: map[string]*rsaKeyInfo{}}
 
 type rsaKeyInfo struct {
 	PubKey string `json:"pubKey"`
@@ -61,33 +66,132 @@ func calcCasSliceSize(fileSize int64) int64 {
 	return casSliceSize
 }
 
+func getSessionKeyForUpload(session *appsession.Session) (string, error) {
+	if session == nil {
+		return "", fmt.Errorf("AppSession不能为空")
+	}
+	sessionKey := strings.TrimSpace(session.Token.SessionKey)
+	if sessionKey == "" {
+		return "", fmt.Errorf("获取上传SessionKey失败")
+	}
+	return sessionKey, nil
+}
+
 func uploadRequest(session *appsession.Session, requestURI string, params map[string]string) (*uploadResponse, error) {
 	if session == nil {
 		return nil, fmt.Errorf("AppSession不能为空")
 	}
-	rsaKey, err := getUploadRSAKey(session.Token.SessionKey)
+	sessionKey, err := getSessionKeyForUpload(session)
 	if err != nil {
 		return nil, err
 	}
-	urlStr, headers, err := buildUploadRequest(params, requestURI, rsaKey, session.Token.SessionKey, "GET")
+	rsaKey, err := getUploadRSAKeyWithCache(session, sessionKey)
 	if err != nil {
 		return nil, err
 	}
-	body, err := requester.Fetch(http.MethodGet, urlStr, nil, headers)
+	return doUploadRequest(session, sessionKey, requestURI, params, rsaKey)
+}
+
+func doUploadRequest(session *appsession.Session, sessionKey, requestURI string, params map[string]string, rsaKey *rsaKeyInfo) (*uploadResponse, error) {
+	urlStr, headers, err := buildUploadRequest(params, requestURI, rsaKey, sessionKey, http.MethodGet)
 	if err != nil {
 		return nil, err
 	}
-	resp := new(uploadResponse)
-	if err := json.Unmarshal(body, resp); err != nil {
+	req, err := http.NewRequest(http.MethodGet, urlStr, nil)
+	if err != nil {
 		return nil, err
 	}
-	if resp.Code != "" && resp.Code != "SUCCESS" {
-		return nil, fmt.Errorf("CAS上传请求失败 %s: %s", requestURI, firstNonEmpty(resp.Msg, resp.Code))
+	for k, v := range headers {
+		req.Header.Set(k, v)
 	}
-	if resp.ErrorCode != "" {
-		return nil, fmt.Errorf("CAS上传请求失败 %s: %s", requestURI, firstNonEmpty(resp.ErrorMsg, resp.ErrorCode))
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
 	}
-	return resp, nil
+	defer func() { _ = resp.Body.Close() }()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	parsed := new(uploadResponse)
+	if len(body) > 0 {
+		if err := json.Unmarshal(body, parsed); err != nil {
+			if isBlacklistBody(string(body)) {
+				return nil, fmt.Errorf("CAS秒传被天翼云盘风控拦截(文件MD5黑名单): %s", requestURI)
+			}
+			if resp.StatusCode >= 400 {
+				return nil, httpError{StatusCode: resp.StatusCode, Body: string(body)}
+			}
+			return nil, err
+		}
+	}
+	if resp.StatusCode >= 400 {
+		if resp.StatusCode == http.StatusForbidden {
+			clearUploadRSAKeyCache(session)
+		}
+		if isBlacklistResp(parsed) {
+			return nil, fmt.Errorf("CAS秒传被天翼云盘风控拦截(文件MD5黑名单): %s", requestURI)
+		}
+		return nil, httpError{StatusCode: resp.StatusCode, Body: string(body)}
+	}
+	if isBlacklistResp(parsed) {
+		return nil, fmt.Errorf("CAS秒传被天翼云盘风控拦截(文件MD5黑名单): %s", requestURI)
+	}
+	if parsed.Code != "" && parsed.Code != "SUCCESS" {
+		return nil, fmt.Errorf("CAS上传请求失败 %s: %s", requestURI, firstNonEmpty(parsed.Msg, parsed.Code))
+	}
+	if parsed.ErrorCode != "" {
+		return nil, fmt.Errorf("CAS上传请求失败 %s: %s", requestURI, firstNonEmpty(parsed.ErrorMsg, parsed.ErrorCode))
+	}
+	return parsed, nil
+}
+
+func getUploadRSAKeyWithCache(session *appsession.Session, sessionKey string) (*rsaKeyInfo, error) {
+	key := uploadAccountKey(session)
+	now := time.Now().UnixMilli()
+	uploadRSAKeyCache.Lock()
+	cached := uploadRSAKeyCache.items[key]
+	if cached != nil && cached.Expire > now {
+		copyKey := *cached
+		uploadRSAKeyCache.Unlock()
+		return &copyKey, nil
+	}
+	uploadRSAKeyCache.Unlock()
+
+	rsaKey, err := getUploadRSAKey(sessionKey)
+	if err != nil {
+		return nil, err
+	}
+	maxExpire := time.Now().Add(rsaKeyTTL).UnixMilli()
+	if rsaKey.Expire == 0 || rsaKey.Expire > maxExpire {
+		rsaKey.Expire = maxExpire
+	}
+	uploadRSAKeyCache.Lock()
+	uploadRSAKeyCache.items[key] = rsaKey
+	uploadRSAKeyCache.Unlock()
+	return rsaKey, nil
+}
+
+func clearUploadRSAKeyCache(session *appsession.Session) {
+	key := uploadAccountKey(session)
+	uploadRSAKeyCache.Lock()
+	delete(uploadRSAKeyCache.items, key)
+	uploadRSAKeyCache.Unlock()
+}
+
+func uploadAccountKey(session *appsession.Session) string {
+	if session == nil {
+		return "default"
+	}
+	if token := strings.TrimSpace(session.Token.AccessToken); token != "" {
+		return token
+	}
+	if key := strings.TrimSpace(session.Token.SessionKey); key != "" {
+		return key
+	}
+	return "default"
 }
 
 func getUploadRSAKey(sessionKey string) (*rsaKeyInfo, error) {
@@ -96,29 +200,40 @@ func getUploadRSAKey(sessionKey string) (*rsaKeyInfo, error) {
 	sig := apiutil.SignatureOfMd5(signParams)
 	noCache := fmt.Sprintf("0.%d", rand.Int63())
 	urlStr := fmt.Sprintf("%s/api/security/generateRsaKey.action?sessionKey=%s&noCache=%s", cloudWebAPIBase, url.QueryEscape(sessionKey), noCache)
-	body, err := requester.Fetch(http.MethodGet, urlStr, nil, map[string]string{
-		"Sign-Type":  "1",
-		"Signature":  sig,
-		"Timestamp":  ts,
-		"AppKey":     uploadAppKey,
-		"SessionKey": sessionKey,
-		"Accept":     "application/json;charset=UTF-8",
-		"User-Agent": defaultUploadUA,
-	})
+	req, err := http.NewRequest(http.MethodGet, urlStr, nil)
 	if err != nil {
 		return nil, err
 	}
-	resp := new(rsaKeyInfo)
-	if err := json.Unmarshal(body, resp); err != nil {
+	req.Header.Set("Sign-Type", "1")
+	req.Header.Set("Signature", sig)
+	req.Header.Set("Timestamp", ts)
+	req.Header.Set("AppKey", uploadAppKey)
+	req.Header.Set("SessionKey", sessionKey)
+	req.Header.Set("Accept", "application/json;charset=UTF-8")
+	req.Header.Set("User-Agent", defaultUploadUA)
+	client := &http.Client{Timeout: 15 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
 		return nil, err
 	}
-	if resp.PubKey == "" {
+	defer func() { _ = resp.Body.Close() }()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	parsed := new(rsaKeyInfo)
+	if err := json.Unmarshal(body, parsed); err != nil {
+		return nil, err
+	}
+	if parsed.PubKey == "" {
 		return nil, fmt.Errorf("RSA 密钥无效")
 	}
-	if resp.Expire == 0 {
-		resp.Expire = time.Now().Add(rsaKeyTTL).UnixMilli()
+	if parsed.Expire == 0 {
+		parsed.Expire = time.Now().Add(rsaKeyTTL).UnixMilli()
+	} else if parsed.Expire < 1e12 {
+		parsed.Expire = time.Now().Add(time.Duration(parsed.Expire) * time.Second).UnixMilli()
 	}
-	return resp, nil
+	return parsed, nil
 }
 
 func buildUploadRequest(params map[string]string, requestURI string, rsaKey *rsaKeyInfo, sessionKey, method string) (string, map[string]string, error) {
@@ -135,7 +250,7 @@ func buildUploadRequest(params map[string]string, requestURI string, rsaKey *rsa
 	}
 	signText := fmt.Sprintf("SessionKey=%s&Operate=%s&RequestURI=%s&Date=%s&params=%s", sessionKey, method, requestURI, ts, encryptedParams)
 	signature := strings.ToUpper(hex.EncodeToString(cpcrypto.HmacSHA1([]byte(l), []byte(signText))))
-	return uploadAPIBase + requestURI + "?params=" + url.QueryEscape(encryptedParams), map[string]string{
+	return uploadAPIBase + requestURI + "?params=" + encryptedParams, map[string]string{
 		"Accept":         "application/json;charset=UTF-8",
 		"SessionKey":     sessionKey,
 		"Signature":      signature,
@@ -148,18 +263,14 @@ func buildUploadRequest(params map[string]string, requestURI string, rsaKey *rsa
 }
 
 func aesEncryptUpperHex(params map[string]string, key string) (string, error) {
-	keys := make([]string, 0, len(params))
-	for k := range params {
-		keys = append(keys, k)
+	items := make([]string, 0, len(params))
+	for k, v := range params {
+		items = append(items, k+"="+v)
 	}
-	sort.Strings(keys)
-	items := make([]string, 0, len(keys))
-	for _, k := range keys {
-		items = append(items, k+"="+params[k])
-	}
+	joined := strings.Join(items, "&")
 	var aesKey [16]byte
 	copy(aesKey[:], []byte(key[:16]))
-	cipherText, err := cpcrypto.Aes128ECBEncrypt(aesKey, []byte(strings.Join(items, "&")))
+	cipherText, err := cpcrypto.Aes128ECBEncrypt(aesKey, []byte(joined))
 	if err != nil {
 		return "", err
 	}
@@ -253,4 +364,29 @@ func uploadRespDataBoolInt(resp *uploadResponse, path ...string) bool {
 	default:
 		return false
 	}
+}
+
+type httpError struct {
+	StatusCode int
+	Body       string
+}
+
+func (e httpError) Error() string {
+	return fmt.Sprintf("http %d: %s", e.StatusCode, e.Body)
+}
+
+func isBlacklistResp(resp *uploadResponse) bool {
+	if resp == nil {
+		return false
+	}
+	if resp.Code == "InfoSecurityErrorCode" || resp.ErrorCode == "InfoSecurityErrorCode" {
+		return true
+	}
+	msg := strings.ToLower(firstNonEmpty(resp.Msg, resp.ErrorMsg))
+	return strings.Contains(msg, "black list")
+}
+
+func isBlacklistBody(body string) bool {
+	text := strings.ToLower(body)
+	return strings.Contains(text, "black list") || strings.Contains(text, "infosecurityerrorcode")
 }
