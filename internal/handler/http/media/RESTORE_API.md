@@ -3,7 +3,9 @@
 这份说明对应：
 
 - `POST /api/media/restore_cas`
+- `POST /api/media/retry_restore`
 - `GET /api/media/restore_status`
+- `GET /api/media/restore_list`
 
 用于手动联调 cloud189 `.cas` 恢复链。
 
@@ -78,20 +80,7 @@ Content-Type: application/json
 
 #### 模式 C：显式模式
 
-把恢复所需上下文全部手动传入：
-
-```json
-{
-  "storageId": 1,
-  "mountPointId": 1,
-  "casFileId": "123456789",
-  "casFileName": "movie.cas",
-  "casVirtualId": 1001,
-  "uploadRoute": "person",
-  "destinationType": "family",
-  "targetFolderId": "-11"
-}
-```
+把恢复所需上下文全部手动传入。
 
 ### 默认值
 
@@ -130,17 +119,44 @@ curl -X POST 'http://127.0.0.1:12395/api/media/restore_cas' \
   }'
 ```
 
-#### 3) 个人路线，最终落个人目录
+---
+
+## `POST /api/media/retry_restore`
+
+基于已有恢复记录重新触发恢复。
+
+### 注意
+
+当前 retry 依赖恢复记录里已经持久化了 `casFilePath`。如果旧记录没有这个字段，接口会直接返回失败。
+
+### 请求体
+
+```json
+{
+  "recordId": 1,
+  "uploadRoute": "family",
+  "destinationType": "family",
+  "targetFolderId": "-11"
+}
+```
+
+### 字段说明
+
+- `recordId` 必填
+- `uploadRoute` 可选，默认 `family`
+- `destinationType` 必填
+- `targetFolderId` 可选；不传时默认沿用记录中的 `restoredParentId`
+
+### curl 示例
 
 ```bash
-curl -X POST 'http://127.0.0.1:12395/api/media/restore_cas' \
+curl -X POST 'http://127.0.0.1:12395/api/media/retry_restore' \
   -H 'Authorization: Bearer <token>' \
   -H 'Content-Type: application/json' \
   -d '{
-    "casVirtualId": 1001,
-    "uploadRoute": "person",
-    "destinationType": "person",
-    "targetFolderId": "123456"
+    "recordId": 1,
+    "uploadRoute": "family",
+    "destinationType": "family"
   }'
 ```
 
@@ -193,6 +209,46 @@ curl 'http://127.0.0.1:12395/api/media/restore_status?casPath=/电影库/movie.c
 - `restoredParentId`
 - `lastError`
 - `restoredAt`
+
+---
+
+## `GET /api/media/restore_list`
+
+分页查询恢复记录列表。
+
+### 支持筛选字段
+
+- `storageId`
+- `mountPointId`
+- `restoreStatus`
+- `casFileName`
+- `beginAt`
+- `endAt`
+- `currentPage`
+- `pageSize`
+
+### curl 示例
+
+#### 查最近记录
+
+```bash
+curl 'http://127.0.0.1:12395/api/media/restore_list?currentPage=1&pageSize=20' \
+  -H 'Authorization: Bearer <token>'
+```
+
+#### 查失败记录
+
+```bash
+curl 'http://127.0.0.1:12395/api/media/restore_list?restoreStatus=failed&currentPage=1&pageSize=20' \
+  -H 'Authorization: Bearer <token>'
+```
+
+#### 按挂载点查询
+
+```bash
+curl 'http://127.0.0.1:12395/api/media/restore_list?mountPointId=1&currentPage=1&pageSize=20' \
+  -H 'Authorization: Bearer <token>'
+```
 
 ---
 

@@ -25,6 +25,7 @@ type Handler interface {
 	Clear() httpcontext.HandlerFunc
 	RebuildStrmFile() httpcontext.HandlerFunc
 	RestoreCas() httpcontext.HandlerFunc
+	RetryRestore() httpcontext.HandlerFunc
 	RestoreStatus() httpcontext.HandlerFunc
 	RestoreList() httpcontext.HandlerFunc
 }
@@ -43,6 +44,7 @@ var (
 	codeClearFailed         = bi.Next("清理媒体文件失败")
 	codeRebuildFailed       = bi.Next("重建strm文件失败")
 	codeRestoreCasFailed    = bi.Next("恢复CAS文件失败")
+	codeRetryRestoreFailed  = bi.Next("重试CAS恢复失败")
 	codeRestoreStatusFailed = bi.Next("查询CAS恢复状态失败")
 	codeRestoreListFailed   = bi.Next("查询CAS恢复记录列表失败")
 )

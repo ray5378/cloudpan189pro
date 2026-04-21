@@ -2,6 +2,7 @@ package casrestore
 
 import (
 	"fmt"
+	"strconv"
 
 	appctx "github.com/xxcheng123/cloudpan189-share/internal/framework/context"
 	"github.com/xxcheng123/cloudpan189-share/internal/services/casparser"
@@ -64,6 +65,10 @@ func (s *service) ensureRestoredOnce(ctx appctx.Context, req RestoreRequest) (re
 	}
 	if !isRecoverableFallbackTarget(vf) {
 		return nil, fmt.Errorf("当前文件类型不支持恢复: %s", vf.OsType)
+	}
+	casPath, pathErr := s.virtualFileService.CalFilePath(ctx, vf.ID)
+	if pathErr == nil {
+		_ = s.markResolvedSource(ctx, record.ID, casPath, strconv.FormatInt(vf.ParentId, 10))
 	}
 
 	restoreName := casparser.GetOriginalFileName(vf.Name, casInfo)

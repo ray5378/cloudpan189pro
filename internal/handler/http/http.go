@@ -265,6 +265,7 @@ func Start(svc bootstrap.ServiceContext) {
 			mediaRouter.POST("/clear", wrap(mediaHandler.Clear()))
 			mediaRouter.POST("/rebuild_strm_file", wrap(mediaHandler.RebuildStrmFile()))
 			mediaRouter.POST("/restore_cas", wrap(mediaHandler.RestoreCas()))
+			mediaRouter.POST("/retry_restore", wrap(mediaHandler.RetryRestore()))
 			mediaRouter.GET("/restore_status", wrap(mediaHandler.RestoreStatus()))
 			mediaRouter.GET("/restore_list", wrap(mediaHandler.RestoreList()))
 		}
