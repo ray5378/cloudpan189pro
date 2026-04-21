@@ -46,7 +46,10 @@ type batchTaskCheckResp struct {
 }
 
 // familyRestoreAdapter 负责“家庭路线”的秒传恢复。
-// 严格按参照代码：家庭秒传成功后，如最终目标是个人目录，则走 AccessToken 签名的 batch COPY。
+// 严格按参照代码：
+// 1. upload.cloud.189.cn 家庭秒传（init/check/commit）
+// 2. 如目标是个人目录，则走 AccessToken 签名的 batch COPY
+// 3. 成功后清理家庭中转文件
 func (a *familyRestoreAdapter) TryRestore(
 	session *appsession.Session,
 	panClient *cloudpan.PanClient,
@@ -72,56 +75,19 @@ func (a *familyRestoreAdapter) TryRestore(
 		fileName = info.Name
 	}
 
-	familyParentID := ""
+	familyFolderID := ""
 	if destinationType == DestinationTypeFamily {
-		familyParentID = normalizeFamilyFolderID(targetFolderID)
+		familyFolderID = normalizeFamilyFolderID(targetFolderID)
 	}
 
-	createRes, apiErr := panClient.AppFamilyCreateUploadFile(&cloudpan.AppCreateUploadFileParam{
-		FamilyId:       familyID,
-		ParentFolderId: familyParentID,
-		FileName:       fileName,
-		Size:           info.Size,
-		Md5:            info.MD5,
-		LastWrite:      time.Now().Format("2006-01-02 15:04:05"),
-		LocalPath:      "/tmp/" + fileName,
-	})
-	if apiErr != nil {
-		return nil, errors.Wrap(apiErr, "创建家庭上传任务失败")
+	familyFileID, err := a.familyRapidUpload(session, familyID, familyFolderID, info, fileName)
+	if err != nil {
+		return nil, err
 	}
-	if createRes == nil || createRes.UploadFileId == "" {
-		return nil, fmt.Errorf("创建家庭上传任务失败: 缺少uploadFileId")
-	}
-
-	status, apiErr := panClient.AppFamilyGetUploadFileStatus(familyID, createRes.UploadFileId)
-	if apiErr != nil {
-		return nil, errors.Wrap(apiErr, "查询家庭上传状态失败")
-	}
-	if status == nil || status.FileDataExists != 1 {
-		return nil, fmt.Errorf("家庭云端不存在可直接命中的文件数据")
-	}
-
-	commitURL := createRes.FileCommitUrl
-	if commitURL == "" && status.FileCommitUrl != "" {
-		commitURL = status.FileCommitUrl
-	}
-	if commitURL == "" {
-		return nil, fmt.Errorf("缺少家庭commit地址")
-	}
-
-	commitRes, apiErr := panClient.AppFamilyUploadFileCommit(familyID, commitURL, createRes.UploadFileId, createRes.XRequestId)
-	if apiErr != nil {
-		return nil, errors.Wrap(apiErr, "提交家庭恢复失败")
-	}
-	if commitRes == nil || strings.TrimSpace(commitRes.Id) == "" {
-		return nil, fmt.Errorf("家庭恢复提交成功但未返回文件ID")
-	}
-	familyFileID := strings.TrimSpace(commitRes.Id)
-
 	result := &familyRestoreResult{
 		FamilyID:         familyID,
 		RestoredFileID:   familyFileID,
-		RestoredFileName: commitRes.Name,
+		RestoredFileName: fileName,
 	}
 	if destinationType == DestinationTypeFamily {
 		return result, nil
@@ -133,6 +99,88 @@ func (a *familyRestoreAdapter) TryRestore(
 	}
 	_ = a.safeDeleteFamilyFile(panClient, familyID, familyFileID, fileName)
 	return result, nil
+}
+
+func (a *familyRestoreAdapter) familyRapidUpload(session *appsession.Session, familyID int64, familyFolderID string, info *casparser.CasInfo, fileName string) (string, error) {
+	sessionKey := strings.TrimSpace(session.Token.SessionKey)
+	if sessionKey == "" {
+		return "", fmt.Errorf("家庭秒传失败: 缺少sessionKey")
+	}
+	sliceSize := calcCasSliceSize(info.Size)
+
+	initRes, err := uploadRequest(session, "/family/initMultiUpload", map[string]string{
+		"parentFolderId": familyFolderID,
+		"familyId":       strconv.FormatInt(familyID, 10),
+		"fileName":       url.QueryEscape(fileName),
+		"fileSize":       strconv.FormatInt(info.Size, 10),
+		"sliceSize":      strconv.FormatInt(sliceSize, 10),
+		"lazyCheck":      "1",
+	})
+	if err != nil {
+		return "", err
+	}
+	uploadFileID := uploadRespDataString(initRes, "data", "uploadFileId")
+	if uploadFileID == "" {
+		return "", fmt.Errorf("家庭秒传init失败: 缺少uploadFileId")
+	}
+	fileDataExists := uploadRespDataBoolInt(initRes, "data", "fileDataExists")
+
+	time.Sleep(500 * time.Millisecond)
+
+	if !fileDataExists {
+		checkRes, err := uploadRequest(session, "/family/checkTransSecond", map[string]string{
+			"fileMd5":      info.MD5,
+			"sliceMd5":     info.SliceMD5,
+			"uploadFileId": uploadFileID,
+		})
+		if err != nil {
+			return "", err
+		}
+		fileDataExists = uploadRespDataBoolInt(checkRes, "data", "fileDataExists")
+	}
+	if !fileDataExists {
+		return "", fmt.Errorf("家庭秒传失败: 云端不存在该文件数据 (%s)", fileName)
+	}
+
+	time.Sleep(500 * time.Millisecond)
+
+	var commitRes *uploadResponse
+	var lastErr error
+	for retry := 0; retry < maxCommitRetry; retry++ {
+		commitRes, lastErr = uploadRequest(session, "/family/commitMultiUploadFile", map[string]string{
+			"uploadFileId": uploadFileID,
+			"fileMd5":      info.MD5,
+			"sliceMd5":     info.SliceMD5,
+			"lazyCheck":    "1",
+			"opertype":     "3",
+		})
+		if lastErr == nil {
+			break
+		}
+		msg := strings.ToLower(lastErr.Error())
+		if strings.Contains(msg, "http 403") && retry < maxCommitRetry-1 {
+			time.Sleep(time.Duration(retry+1) * 2 * time.Second)
+			continue
+		}
+		return "", lastErr
+	}
+	if commitRes == nil {
+		if lastErr != nil {
+			return "", lastErr
+		}
+		return "", fmt.Errorf("家庭秒传commit失败")
+	}
+
+	familyFileID := firstNonEmpty(
+		uploadRespDataString(commitRes, "file", "userFileId"),
+		uploadRespDataString(commitRes, "file", "id"),
+		uploadRespDataString(commitRes, "data", "fileId"),
+	)
+	if familyFileID == "" {
+		b, _ := json.Marshal(commitRes)
+		return "", fmt.Errorf("家庭秒传commit响应缺少文件ID: %s", string(b))
+	}
+	return familyFileID, nil
 }
 
 func (a *familyRestoreAdapter) pickFamilyID(panClient *cloudpan.PanClient) (int64, error) {
@@ -311,4 +359,13 @@ func escapeJSONString(s string) string {
 		return string(b[1 : len(b)-1])
 	}
 	return s
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if strings.TrimSpace(v) != "" {
+			return v
+		}
+	}
+	return ""
 }
