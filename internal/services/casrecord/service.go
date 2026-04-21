@@ -1,0 +1,27 @@
+package casrecord
+
+import (
+	"github.com/xxcheng123/cloudpan189-share/internal/bootstrap"
+	"github.com/xxcheng123/cloudpan189-share/internal/framework/context"
+	"github.com/xxcheng123/cloudpan189-share/internal/repository/models"
+	"gorm.io/gorm"
+)
+
+type Service interface {
+	Create(ctx context.Context, record *models.CasMediaRecord) (int64, error)
+	Query(ctx context.Context, id int64) (*models.CasMediaRecord, error)
+	QueryByStorageAndCasFileID(ctx context.Context, storageID int64, casFileID string) (*models.CasMediaRecord, error)
+	Update(ctx context.Context, id int64, updates map[string]any) error
+}
+
+type service struct {
+	svc bootstrap.ServiceContext
+}
+
+func NewService(svc bootstrap.ServiceContext) Service {
+	return &service{svc: svc}
+}
+
+func (s *service) getDB(ctx context.Context) *gorm.DB {
+	return s.svc.GetDB(ctx).Model(new(models.CasMediaRecord))
+}
