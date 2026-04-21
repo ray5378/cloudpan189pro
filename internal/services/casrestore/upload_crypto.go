@@ -49,6 +49,18 @@ type uploadResponse struct {
 	File      map[string]interface{} `json:"file"`
 }
 
+type blacklistedError struct {
+	URI string
+}
+
+func (e blacklistedError) Error() string {
+	return fmt.Sprintf("CAS秒传被天翼云盘风控拦截(文件MD5黑名单): %s", e.URI)
+}
+
+func (e blacklistedError) IsBlacklisted() bool {
+	return true
+}
+
 func calcCasSliceSize(fileSize int64) int64 {
 	if fileSize > casSliceSize*2*999 {
 		mult := fileSize / 1999 / casSliceSize
@@ -119,7 +131,7 @@ func doUploadRequest(session *appsession.Session, sessionKey, requestURI string,
 	if len(body) > 0 {
 		if err := json.Unmarshal(body, parsed); err != nil {
 			if isBlacklistBody(string(body)) {
-				return nil, fmt.Errorf("CAS秒传被天翼云盘风控拦截(文件MD5黑名单): %s", requestURI)
+				return nil, blacklistedError{URI: requestURI}
 			}
 			if resp.StatusCode >= 400 {
 				return nil, httpError{StatusCode: resp.StatusCode, Body: string(body)}
@@ -132,12 +144,15 @@ func doUploadRequest(session *appsession.Session, sessionKey, requestURI string,
 			clearUploadRSAKeyCache(session)
 		}
 		if isBlacklistResp(parsed) {
-			return nil, fmt.Errorf("CAS秒传被天翼云盘风控拦截(文件MD5黑名单): %s", requestURI)
+			return nil, blacklistedError{URI: requestURI}
+		}
+		if parsed != nil && (parsed.Code != "" || parsed.Msg != "" || parsed.ErrorCode != "" || parsed.ErrorMsg != "") {
+			return nil, fmt.Errorf("CAS上传请求失败 %s: %s", requestURI, strings.TrimSpace(strings.TrimSpace(parsed.Code+" "+parsed.Msg+" "+parsed.ErrorCode+" "+parsed.ErrorMsg)))
 		}
 		return nil, httpError{StatusCode: resp.StatusCode, Body: string(body)}
 	}
 	if isBlacklistResp(parsed) {
-		return nil, fmt.Errorf("CAS秒传被天翼云盘风控拦截(文件MD5黑名单): %s", requestURI)
+		return nil, blacklistedError{URI: requestURI}
 	}
 	if parsed.Code != "" && parsed.Code != "SUCCESS" {
 		return nil, fmt.Errorf("CAS上传请求失败 %s: %s", requestURI, firstNonEmpty(parsed.Msg, parsed.Code))

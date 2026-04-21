@@ -3,8 +3,8 @@ package casrestore
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/url"
-	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -132,11 +132,10 @@ func (a *personRestoreAdapter) personRapidUpload(session *appsession.Session, pe
 			}
 			return restoredFileID, nil
 		}
-		msg := strings.ToLower(lastErr.Error())
-		if strings.Contains(msg, "黑名单") || strings.Contains(msg, "infosecurityerrorcode") || strings.Contains(msg, "black list") {
+		if _, ok := lastErr.(blacklistedError); ok {
 			return "", lastErr
 		}
-		if strings.Contains(msg, "http 403") && retry < maxCommitRetry-1 {
+		if httpErr, ok := lastErr.(httpError); ok && httpErr.StatusCode == http.StatusForbidden && retry < maxCommitRetry-1 {
 			clearUploadRSAKeyCache(session)
 			time.Sleep(time.Duration(retry+1) * 2 * time.Second)
 			continue
