@@ -35,17 +35,18 @@ type Service interface {
 }
 
 type service struct {
-	svc               bootstrap.ServiceContext
-	recordSvc         casrecord.Service
-	appSessionService appsession.Service
-	inflightMu        sync.Mutex
-	inflight          map[string]*restoreCall
+	svc                bootstrap.ServiceContext
+	recordSvc          casrecord.Service
+	appSessionService  appsession.Service
+	cloudBridgeService cloudbridgeSvi.Service
+	inflightMu         sync.Mutex
+	inflight           map[string]*restoreCall
 }
 
 type restoreCall struct {
 	wg     sync.WaitGroup
 	result *RestoreResult
-	err    error
+	terr   error
 }
 
 func NewService(svc bootstrap.ServiceContext) Service {
@@ -53,10 +54,11 @@ func NewService(svc bootstrap.ServiceContext) Service {
 	cloudBridgeSvc := cloudbridgeSvi.NewService(svc)
 	mountPointSvc := mountpointSvi.NewService(svc, cloudTokenSvc, cloudBridgeSvc)
 	return &service{
-		svc:               svc,
-		recordSvc:         casrecord.NewService(svc),
-		appSessionService: appsession.NewService(svc, cloudTokenSvc, mountPointSvc),
-		inflight:          make(map[string]*restoreCall),
+		svc:                svc,
+		recordSvc:          casrecord.NewService(svc),
+		appSessionService:  appsession.NewService(svc, cloudTokenSvc, mountPointSvc),
+		cloudBridgeService: cloudBridgeSvc,
+		inflight:           make(map[string]*restoreCall),
 	}
 }
 
@@ -69,7 +71,7 @@ func (s *service) withInflight(_ stdctx.Context, key string, fn func() (*Restore
 	if call, ok := s.inflight[key]; ok {
 		s.inflightMu.Unlock()
 		call.wg.Wait()
-		return call.result, call.err
+		return call.result, call.terr
 	}
 	call := &restoreCall{}
 	call.wg.Add(1)
@@ -83,6 +85,6 @@ func (s *service) withInflight(_ stdctx.Context, key string, fn func() (*Restore
 		call.wg.Done()
 	}()
 
-	call.result, call.err = fn()
-	return call.result, call.err
+	call.result, call.terr = fn()
+	return call.result, call.terr
 }

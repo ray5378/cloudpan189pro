@@ -52,6 +52,9 @@ func (s *service) ensureRestoredOnce(ctx appctx.Context, req RestoreRequest) (re
 	if err != nil {
 		return nil, err
 	}
+	if !isRecoverableFallbackTarget(vf) {
+		return nil, fmt.Errorf("当前文件类型不支持恢复: %s", vf.OsType)
+	}
 
 	restoreName := casparser.GetOriginalFileName(vf.Name, casInfo)
 	if err = s.markRestoring(ctx, record.ID, restoreName, casInfo.Size, casInfo.MD5, casInfo.SliceMD5); err != nil {
@@ -69,12 +72,16 @@ func (s *service) ensureRestoredOnce(ctx appctx.Context, req RestoreRequest) (re
 
 	personResult, personErr := (&personRestoreAdapter{}).TryRestore(panClient, req.TargetFolderID, restoreName, casInfo)
 	if personErr == nil {
-		result = &RestoreResult{
+		fileID, fileName, verifyErr := s.verifyRestoredInPersonFolder(ctx, req.MountPointID, req.TargetFolderID, restoreName)
+		if verifyErr != nil {
+			return nil, verifyErr
+		}
+		result = normalizeRestoreResult(&RestoreResult{
 			RestoredFileID:   personResult.RestoredFileID,
 			RestoredFileName: personResult.RestoredFileName,
 			TargetFolderID:   req.TargetFolderID,
 			CasInfo:          casInfo,
-		}
+		}, fileID, fileName, req.TargetFolderID)
 		if err = s.markRestored(ctx, record.ID, result); err != nil {
 			return nil, err
 		}
@@ -90,13 +97,16 @@ func (s *service) ensureRestoredOnce(ctx appctx.Context, req RestoreRequest) (re
 	if familyErr != nil {
 		return nil, fmt.Errorf("person恢复失败: %v; family fallback失败: %w", personErr, familyErr)
 	}
-
-	result = &RestoreResult{
+	fileID, fileName, verifyErr := s.verifyRestoredInPersonFolder(ctx, req.MountPointID, req.TargetFolderID, restoreName)
+	if verifyErr != nil {
+		return nil, verifyErr
+	}
+	result = normalizeRestoreResult(&RestoreResult{
 		RestoredFileID:   familyResult.RestoredFileID,
 		RestoredFileName: familyResult.RestoredFileName,
 		TargetFolderID:   req.TargetFolderID,
 		CasInfo:          casInfo,
-	}
+	}, fileID, fileName, req.TargetFolderID)
 	if err = s.markRestored(ctx, record.ID, result); err != nil {
 		return nil, err
 	}
