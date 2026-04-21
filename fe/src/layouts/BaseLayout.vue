@@ -286,6 +286,11 @@ const menuOptions = computed((): MenuOption[] => {
       icon: () => h(NIcon, null, { default: () => h(ExtensionsIcon) }),
     },
     {
+      label: 'CAS配置',
+      key: '/@dashboard/cas-config',
+      icon: () => h(NIcon, null, { default: () => h(CasConfigIcon) }),
+    },
+    {
       label: '聚合日志',
       key: '/@dashboard/logs',
       icon: () => h(NIcon, null, { default: () => h(TaskLogIcon) }),

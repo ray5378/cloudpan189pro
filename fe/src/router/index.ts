@@ -145,6 +145,16 @@ const router = createRouter({
           ],
         },
         {
+          path: 'cas-config',
+          name: 'CasConfig',
+          component: () => import('@/views/dashboard/cas-config/index.vue'),
+          meta: {
+            title: 'CAS配置',
+            requiresAuth: true,
+            requiresAdmin: true,
+          },
+        },
+        {
           path: 'logs',
           name: 'Logs',
           component: () => import('@/views/dashboard/logs/index.vue'),

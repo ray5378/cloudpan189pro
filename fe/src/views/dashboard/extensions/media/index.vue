@@ -100,69 +100,6 @@
               <n-button size="small" type="info" @click="reload">刷新配置</n-button>
             </n-space>
           </n-space>
-
-          <n-card title="CAS 恢复测试" size="small" :bordered="true">
-            <n-space vertical size="small">
-              <n-alert type="info" :bordered="false">
-                当前前端入口只暴露已经按参考实现收口的组合：person → person、family → family、family → person。
-                person → family 因缺少 reference-backed 主链，前后端都会拒绝。
-              </n-alert>
-
-              <n-form :model="restoreForm" label-placement="left" label-width="120px">
-                <n-form-item label="CAS Virtual ID">
-                  <n-input-number
-                    v-model:value="restoreForm.casVirtualId"
-                    clearable
-                    placeholder="例如 1001"
-                    style="width: 100%"
-                  />
-                </n-form-item>
-
-                <n-form-item label="CAS 路径">
-                  <n-input
-                    v-model:value="restoreForm.casPath"
-                    placeholder="例如 /电影库/movie.cas"
-                    clearable
-                  />
-                </n-form-item>
-
-                <n-form-item label="上传路线">
-                  <n-select
-                    v-model:value="restoreForm.uploadRoute"
-                    :options="uploadRouteOptions"
-                    placeholder="选择上传路线"
-                  />
-                </n-form-item>
-
-                <n-form-item label="最终目录类型">
-                  <n-select
-                    v-model:value="restoreForm.destinationType"
-                    :options="destinationTypeOptions"
-                    placeholder="选择最终目录类型"
-                  />
-                </n-form-item>
-
-                <n-form-item label="目标目录 ID">
-                  <n-input
-                    v-model:value="restoreForm.targetFolderId"
-                    placeholder="个人目录 ID 或家庭目录 ID，例如 -11"
-                    clearable
-                  />
-                </n-form-item>
-
-                <n-space justify="end">
-                  <n-button @click="resetRestoreForm">重置</n-button>
-                  <n-button type="primary" :loading="restoringCas" @click="handleRestoreCas">
-                    开始恢复
-                  </n-button>
-                </n-space>
-              </n-form>
-
-              <n-alert v-if="restoreResultText" type="success" :bordered="false" title="恢复结果">
-                <pre class="result-pre">{{ restoreResultText }}</pre>
-              </n-alert>
-            </n-space>
-          </n-card>
         </n-space>
       </template>
 
@@ -269,12 +206,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, reactive, computed } from 'vue'
+import { ref, onMounted, reactive } from 'vue'
 import {
   NForm,
   NFormItem,
   NInput,
-  NInputNumber,
   NSelect,
   NSwitch,
   NSpace,
@@ -287,17 +223,10 @@ import {
   NTag,
   NAlert,
   NDynamicTags,
-  NCard,
   useMessage,
   useDialog,
 } from 'naive-ui'
-import type {
-  ConfigInitRequest,
-  ConfigUpdateRequest,
-  RestoreCasRequest,
-  CasUploadRoute,
-  CasDestinationType,
-} from '@/api/media'
+import type { ConfigInitRequest, ConfigUpdateRequest } from '@/api/media'
 import {
   getMediaConfigInfo,
   initMediaConfig,
@@ -305,7 +234,6 @@ import {
   updateMediaConfig,
   clearMediaFiles,
   rebuildStrmFiles,
-  restoreCas,
 } from '@/api/media'
 
 const message = useMessage()
@@ -319,8 +247,6 @@ const showEditModal = ref(false)
 const savingEnable = ref(false)
 const clearingMedia = ref(false)
 const rebuildingStrm = ref(false)
-const restoringCas = ref(false)
-const restoreResultText = ref('')
 
 const editForm = reactive<ConfigUpdateRequest>({
   storagePath: '',
@@ -339,35 +265,10 @@ const initForm = reactive<ConfigInitRequest>({
   includedSuffixes: [],
 })
 
-const restoreForm = reactive<RestoreCasRequest>({
-  casVirtualId: undefined,
-  casPath: '',
-  uploadRoute: 'family',
-  destinationType: 'family',
-  targetFolderId: '',
-})
-
 const conflictPolicyOptions = [
   { label: 'skip（跳过）', value: 'skip' },
   { label: 'replace（替换）', value: 'replace' },
 ]
-
-const uploadRouteOptions = [
-  { label: 'family（家庭路线，默认）', value: 'family' },
-  { label: 'person（个人路线）', value: 'person' },
-]
-
-const destinationTypeOptions = computed(() => {
-  const uploadRoute = restoreForm.uploadRoute as CasUploadRoute
-  const options: { label: string; value: CasDestinationType }[] = [
-    { label: 'person（个人目录）', value: 'person' },
-    { label: 'family（家庭目录）', value: 'family' },
-  ]
-  if (uploadRoute === 'person') {
-    return options.filter((item) => item.value === 'person')
-  }
-  return options
-})
 
 const defaultIncludedSuffixes = [
   'mp4', 'mkv', 'avi', 'mov', 'wmv', 'flv', 'webm', 'm4v', 'mpg', 'mpeg', 'm2v', 'm4p', 'm4b',
@@ -544,55 +445,6 @@ const handleRebuildStrm = () => {
   })
 }
 
-const resetRestoreForm = () => {
-  restoreForm.casVirtualId = undefined
-  restoreForm.casPath = ''
-  restoreForm.uploadRoute = 'family'
-  restoreForm.destinationType = 'family'
-  restoreForm.targetFolderId = ''
-  restoreResultText.value = ''
-}
-
-const handleRestoreCas = () => {
-  if (!restoreForm.casVirtualId && !(restoreForm.casPath || '').trim()) {
-    message.warning('请填写 casVirtualId 或 casPath 其中一个')
-    return
-  }
-  if (!(restoreForm.targetFolderId || '').trim()) {
-    message.warning('请填写目标目录 ID')
-    return
-  }
-  if (restoreForm.uploadRoute === 'person' && restoreForm.destinationType === 'family') {
-    message.warning('当前前后端都只支持 reference-backed 组合，person → family 暂不支持')
-    return
-  }
-
-  const payload: RestoreCasRequest = {
-    destinationType: restoreForm.destinationType,
-    targetFolderId: restoreForm.targetFolderId.trim(),
-    uploadRoute: restoreForm.uploadRoute,
-  }
-  if (restoreForm.casVirtualId) {
-    payload.casVirtualId = restoreForm.casVirtualId
-  }
-  if ((restoreForm.casPath || '').trim()) {
-    payload.casPath = restoreForm.casPath?.trim()
-  }
-
-  restoringCas.value = true
-  restoreCas(payload)
-    .then((res) => {
-      restoreResultText.value = JSON.stringify(res.data || {}, null, 2)
-      message.success(res.msg || 'CAS 恢复请求成功')
-    })
-    .catch((err) => {
-      message.error(err?.message || 'CAS 恢复失败')
-    })
-    .finally(() => {
-      restoringCas.value = false
-    })
-}
-
 onMounted(reload)
 </script>
 
@@ -602,13 +454,5 @@ onMounted(reload)
   font-size: 12px;
   line-height: 1.6;
   color: var(--n-text-color-3);
-}
-
-.result-pre {
-  margin: 0;
-  white-space: pre-wrap;
-  word-break: break-all;
-  font-size: 12px;
-  line-height: 1.6;
 }
 </style>
