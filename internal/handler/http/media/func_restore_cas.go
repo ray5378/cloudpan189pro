@@ -9,9 +9,10 @@ import (
 
 // restoreCasRequest 手动触发 CAS 恢复。
 // 注意：uploadRoute 表示秒传/上传路线；destinationType 表示最终目录归属。
-// 为了便于手动联调，接口支持两种模式：
-// 1. 最简模式：只传 casVirtualId + destinationType + targetFolderId（其余上下文自动反查）
-// 2. 显式模式：把 storageId / mountPointId / casFileId / casFileName 一起传进来
+// 为了便于手动联调，接口支持三种模式：
+// 1. 最简模式：传 casVirtualId + destinationType + targetFolderId（其余上下文自动反查）
+// 2. 路径模式：传 casPath + destinationType + targetFolderId（先按路径查 VirtualFile，再自动反查）
+// 3. 显式模式：把 storageId / mountPointId / casFileId / casFileName 一起传进来
 //
 // 这里的 storageId 兜底取挂载点根 file_id，和现有 storage/list 返回的 id 语义保持一致。
 type restoreCasRequest struct {
@@ -19,7 +20,8 @@ type restoreCasRequest struct {
 	MountPointID    int64                         `json:"mountPointId" binding:"omitempty" example:"1"`
 	CasFileID       string                        `json:"casFileId" binding:"omitempty" example:"123456789"`
 	CasFileName     string                        `json:"casFileName" binding:"omitempty" example:"movie.cas"`
-	CasVirtualID    int64                         `json:"casVirtualId" binding:"required" example:"1001"`
+	CasVirtualID    int64                         `json:"casVirtualId" binding:"omitempty" example:"1001"`
+	CasPath         string                        `json:"casPath" binding:"omitempty" example:"/电影库/movie.cas"`
 	UploadRoute     casrestoreSvi.UploadRoute     `json:"uploadRoute" binding:"omitempty,oneof=family person" example:"family"`
 	DestinationType casrestoreSvi.DestinationType `json:"destinationType" binding:"required,oneof=family person" example:"family"`
 	TargetFolderID  string                        `json:"targetFolderId" binding:"required" example:"-11"`
@@ -44,6 +46,10 @@ func (h *handler) RestoreCas() httpcontext.HandlerFunc {
 		req := new(restoreCasRequest)
 		if err := ctx.ShouldBindJSON(req); err != nil {
 			ctx.AbortWithInvalidParams(err)
+			return
+		}
+		if req.CasVirtualID == 0 && req.CasPath == "" {
+			ctx.AbortWithInvalidParams(fmt.Errorf("casVirtualId 和 casPath 至少传一个"))
 			return
 		}
 
@@ -78,9 +84,15 @@ func (h *handler) buildRestoreRequest(ctx *httpcontext.Context, req *restoreCasR
 		TargetFolderID:  req.TargetFolderID,
 	}
 
-	vf, err := h.virtualfileService.Query(ctx.GetContext(), req.CasVirtualID)
+	vf, err := h.queryCASVirtualFile(ctx, req)
 	if err != nil {
 		return casrestoreSvi.RestoreRequest{}, err
+	}
+	if vf == nil {
+		return casrestoreSvi.RestoreRequest{}, fmt.Errorf("无法定位CAS虚拟文件")
+	}
+	if restoreReq.CasVirtualID == 0 {
+		restoreReq.CasVirtualID = vf.ID
 	}
 	if restoreReq.CasFileID == "" {
 		restoreReq.CasFileID = vf.CloudId
@@ -89,7 +101,7 @@ func (h *handler) buildRestoreRequest(ctx *httpcontext.Context, req *restoreCasR
 		restoreReq.CasFileName = vf.Name
 	}
 
-	top, err := h.virtualfileService.QueryTop(ctx.GetContext(), req.CasVirtualID)
+	top, err := h.virtualfileService.QueryTop(ctx.GetContext(), vf.ID)
 	if err != nil {
 		return casrestoreSvi.RestoreRequest{}, err
 	}
@@ -114,4 +126,32 @@ func (h *handler) buildRestoreRequest(ctx *httpcontext.Context, req *restoreCasR
 	}
 
 	return restoreReq, nil
+}
+
+func (h *handler) queryCASVirtualFile(ctx *httpcontext.Context, req *restoreCasRequest) (*struct {
+	ID      int64
+	CloudId string
+	Name    string
+}, error) {
+	if req.CasVirtualID != 0 {
+		vf, err := h.virtualfileService.Query(ctx.GetContext(), req.CasVirtualID)
+		if err != nil {
+			return nil, err
+		}
+		return &struct {
+			ID      int64
+			CloudId string
+			Name    string
+		}{ID: vf.ID, CloudId: vf.CloudId, Name: vf.Name}, nil
+	}
+
+	vf, err := h.virtualfileService.QueryByPath(ctx.GetContext(), req.CasPath)
+	if err != nil {
+		return nil, err
+	}
+	return &struct {
+		ID      int64
+		CloudId string
+		Name    string
+	}{ID: vf.ID, CloudId: vf.CloudId, Name: vf.Name}, nil
 }
