@@ -27,6 +27,7 @@ import (
 
 	autoingestlogSvi "github.com/xxcheng123/cloudpan189-share/internal/services/autoingestlog"
 	autoingestplanSvi "github.com/xxcheng123/cloudpan189-share/internal/services/autoingestplan"
+	casrestoreSvi "github.com/xxcheng123/cloudpan189-share/internal/services/casrestore"
 	cloudbridgeSvi "github.com/xxcheng123/cloudpan189-share/internal/services/cloudbridge"
 	cloudtokenSvi "github.com/xxcheng123/cloudpan189-share/internal/services/cloudtoken"
 	filetasklogSvi "github.com/xxcheng123/cloudpan189-share/internal/services/filetasklog"
@@ -75,6 +76,7 @@ func Start(svc bootstrap.ServiceContext) {
 		loginLogService       = loginlogSvi.NewService(svc)
 		mediaConfigService    = mediaconfigSvi.NewService(svc)
 		mediaFileService      = mediafileSvi.NewService(svc)
+		casRestoreService     = casrestoreSvi.NewService(svc)
 	)
 
 	var (
@@ -89,7 +91,7 @@ func Start(svc bootstrap.ServiceContext) {
 		taskStateHandler  = taskstate.NewHandler(taskEngine, fileTaskLogService)
 		autoIngestHandler = autoingest.NewHandler(taskEngine, autoIngestPlanService, autoIngestLogService, cloudBridgeService)
 		loginLogHandler   = loginlogHandler.NewHandler(loginLogService)
-		mediaHandler      = media.NewHandler(mediaConfigService, mediaFileService, mountPointService, virtualFileService, verifyService, taskEngine)
+		mediaHandler      = media.NewHandler(mediaConfigService, mediaFileService, mountPointService, virtualFileService, verifyService, casRestoreService, taskEngine)
 		externalHandler   = external.NewHandler(cloudBridgeService, storageFacadeService, settingService, fileTaskLogService, taskEngine)
 	)
 
@@ -260,6 +262,7 @@ func Start(svc bootstrap.ServiceContext) {
 			mediaRouter.POST("/config/toggle", wrap(mediaHandler.ConfigToggle()))
 			mediaRouter.POST("/clear", wrap(mediaHandler.Clear()))
 			mediaRouter.POST("/rebuild_strm_file", wrap(mediaHandler.RebuildStrmFile()))
+			mediaRouter.POST("/restore_cas", wrap(mediaHandler.RestoreCas()))
 		}
 	}
 
@@ -273,24 +276,17 @@ func Start(svc bootstrap.ServiceContext) {
 			engine.NoRoute(func(c *gin.Context) {
 				if strings.HasPrefix(c.Request.URL.Path, "/api") {
 					c.Status(404)
-
 					return
 				}
 
-				// 返回 index.html
 				file, err := staticFS.Open("index.html")
 				if err != nil {
 					c.Status(404)
-
 					return
 				}
-
-				defer func() {
-					_ = file.Close()
-				}()
+				defer func() { _ = file.Close() }()
 
 				stat, _ := file.Stat()
-
 				c.Header("Content-Type", "text/html")
 				c.DataFromReader(200, stat.Size(), "text/html", file, nil)
 			})

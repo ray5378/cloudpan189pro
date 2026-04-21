@@ -4,6 +4,7 @@ import (
 	"github.com/xxcheng123/cloudpan189-share/internal/consts"
 	"github.com/xxcheng123/cloudpan189-share/internal/framework/httpcontext"
 	"github.com/xxcheng123/cloudpan189-share/internal/pkgs/taskengine"
+	casrestoreSvi "github.com/xxcheng123/cloudpan189-share/internal/services/casrestore"
 	mediaconfigSvi "github.com/xxcheng123/cloudpan189-share/internal/services/mediaconfig"
 	mediafileSvi "github.com/xxcheng123/cloudpan189-share/internal/services/mediafile"
 	mountpointSvi "github.com/xxcheng123/cloudpan189-share/internal/services/mountpoint"
@@ -22,6 +23,7 @@ type Handler interface {
 	// 媒体操作
 	Clear() httpcontext.HandlerFunc
 	RebuildStrmFile() httpcontext.HandlerFunc
+	RestoreCas() httpcontext.HandlerFunc
 }
 
 var bi = httpcontext.NewBusinessGenerator(consts.BusCodeMediaStartCode)
@@ -37,6 +39,7 @@ var (
 	codeMediaNotEnabled = bi.Next("媒体功能未启用")
 	codeClearFailed     = bi.Next("清理媒体文件失败")
 	codeRebuildFailed   = bi.Next("重建strm文件失败")
+	codeRestoreCasFailed = bi.Next("恢复CAS文件失败")
 )
 
 // handler 依赖的服务
@@ -46,6 +49,7 @@ type handler struct {
 	mountpointService  mountpointSvi.Service
 	virtualfileService virtualfileSvi.Service
 	verifyService      verifySvi.Service
+	casRestoreService  casrestoreSvi.Service
 	taskEngine         taskengine.TaskEngine
 }
 
@@ -56,6 +60,7 @@ func NewHandler(
 	mountpointService mountpointSvi.Service,
 	virtualfileService virtualfileSvi.Service,
 	verifyService verifySvi.Service,
+	casRestoreService casrestoreSvi.Service,
 	taskEngine taskengine.TaskEngine,
 ) Handler {
 	return &handler{
@@ -64,6 +69,7 @@ func NewHandler(
 		mountpointService:  mountpointService,
 		virtualfileService: virtualfileService,
 		verifyService:      verifyService,
+		casRestoreService:  casRestoreService,
 		taskEngine:         taskEngine,
 	}
 }
