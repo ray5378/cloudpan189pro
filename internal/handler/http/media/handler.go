@@ -26,23 +26,25 @@ type Handler interface {
 	RebuildStrmFile() httpcontext.HandlerFunc
 	RestoreCas() httpcontext.HandlerFunc
 	RestoreStatus() httpcontext.HandlerFunc
+	RestoreList() httpcontext.HandlerFunc
 }
 
 var bi = httpcontext.NewBusinessGenerator(consts.BusCodeMediaStartCode)
 
 var (
 	// 配置相关错误码
-	codeConfigQueryFailed   = bi.Next("查询媒体配置失败")
-	codeConfigInitFailed    = bi.Next("初始化媒体配置失败")
-	codeConfigUpdateFailed  = bi.Next("更新媒体配置失败")
-	codeConfigToggleFailed  = bi.Next("切换媒体配置启用状态失败")
+	codeConfigQueryFailed    = bi.Next("查询媒体配置失败")
+	codeConfigInitFailed     = bi.Next("初始化媒体配置失败")
+	codeConfigUpdateFailed   = bi.Next("更新媒体配置失败")
+	codeConfigToggleFailed   = bi.Next("切换媒体配置启用状态失败")
 
 	// 操作相关错误码
-	codeMediaNotEnabled   = bi.Next("媒体功能未启用")
-	codeClearFailed       = bi.Next("清理媒体文件失败")
-	codeRebuildFailed     = bi.Next("重建strm文件失败")
-	codeRestoreCasFailed  = bi.Next("恢复CAS文件失败")
+	codeMediaNotEnabled     = bi.Next("媒体功能未启用")
+	codeClearFailed         = bi.Next("清理媒体文件失败")
+	codeRebuildFailed       = bi.Next("重建strm文件失败")
+	codeRestoreCasFailed    = bi.Next("恢复CAS文件失败")
 	codeRestoreStatusFailed = bi.Next("查询CAS恢复状态失败")
+	codeRestoreListFailed   = bi.Next("查询CAS恢复记录列表失败")
 )
 
 // handler 依赖的服务
