@@ -1,16 +1,21 @@
 package casrestore
 
 import (
+	"encoding/json"
 	"fmt"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
 	"github.com/tickstep/cloudpan189-api/cloudpan"
+	"github.com/xxcheng123/cloudpan189-share/internal/services/appsession"
 	"github.com/xxcheng123/cloudpan189-share/internal/services/casparser"
 )
 
 // personRestoreAdapter 负责“个人路线”的秒传恢复。
 // 注意：这里的“个人路线”只描述上传/秒传路径，不代表最终目录一定是个人目录。
+// 严格按参考实现：个人秒传主链走 upload.cloud.189.cn 的 init/check/commit。
 type personRestoreAdapter struct{}
 
 // personRestoreResult 表示个人路线恢复后的中间结果。
@@ -20,12 +25,16 @@ type personRestoreResult struct {
 }
 
 func (a *personRestoreAdapter) TryRestore(
+	session *appsession.Session,
 	panClient *cloudpan.PanClient,
 	destinationType DestinationType,
 	targetFolderID string,
 	fileName string,
 	info *casparser.CasInfo,
 ) (*personRestoreResult, error) {
+	if session == nil {
+		return nil, errors.New("AppSession不能为空")
+	}
 	if panClient == nil {
 		return nil, errors.New("PanClient不能为空")
 	}
@@ -36,65 +45,29 @@ func (a *personRestoreAdapter) TryRestore(
 		fileName = info.Name
 	}
 
-	// 个人路线下，个人目录可直接作为上传父目录；若最终目标是家庭目录，则先落个人，再转存到家庭。
 	personParentID := ""
 	if destinationType == DestinationTypePerson {
 		personParentID = targetFolderID
 	}
 
-	createRes, apiErr := panClient.AppCreateUploadFile(&cloudpan.AppCreateUploadFileParam{
-		ParentFolderId: personParentID,
-		FileName:       fileName,
-		Size:           info.Size,
-		Md5:            info.MD5,
-		LastWrite:      time.Now().Format("2006-01-02 15:04:05"),
-		LocalPath:      "/tmp/" + fileName,
-	})
-	if apiErr != nil {
-		return nil, errors.Wrap(apiErr, "创建个人上传任务失败")
+	restoredFileID, err := a.personRapidUpload(session, personParentID, info, fileName)
+	if err != nil {
+		return nil, err
 	}
-	if createRes == nil || createRes.UploadFileId == "" {
-		return nil, fmt.Errorf("创建个人上传任务失败: 缺少uploadFileId")
-	}
-
-	status, apiErr := panClient.AppGetUploadFileStatus(createRes.UploadFileId)
-	if apiErr != nil {
-		return nil, errors.Wrap(apiErr, "查询个人上传状态失败")
-	}
-	if status == nil || status.FileDataExists != 1 {
-		return nil, fmt.Errorf("个人云端不存在可直接命中的文件数据")
-	}
-
-	commitURL := createRes.FileCommitUrl
-	if commitURL == "" && status.FileCommitUrl != "" {
-		commitURL = status.FileCommitUrl
-	}
-	if commitURL == "" {
-		return nil, fmt.Errorf("缺少个人commit地址")
-	}
-
-	commitRes, apiErr := panClient.AppUploadFileCommit(commitURL, createRes.UploadFileId, createRes.XRequestId)
-	if apiErr != nil {
-		return nil, errors.Wrap(apiErr, "提交个人恢复失败")
-	}
-	if commitRes == nil || commitRes.Id == "" {
-		return nil, fmt.Errorf("个人恢复提交成功但未返回文件ID")
-	}
-
 	result := &personRestoreResult{
-		RestoredFileID:   commitRes.Id,
-		RestoredFileName: commitRes.Name,
+		RestoredFileID:   restoredFileID,
+		RestoredFileName: fileName,
 	}
 	if destinationType == DestinationTypePerson {
 		return result, nil
 	}
 
-	// 最终目标是家庭目录时：先从个人转存到家庭，再在家庭内移动到目标目录。
+	// 这里暂时仍沿用现有 person -> family 收尾；只有在参考实现存在更明确链路后才继续替换。
 	familyID, err := (&familyRestoreAdapter{}).pickFamilyID(panClient)
 	if err != nil {
 		return nil, err
 	}
-	ok, apiErr := panClient.AppSaveFileToFamilyCloud(familyID, []string{commitRes.Id})
+	ok, apiErr := panClient.AppSaveFileToFamilyCloud(familyID, []string{restoredFileID})
 	if apiErr != nil {
 		return nil, errors.Wrap(apiErr, "个人文件转存到家庭云失败")
 	}
@@ -102,7 +75,7 @@ func (a *personRestoreAdapter) TryRestore(
 		return nil, fmt.Errorf("个人文件转存到家庭云失败")
 	}
 	if targetFolderID != "" {
-		moved, apiErr := panClient.AppFamilyMoveFile(familyID, commitRes.Id, targetFolderID)
+		moved, apiErr := panClient.AppFamilyMoveFile(familyID, restoredFileID, targetFolderID)
 		if apiErr != nil {
 			return nil, errors.Wrap(apiErr, "转存家庭云后移动文件失败")
 		}
@@ -112,4 +85,97 @@ func (a *personRestoreAdapter) TryRestore(
 		}
 	}
 	return result, nil
+}
+
+func (a *personRestoreAdapter) personRapidUpload(session *appsession.Session, personParentID string, info *casparser.CasInfo, fileName string) (string, error) {
+	if _, err := getSessionKeyForUpload(session); err != nil {
+		return "", err
+	}
+	sliceSize := calcCasSliceSize(info.Size)
+
+	initRes, err := uploadRequest(session, "/person/initMultiUpload", map[string]string{
+		"parentFolderId": personParentID,
+		"fileName":       url.QueryEscape(fileName),
+		"fileSize":       fmt.Sprintf("%d", info.Size),
+		"sliceSize":      fmt.Sprintf("%d", sliceSize),
+		"lazyCheck":      "1",
+	})
+	if err != nil {
+		return "", err
+	}
+	uploadFileID := uploadRespDataString(initRes, "data", "uploadFileId")
+	if uploadFileID == "" {
+		payload, _ := marshalLimitJSON(initRes)
+		return "", fmt.Errorf("CAS秒传初始化失败: 缺少uploadFileId (响应: %s)", payload)
+	}
+	fileDataExists := uploadRespDataBoolInt(initRes, "data", "fileDataExists")
+
+	time.Sleep(500 * time.Millisecond)
+
+	if !fileDataExists {
+		checkRes, err := uploadRequest(session, "/person/checkTransSecond", map[string]string{
+			"fileMd5":      info.MD5,
+			"sliceMd5":     info.SliceMD5,
+			"uploadFileId": uploadFileID,
+		})
+		if err != nil {
+			return "", err
+		}
+		fileDataExists = uploadRespDataBoolInt(checkRes, "data", "fileDataExists")
+	}
+	if !fileDataExists {
+		return "", fmt.Errorf("CAS秒传失败: 云端不存在该文件数据 (%s)", fileName)
+	}
+
+	time.Sleep(500 * time.Millisecond)
+
+	var (
+		lastErr   error
+		commitRes *uploadResponse
+	)
+	for retry := 0; retry < maxCommitRetry; retry++ {
+		commitRes, lastErr = uploadRequest(session, "/person/commitMultiUploadFile", map[string]string{
+			"uploadFileId": uploadFileID,
+			"fileMd5":      info.MD5,
+			"sliceMd5":     info.SliceMD5,
+			"lazyCheck":    "1",
+			"opertype":     "3",
+		})
+		if lastErr == nil {
+			restoredFileID := firstNonEmpty(
+				uploadRespDataString(commitRes, "file", "userFileId"),
+				uploadRespDataString(commitRes, "file", "id"),
+				uploadRespDataString(commitRes, "data", "fileId"),
+			)
+			if restoredFileID == "" {
+				return "", fmt.Errorf("CAS秒传commit响应缺少文件ID")
+			}
+			return restoredFileID, nil
+		}
+		msg := strings.ToLower(lastErr.Error())
+		if strings.Contains(msg, "黑名单") || strings.Contains(msg, "infosecurityerrorcode") || strings.Contains(msg, "black list") {
+			return "", lastErr
+		}
+		if strings.Contains(msg, "http 403") && retry < maxCommitRetry-1 {
+			clearUploadRSAKeyCache(session)
+			time.Sleep(time.Duration(retry+1) * 2 * time.Second)
+			continue
+		}
+		return "", lastErr
+	}
+	if lastErr != nil {
+		return "", lastErr
+	}
+	return "", fmt.Errorf("CAS秒传commit失败")
+}
+
+func marshalLimitJSON(v any) (string, error) {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return "", err
+	}
+	if len(b) > 300 {
+		return string(b[:300]), nil
+	}
+	return string(b), nil
 }

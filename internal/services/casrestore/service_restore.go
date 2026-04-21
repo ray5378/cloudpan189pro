@@ -89,7 +89,7 @@ func (s *service) ensureRestoredOnce(ctx appctx.Context, req RestoreRequest) (re
 
 	switch req.UploadRoute {
 	case UploadRoutePerson:
-		personResult, personErr := (&personRestoreAdapter{}).TryRestore(panClient, req.DestinationType, req.TargetFolderID, restoreName, casInfo)
+		personResult, personErr := (&personRestoreAdapter{}).TryRestore(session, panClient, req.DestinationType, req.TargetFolderID, restoreName, casInfo)
 		if personErr != nil {
 			return nil, fmt.Errorf("个人路线恢复失败: %w", personErr)
 		}
