@@ -27,6 +27,7 @@ import (
 
 	autoingestlogSvi "github.com/xxcheng123/cloudpan189-share/internal/services/autoingestlog"
 	autoingestplanSvi "github.com/xxcheng123/cloudpan189-share/internal/services/autoingestplan"
+	casrecordSvi "github.com/xxcheng123/cloudpan189-share/internal/services/casrecord"
 	casrestoreSvi "github.com/xxcheng123/cloudpan189-share/internal/services/casrestore"
 	cloudbridgeSvi "github.com/xxcheng123/cloudpan189-share/internal/services/cloudbridge"
 	cloudtokenSvi "github.com/xxcheng123/cloudpan189-share/internal/services/cloudtoken"
@@ -77,6 +78,7 @@ func Start(svc bootstrap.ServiceContext) {
 		mediaConfigService    = mediaconfigSvi.NewService(svc)
 		mediaFileService      = mediafileSvi.NewService(svc)
 		casRestoreService     = casrestoreSvi.NewService(svc)
+		casRecordService      = casrecordSvi.NewService(svc)
 	)
 
 	var (
@@ -91,7 +93,7 @@ func Start(svc bootstrap.ServiceContext) {
 		taskStateHandler  = taskstate.NewHandler(taskEngine, fileTaskLogService)
 		autoIngestHandler = autoingest.NewHandler(taskEngine, autoIngestPlanService, autoIngestLogService, cloudBridgeService)
 		loginLogHandler   = loginlogHandler.NewHandler(loginLogService)
-		mediaHandler      = media.NewHandler(mediaConfigService, mediaFileService, mountPointService, virtualFileService, verifyService, casRestoreService, taskEngine)
+		mediaHandler      = media.NewHandler(mediaConfigService, mediaFileService, mountPointService, virtualFileService, verifyService, casRestoreService, casRecordService, taskEngine)
 		externalHandler   = external.NewHandler(cloudBridgeService, storageFacadeService, settingService, fileTaskLogService, taskEngine)
 	)
 
@@ -263,6 +265,7 @@ func Start(svc bootstrap.ServiceContext) {
 			mediaRouter.POST("/clear", wrap(mediaHandler.Clear()))
 			mediaRouter.POST("/rebuild_strm_file", wrap(mediaHandler.RebuildStrmFile()))
 			mediaRouter.POST("/restore_cas", wrap(mediaHandler.RestoreCas()))
+			mediaRouter.GET("/restore_status", wrap(mediaHandler.RestoreStatus()))
 		}
 	}
 
