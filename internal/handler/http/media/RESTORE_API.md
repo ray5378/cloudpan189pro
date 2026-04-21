@@ -89,45 +89,21 @@ Content-Type: application/json
 - `targetFolderId` 必填
 - `casVirtualId` / `casPath` 至少传一个（除非你手动显式把上下文都传全）
 
-### curl 示例
-
-#### 1) 家庭路线，最终落家庭目录
-
-```bash
-curl -X POST 'http://127.0.0.1:12395/api/media/restore_cas' \
-  -H 'Authorization: Bearer <token>' \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "casVirtualId": 1001,
-    "uploadRoute": "family",
-    "destinationType": "family",
-    "targetFolderId": "-11"
-  }'
-```
-
-#### 2) 家庭路线，最终落个人目录
-
-```bash
-curl -X POST 'http://127.0.0.1:12395/api/media/restore_cas' \
-  -H 'Authorization: Bearer <token>' \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "casPath": "/电影库/movie.cas",
-    "uploadRoute": "family",
-    "destinationType": "person",
-    "targetFolderId": "123456"
-  }'
-```
-
 ---
 
 ## `POST /api/media/retry_restore`
 
 基于已有恢复记录重新触发恢复。
 
-### 注意
+### 兼容策略
 
-当前 retry 依赖恢复记录里已经持久化了 `casFilePath`。如果旧记录没有这个字段，接口会直接返回失败。
+当前 retry 会按下面顺序重新定位 `.cas` 虚拟文件：
+
+1. 优先使用记录里的 `casFilePath`
+2. 如果旧记录没有 `casFilePath`，则尝试在同一挂载点下按 `casFileId` 精确匹配
+3. 还不行则按 `casFileName(.cas)` 缩窄匹配
+
+所以旧记录现在不一定必须有 `casFilePath` 才能重试；但如果三种定位都失败，接口仍会返回错误。
 
 ### 请求体
 
@@ -147,19 +123,6 @@ curl -X POST 'http://127.0.0.1:12395/api/media/restore_cas' \
 - `destinationType` 必填
 - `targetFolderId` 可选；不传时默认沿用记录中的 `restoredParentId`
 
-### curl 示例
-
-```bash
-curl -X POST 'http://127.0.0.1:12395/api/media/retry_restore' \
-  -H 'Authorization: Bearer <token>' \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "recordId": 1,
-    "uploadRoute": "family",
-    "destinationType": "family"
-  }'
-```
-
 ---
 
 ## `GET /api/media/restore_status`
@@ -171,44 +134,6 @@ curl -X POST 'http://127.0.0.1:12395/api/media/retry_restore' \
 - `recordId`
 - `casVirtualId`
 - `casPath`
-
-### curl 示例
-
-#### 1) 按记录 ID
-
-```bash
-curl 'http://127.0.0.1:12395/api/media/restore_status?recordId=1' \
-  -H 'Authorization: Bearer <token>'
-```
-
-#### 2) 按 CAS 虚拟文件 ID
-
-```bash
-curl 'http://127.0.0.1:12395/api/media/restore_status?casVirtualId=1001' \
-  -H 'Authorization: Bearer <token>'
-```
-
-#### 3) 按 CAS 路径
-
-```bash
-curl 'http://127.0.0.1:12395/api/media/restore_status?casPath=/电影库/movie.cas' \
-  -H 'Authorization: Bearer <token>'
-```
-
-### 返回里重点看什么
-
-`data` 里重点字段：
-
-- `restoreStatus`
-  - `pending`
-  - `restoring`
-  - `restored`
-  - `failed`
-- `restoredFileId`
-- `restoredFileName`
-- `restoredParentId`
-- `lastError`
-- `restoredAt`
 
 ---
 
@@ -226,29 +151,6 @@ curl 'http://127.0.0.1:12395/api/media/restore_status?casPath=/电影库/movie.c
 - `endAt`
 - `currentPage`
 - `pageSize`
-
-### curl 示例
-
-#### 查最近记录
-
-```bash
-curl 'http://127.0.0.1:12395/api/media/restore_list?currentPage=1&pageSize=20' \
-  -H 'Authorization: Bearer <token>'
-```
-
-#### 查失败记录
-
-```bash
-curl 'http://127.0.0.1:12395/api/media/restore_list?restoreStatus=failed&currentPage=1&pageSize=20' \
-  -H 'Authorization: Bearer <token>'
-```
-
-#### 按挂载点查询
-
-```bash
-curl 'http://127.0.0.1:12395/api/media/restore_list?mountPointId=1&currentPage=1&pageSize=20' \
-  -H 'Authorization: Bearer <token>'
-```
 
 ---
 
