@@ -177,6 +177,7 @@ import {
   SunnyOutline as SunnyIcon,
   MoonOutline as MoonIcon,
   AppsOutline as ExtensionsIcon,
+  ConstructOutline as CasConfigIcon,
 } from '@vicons/ionicons5'
 import { useAuthStore, useSystemStore, useThemeStore } from '@/stores'
 import CloudPanLogo from '@/components/CloudPanLogo.vue'
