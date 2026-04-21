@@ -1,126 +1,173 @@
-# CAS 按需恢复播放技术设计文档
+# CAS 按需恢复播放技术设计文档（确认版）
 
 ## 1. 设计目标
 
-在 `cloudpan189pro` 中落地一套面向 `.cas` 文件的按需恢复播放体系，实现：
+本设计不是迁移 `cloud189-auto-save` 的整个任务系统，而是：
 
+**在 `cloud189pro` 中，基于已有 cloud189 读取链、STRM 写入能力和订阅框架，补齐 `.cas` 所需的恢复写链、播放触发链与回收链。**
+
+最终实现：
 - 订阅阶段仅保存 `.cas`
 - 为 `.cas` 生成 `.strm`
-- 播放器请求 `.strm` 时触发恢复
-- 恢复成功后提供真实媒体播放地址
-- 超时后自动删除真实媒体，仅保留 `.cas`
-
-该设计重点不是完整迁移 `cloud189-auto-save` 的任务系统，而是：
-
-**按 `cloudpan189pro` 现有 Go 架构，重建一套 CAS 能力模块，并与订阅、媒体、STRM、存储、播放链路完成接线。**
+- 播放请求到来时自动恢复真实媒体
+- 播放完成后一段时间回收真实媒体
+- 长期只保留 `.cas` 与 `.strm`
 
 ---
 
-## 2. 现有能力评估
+## 2. 重新核对代码后的现状结论
 
-## 2.1 `cloud189-auto-save` 已有可参考能力
+## 2.1 `cloud189pro` 当前已确认存在的能力
 
-可复用“逻辑”，不可直接复用“代码”的部分：
+### A. cloud189 读取侧能力（位于 `internal/services/cloudbridge`）
+已看到：
+- 个人盘文件列表
+- 家庭盘文件列表
+- 分享文件列表
+- 分享校验
+- 下载链接生成
 
-- `.cas` 文件识别
-- `.cas` 内容解析（JSON / base64 / 多行）
-- 原始文件名推导
-- 天翼秒传恢复流程：
-  - `initMultiUpload`
-  - `checkTransSecond`
-  - `commitMultiUploadFile`
-- 黑名单 / 403 / 风控情况下的回退思路
-- 本地 CAS 元数据缓存思路
-- 中转 `.cas` 文件清理思路
+这说明 `cloud189pro` 不是完全没有 cloud189 接口基础，而是已经具备了 **读取链**。
 
-## 2.2 `cloudpan189pro` 已有能力基础
+### B. STRM 写入能力（位于 `internal/services/mediafile`）
+已看到：
+- `service_write_strm.go`
 
-从项目结构判断，当前已有这些适合作为接入点的模块：
+说明 `.strm` 文件写入能力已有明确接入点。
 
-- `internal/services/cloudbridge`：天翼能力接入候选位置
-- `internal/services/storagefacade`：存储操作抽象层候选位置
-- `internal/services/virtualfile`：虚拟文件系统候选接入点
-- `internal/services/mediafile`：STRM / 媒体生成候选接入点
-- `internal/services/autoingestplan`：订阅 / 自动导入相关候选接入点
-- `internal/services/cloudtoken`：天翼登录态与 token 支撑
-
-需要纠正的是：`cloud189pro` 当前并**没有**现成的 cloud189 网盘浏览 / 下载 / 删除 / 恢复整套可直接复用能力，因此不能把 cloud189 文件操作链视为已完成模块。
-
-当前更合理的判断是：
-- `cloud189pro` 已具备整体业务框架：存储抽象、挂载体系、媒体映射、STRM、订阅、服务分层
-- `cloud189-auto-save` 已具备可参考的 cloud189 文件操作链，尤其是 `.cas` 下载、解析、恢复、删除、中转处理逻辑
-- 因此迁移策略应是：**以 `cloud189-auto-save` 为 cloud189 侧实现参考，在 `cloud189pro` 中按 Go 架构重建对应能力**
-
-这意味着：
-- `.cas` 方案仍然不需要照搬 JS 任务系统
-- 但 cloud189 文件访问与恢复能力本身需要作为新增能力补齐
-- 回收模块能否直接复用现有删除能力，需要以后续代码盘点结果为准，当前不应提前假设
-- 播放模块能否直接复用现有下载地址生成能力，也需要以后续 cloud189 文件链补齐情况为准
-- 真正新增的重点仍然集中在：`.cas` 解析、cloud189 文件访问链、秒传恢复、播放触发、回收状态控制
+### C. 系统框架能力
+已看到：
+- `autoingestplan`
+- `virtualfile`
+- `storagefacade`
+- `mountpoint`
+- `mediaconfig`
 
 说明：
-- `.cas` 协议处理本身易迁移
-- 秒传恢复链需要基于 Go 重新实现
-- cloud189 文件访问 / 下载 / 删除 / 恢复相关能力应重点参考 `cloud189-auto-save`
-- 业务接入应走 `cloud189pro` 自己的服务层，而不是直接模拟 JS 任务流
+- 订阅 / 记录 / 媒体映射 / 存储抽象这些系统框架已经存在。
+
+## 2.2 `cloud189pro` 当前尚未看到的能力
+
+### A. cloud189 恢复写链
+当前未看到现成实现：
+- 上传 session / 秒传上下文
+- `initMultiUpload`
+- `checkTransSecond`
+- `commitMultiUploadFile`
+- 家庭回退恢复
+- 恢复后确认文件存在
+- 恢复目标文件删除链
+
+也就是说，当前 `cloud189pro` 的关键缺口不是读链，而是：
+
+**`.cas` 所需的 cloud189 恢复写链。**
+
+## 2.3 `cloud189-auto-save` 当前可直接参考的关键位置
+
+### A. `src/services/casService.js`
+可参考：
+- `.cas` 判断
+- 原始文件名推导
+- `.cas` 内容解析
+- 下载 `.cas`
+- 个人秒传恢复
+- 家庭回退恢复
+
+### B. `src/services/lazyShareStrm.js`
+可参考：
+- 懒恢复思路
+- `.cas` 元数据缓存
+- 并发去重
+- 中转 `.cas` 清理
+
+### C. `src/services/task.js`
+可参考：
+- 普通任务场景下的 `.cas` 转存后恢复链
+
+结论：
+- `cloud189-auto-save` 适合作为 cloud189 `.cas` 恢复链的**逻辑参考**
+- 不适合作为任务系统整体直接迁移目标
 
 ---
 
-## 3. 总体架构
+## 3. 最终架构定位
 
-建议拆成 4 个核心模块。
+## 3.1 不做的事情
+- 不直接把 `cloud189-auto-save` JS 任务流整体翻译成 Go
+- 不先做复杂流代理优化
+- 不在恢复链未打通前先做完整播放器联调
 
-### 3.1 CAS 解析模块
+## 3.2 要做的事情
+在 `cloud189pro` 中新增一条纵向能力链：
 
+### 第一层：CAS 协议层
+负责：
+- 识别 `.cas`
+- 解析 `.cas`
+- 推导原始文件名
+
+### 第二层：CAS 恢复层
+负责：
+- 下载 `.cas`
+- 解析元数据
+- 调 cloud189 秒传恢复真实媒体
+- 家庭回退
+- 恢复并发去重
+- 恢复状态管理
+
+### 第三层：CAS 播放层
+负责：
+- 接收 `.strm` 指向的播放请求
+- 检查是否已恢复
+- 必要时触发恢复
+- 返回真实播放地址
+
+### 第四层：CAS 回收层
+负责：
+- 按 TTL 删除恢复出来的真实媒体
+- 更新恢复状态
+- 保留 `.cas` 与 `.strm`
+
+---
+
+## 4. 模块拆分建议
+
+## 4.1 `casparser`
 建议位置：
 - `internal/services/casparser`
 
-职责：
-- 判断文件是否为 `.cas`
-- 解析 `.cas` 内容
-- 推导原始文件名
-
 建议文件：
-- `internal/services/casparser/types.go`
-- `internal/services/casparser/parser.go`
-- `internal/services/casparser/parser_test.go`
+- `types.go`
+- `parser.go`
+- `parser_test.go`
 
-核心接口：
+职责：
+- `IsCasFile(name string) bool`
+- `GetOriginalFileName(casFileName string, info *CasInfo) string`
+- `ParseCasContent(content []byte) (*CasInfo, error)`
 
-```go
-type CasInfo struct {
-    Name       string
-    Size       int64
-    MD5        string
-    SliceMD5   string
-    CreateTime string
-}
-
-func IsCasFile(name string) bool
-func GetOriginalFileName(casFileName string, info *CasInfo) string
-func ParseCasContent(content []byte) (*CasInfo, error)
-```
+该模块只做 `.cas` 协议，不碰 cloud189 API。
 
 ---
 
-### 3.2 CAS 恢复模块
-
+## 4.2 `casrestore`
 建议位置：
 - `internal/services/casrestore`
 
-职责：
-- 下载 `.cas` 文件内容
-- 解析 `.cas`
-- 调用天翼秒传接口恢复真实媒体
-- 支持个人恢复优先、家庭中转回退
-- 返回恢复后的目标媒体信息
-
 建议文件：
-- `internal/services/casrestore/service.go`
-- `internal/services/casrestore/cloud189_restore.go`
-- `internal/services/casrestore/state.go`
+- `service.go`
+- `cloud189_restore.go`
+- `state.go`
+- `download.go`
 
-核心接口建议：
+职责：
+- 根据 `.cas` 文件内容恢复真实媒体
+- 调用 cloud189 恢复写链
+- 执行个人恢复优先 + 家庭回退
+- 记录恢复状态
+- 执行 inflight 去重
+
+建议核心接口：
 
 ```go
 type RestoreRequest struct {
@@ -135,85 +182,59 @@ type RestoreResult struct {
     RestoredFileName string
     TargetFolderID   string
 }
-
-type Service interface {
-    EnsureRestored(ctx context.Context, req RestoreRequest) (*RestoreResult, error)
-}
 ```
-
-关键点：
-- 同一 `.cas` 恢复需要 inflight 去重
-- 支持重试
-- 支持恢复状态查询
 
 ---
 
-### 3.3 CAS 播放模块
-
+## 4.3 `casplayback`
 建议位置：
 - `internal/services/casplayback`
 - `internal/handler/http/cas_playback.go`
 
 职责：
-- 作为 `.strm` 指向的播放入口
-- 接收播放器请求
-- 判断真实媒体是否已存在
-- 若不存在则触发恢复
-- 恢复后返回真实媒体播放地址或代理流
+- 作为 `.strm` 的播放入口
+- 查询 CAS 记录
+- 必要时触发恢复
+- 恢复成功后返回真实播放 URL
 
-推荐首版行为：
-- 优先使用 **302 跳转到最终真实媒体播放 URL**
-- 后续再按需要扩展反代流模式
-
-建议播放接口：
+建议首版接口：
 
 ```text
 GET /api/cas/play/:recordId
 ```
 
-可选接口：
-
-```text
-GET /api/cas/status/:recordId
-POST /api/cas/restore/:recordId
-POST /api/cas/recycle/:recordId
-```
+首版建议行为：
+- 优先返回 **302 跳转** 到真实媒体地址
+- 暂不优先做流代理
 
 ---
 
-### 3.4 CAS 回收模块
-
+## 4.4 `casrecycle`
 建议位置：
 - `internal/services/casrecycle`
 - `internal/handler/scheduler`
 
 职责：
 - 定时扫描已恢复媒体
-- 根据 TTL / 最后访问时间决定是否删除真实媒体
-- 删除后更新状态
-- 避免删除 `.cas` 和 `.strm`
-
-建议策略：
-- 默认按“最后访问时间 + 保留分钟数”计算回收时间
-- 正在播放中的文件不删除
-- 删除失败记录日志并重试
+- 根据 TTL 删除真实媒体
+- 更新状态
+- 删除失败记录并重试
 
 ---
 
-## 4. 数据模型设计
+## 5. 数据模型设计
 
-建议新增一张专用表：`cas_media_records`
+建议新增表：`cas_media_records`
 
 建议字段：
-
 - `id`
-- `storage_id`：所属存储 / 挂载点
-- `mount_point_id`：可选，所属挂载点
-- `cas_file_id`：`.cas` 文件 ID
+- `storage_id`
+- `mount_point_id`
+- `cas_file_id`
 - `cas_file_name`
 - `cas_file_path`
-- `source_parent_id`：`.cas` 所在源目录 ID
-- `restored_parent_id`：恢复目标目录 ID
+- `source_parent_id`
+- `restored_parent_id`
 - `original_file_name`
 - `original_file_size`
 - `file_md5`
@@ -221,7 +242,7 @@ POST /api/cas/recycle/:recordId
 - `strm_relative_path`
 - `restored_file_id`
 - `restored_file_name`
-- `restore_status`：`pending / restoring / restored / failed / recycling / recycled`
+- `restore_status`（`pending / restoring / restored / failed / recycling / recycled`）
 - `last_access_at`
 - `restored_at`
 - `recycle_after_at`
@@ -231,246 +252,192 @@ POST /api/cas/recycle/:recordId
 
 索引建议：
 - `(storage_id, cas_file_id)` 唯一索引
-- `restore_status` 普通索引
-- `recycle_after_at` 普通索引
+- `restore_status` 索引
+- `recycle_after_at` 索引
 
 ---
 
-## 5. 核心流程设计
+## 6. 核心流程设计（确认版）
 
-## 5.1 订阅 / 自动导入阶段
+## 6.1 第一阶段：恢复最小闭环
 
-目标：只保存 `.cas` 与 `.strm`，不恢复真实媒体。
+这是当前最应该优先落地的阶段。
 
-流程：
-1. 订阅流程发现文件
-2. 若文件为 `.cas`
-3. 将 `.cas` 转存到本地网盘目录
-4. 解析或登记 `.cas` 对应原始媒体名
-5. 生成 `.strm`
-6. `.strm` 内容写入 CAS 播放入口 URL
-7. 写入 / 更新 `cas_media_records`
+### 目标
+先不接播放器，先做到：
+- 能识别 `.cas`
+- 能解析 `.cas`
+- 能根据 `.cas` 手动恢复真实媒体
+- 能返回恢复成功结果
 
-### `.strm` 内容建议
+### 流程
+1. 给定 `.cas` 文件标识
+2. 获取 `.cas` 下载链接
+3. 下载 `.cas` 内容
+4. 解析出 `name / size / md5 / sliceMd5`
+5. 调用个人秒传恢复链：
+   - `initMultiUpload`
+   - `checkTransSecond`
+   - `commitMultiUploadFile`
+6. 必要时走家庭回退
+7. 恢复完成后查找到真实媒体文件
+8. 返回恢复结果并记录状态
+
+### 为什么先做这个
+因为这是整条链风险最高、价值最高的部分。
+只有恢复闭环打通，STRM 播放与自动回收才值得接。
+
+---
+
+## 6.2 第二阶段：STRM 播放联动
+
+### 目标
+- `.strm` 指向 CAS 播放入口
+- 播放请求到来时自动恢复
+- 恢复成功后返回真实播放地址
+
+### 流程
+1. 订阅阶段生成 `.strm`
+2. `.strm` 内容为：
 
 ```text
 http://<server>/api/cas/play/<recordId>
 ```
 
-说明：
-- 不应直接写真实媒体下载地址
-- 不应直接写静态天翼分享地址
-- 必须写系统控制入口，才能在播放时动态触发恢复
+3. 播放器请求播放入口
+4. 查询 CAS 记录
+5. 若已恢复且真实文件仍存在，直接返回真实播放地址
+6. 否则触发恢复
+7. 恢复成功后更新状态并返回真实播放地址
 
 ---
 
-## 5.2 播放触发恢复流程
+## 6.3 第三阶段：自动回收
 
-流程：
-1. 播放器请求 `/api/cas/play/:recordId`
-2. 查询 `cas_media_records`
-3. 若当前状态为 `restored`，校验真实媒体是否仍存在
-4. 若不存在或状态非 `restored`，进入恢复流程
-5. 调用 `casrestore.EnsureRestored`
-6. 恢复成功后更新：
-   - `restore_status = restored`
-   - `restored_file_id`
-   - `restored_file_name`
-   - `restored_at`
-   - `last_access_at`
-   - `recycle_after_at`
-7. 获取真实媒体播放地址
-8. 返回 302 跳转或代理流
+### 目标
+- 让恢复出来的真实媒体在 TTL 后自动删除
+- 长期仅保留 `.cas` 与 `.strm`
 
----
-
-## 5.3 恢复流程（内部）
-
-推荐与 `cloud189-auto-save` 一致的恢复原则：
-
-### 个人秒传优先
-1. 获取上传 session
-2. `initMultiUpload`（不携带 md5，使用 `lazyCheck=1`）
-3. `checkTransSecond`
-4. `commitMultiUploadFile`
-
-### 回退策略
-若出现以下情形，考虑回退家庭中转：
-- 403
-- 风控
-- 黑名单
-- `InfoSecurityErrorCode`
-- `InvalidPartSize`
-
-### 恢复关键要求
-- 必须支持分片大小动态计算
-- 必须支持 commit 重试
-- 必须支持同一 `.cas` 的恢复并发去重
-
----
-
-## 5.4 自动回收流程
-
-流程：
+### 流程
 1. 定时任务扫描 `cas_media_records`
 2. 找出 `restore_status = restored` 且 `recycle_after_at <= now()` 的记录
-3. 若当前不在播放 / 不在恢复中，则删除真实媒体文件
-4. 删除成功后更新：
-   - `restore_status = recycled`
-   - 清空 `restored_file_id`
-   - 清空 `restored_file_name`
+3. 若当前不在恢复中、也未命中访问保护，则删除真实媒体
+4. 更新状态为 `recycled`
 5. 保留 `.cas` 与 `.strm`
-
-可选增强：
-- 若删除失败，则记录 `last_error`
-- 支持手工触发回收
-- 支持按文件夹批量回收
 
 ---
 
-## 6. 缓存与并发控制
+## 7. cloud189 恢复写链实现重点
 
-## 6.1 恢复并发去重
+这部分是当前最大的新增模块。
 
-为避免同一媒体被同时恢复多次，需要引入 inflight 控制：
+### 7.1 必须补出的能力
+- cloud189 上传 / 秒传 session
+- `initMultiUpload`
+- `checkTransSecond`
+- `commitMultiUploadFile`
+- 恢复后的文件查询
+- 家庭回退恢复
+- 失败重试
+
+### 7.2 直接参考来源
+参考：
+- `cloud189-auto-save/src/services/casService.js`
+
+重点参考逻辑：
+- init 阶段不带 md5，使用 `lazyCheck=1`
+- commit 阶段重试
+- 黑名单 / 403 / 风控 / `InvalidPartSize` 回退家庭恢复
+- 分片大小动态计算
+
+---
+
+## 8. 并发与状态控制
+
+## 8.1 恢复并发去重
+同一 `.cas` 不能同时恢复多次。
 
 建议 key：
 - `storageID + casFileID`
 
 行为：
-- 若已有恢复任务在进行，则后续请求等待同一任务结果
-- 避免重复调用天翼秒传接口
+- 若已有 inflight 恢复任务，则后续请求等待同一结果
 
-## 6.2 CAS 元数据缓存
+## 8.2 状态流转
+建议状态：
+- `pending`
+- `restoring`
+- `restored`
+- `failed`
+- `recycling`
+- `recycled`
 
-可以支持两层：
-- 数据库持久缓存（`cas_media_records`）
-- 进程内短期缓存（可选）
-
-首版建议：
-- 以数据库字段为主
-- 不急于做复杂进程内缓存
-
----
-
-## 7. 接入点建议
-
-## 7.1 订阅 / 自动导入接入点
-
-候选位置：
-- `internal/services/autoingestplan`
-- `internal/services/storagefacade`
-- `internal/services/mediafile`
-
-建议原则：
-- 订阅阶段只负责登记 `.cas` 与生成 `.strm`
-- 不负责立即恢复真实媒体
-
-## 7.2 播放接入点
-
-候选位置：
-- HTTP handler 层新增 CAS 播放接口
-- 通过 `mediafile` 或专门 `casplayback` service 提供最终 URL
-
-## 7.3 云盘能力接入点
-
-候选位置：
-- `internal/services/cloudbridge`
-
-建议在此处补充：
-- 获取 `.cas` 下载地址
-- 上传会话 / 秒传接口
-- 家庭恢复相关接口
+### 首版要求
+- 状态必须持久化
+- 失败原因必须记录
+- 回收状态必须可追踪
 
 ---
 
-## 8. 首版实现策略
+## 9. 订阅阶段接线原则
 
-## 阶段 1：基础层
+### 当前原则
+订阅阶段只做：
+- 保存 `.cas`
+- 建立 CAS 记录
+- 生成 `.strm`
 
-目标：
-- 落地 `.cas` 解析模块
-- 完成 `.cas` 记录表建模
-- 能识别 `.cas` 并生成正确原始文件名
+### 当前不做
+- 订阅时立刻恢复真实媒体
+- 订阅时直接下载真实媒体
 
-交付物：
-- `casparser`
-- 数据表迁移
-- 单元测试
-
-## 阶段 2：手动恢复闭环
-
-目标：
-- 提供手工恢复接口
-- 给定 `.cas` 记录即可恢复真实媒体
-- 成功后可定位恢复出的文件
-
-交付物：
-- `casrestore`
-- 恢复状态管理
-- 恢复结果记录
-
-## 阶段 3：STRM 播放联动
-
-目标：
-- `.strm` 指向播放入口
-- 播放时自动恢复
-- 返回真实播放地址
-
-交付物：
-- `casplayback`
-- 新增播放 API
-- 订阅侧 `.strm` 生成接线
-
-## 阶段 4：自动回收
-
-目标：
-- TTL 清理
-- 回收状态记录
-- 删除失败重试
-
-交付物：
-- `casrecycle`
-- 定时任务
-- 回收日志
+原因：
+- 你的目标就是长期只保留 `.cas`
+- 恢复应当延迟到播放触发时发生
 
 ---
 
-## 9. 风险与应对
+## 10. 当前确认后的实施顺序
 
-### 9.1 天翼秒传接口不稳定
-应对：
-- 接口层独立封装
-- 全链路日志
-- commit 重试
-- 家庭回退策略
+## 第一优先级
+在 `cloud189pro` 中落地：
+1. `.cas` 解析模块
+2. CAS 记录表
+3. cloud189 秒传恢复写链
+4. 手动恢复最小闭环
 
-### 9.2 首次播放耗时过长
-应对：
-- 首版接受“首次播放需要等待恢复”
-- 后续可考虑元数据预热 / 恢复预热
+## 第二优先级
+在恢复闭环稳定后再落地：
+1. `.strm` 播放入口
+2. 播放触发恢复
+3. 返回真实播放地址
 
-### 9.3 恢复后的链接获取方式不稳定
-应对：
-- 优先走现有下载链接生成能力
-- 首版优先 302 模式，减少代理复杂度
-
-### 9.4 删除时机导致中断播放
-应对：
-- 基于最后访问时间回收
-- 增加正在播放保护窗口
-- 回收前再次校验最近访问时间
+## 第三优先级
+最后再落地：
+1. 自动回收
+2. 播放保护
+3. 删除失败重试
 
 ---
 
-## 10. 当前设计结论
+## 11. 当前结论（确认版）
 
-`.cas` 迁移到 `cloudpan189pro` 应采用以下原则：
+重新读完两边代码后的最明确结论是：
 
-1. **迁逻辑，不迁 JS 实现本体**
-2. **先做解析 + 恢复最小闭环，再接 STRM 播放**
-3. **订阅阶段只保存 `.cas` 与 `.strm`，不直接恢复媒体**
-4. **播放时再恢复，恢复后自动回收**
-5. **将其作为一个独立的 CAS 能力模块体系建设，而不是分散补丁式实现**
+### `cloud189pro` 现状
+- 已有 cloud189 读链
+- 已有 STRM 写入能力
+- 已有订阅 / 存储 / 媒体映射框架
+- 尚无 `.cas` 所需的恢复写链
 
-该设计与最终业务目标一致，适合作为 `cloudpan189pro` 后续新增主线能力推进。
+### `cloud189-auto-save` 价值
+- 是 cloud189 `.cas` 恢复链的主要逻辑参考来源
+- 尤其适合参考：下载 `.cas`、解析 `.cas`、秒传恢复、家庭回退、懒恢复思路
+
+### 当前最正确的起手式
+- 先在 `cloud189pro` 落 `.cas` 解析模块
+- 再补 cloud189 秒传恢复写链
+- 做成“手动恢复成功”的最小闭环
+- 最后再接 `.strm` 播放与自动回收
+
+这就是当前两边代码重新核对后的确认版技术路线。
