@@ -62,29 +62,9 @@ func (a *personRestoreAdapter) TryRestore(
 		return result, nil
 	}
 
-	// 这里暂时仍沿用现有 person -> family 收尾；只有在参考实现存在更明确链路后才继续替换。
-	familyID, err := (&familyRestoreAdapter{}).pickFamilyID(panClient)
-	if err != nil {
-		return nil, err
-	}
-	ok, apiErr := panClient.AppSaveFileToFamilyCloud(familyID, []string{restoredFileID})
-	if apiErr != nil {
-		return nil, errors.Wrap(apiErr, "个人文件转存到家庭云失败")
-	}
-	if !ok {
-		return nil, fmt.Errorf("个人文件转存到家庭云失败")
-	}
-	if targetFolderID != "" {
-		moved, apiErr := panClient.AppFamilyMoveFile(familyID, restoredFileID, targetFolderID)
-		if apiErr != nil {
-			return nil, errors.Wrap(apiErr, "转存家庭云后移动文件失败")
-		}
-		if moved != nil {
-			result.RestoredFileID = moved.FileId
-			result.RestoredFileName = moved.FileName
-		}
-	}
-	return result, nil
+	// 严格按参考实现收口：当前已确认的参考主链只覆盖个人秒传本身，以及失败后切家庭中转到个人。
+	// 尚未找到与当前产品语义等价、且可直接照搬的 person -> family 收尾链路，因此这里不能继续保留猜测型实现。
+	return nil, fmt.Errorf("不支持的操作: 参考实现暂无 person -> family 恢复主链")
 }
 
 func (a *personRestoreAdapter) personRapidUpload(session *appsession.Session, personParentID string, info *casparser.CasInfo, fileName string) (string, error) {

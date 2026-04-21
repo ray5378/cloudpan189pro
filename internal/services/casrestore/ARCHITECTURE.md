@@ -27,6 +27,12 @@ Examples:
 - `uploadRoute=person`, `destinationType=person`
 - `uploadRoute=person`, `destinationType=family`
 
+Implementation note:
+
+- Product semantics may allow four combinations.
+- But cloud-operation implementation must still be backed by the reference flow.
+- If a combination has no reference-backed cloud-operation chain yet, it must be treated as unsupported instead of being implemented with guessed SDK substitutions.
+
 ## Product defaults
 
 - Default `uploadRoute` = `family`
