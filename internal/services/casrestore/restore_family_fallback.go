@@ -1,16 +1,26 @@
 package casrestore
 
 import (
+	"crypto/md5"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"sort"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
 	"github.com/tickstep/cloudpan189-api/cloudpan"
+	"github.com/xxcheng123/cloudpan189-share/internal/services/appsession"
 	"github.com/xxcheng123/cloudpan189-share/internal/services/casparser"
 )
 
-// familyRestoreAdapter 负责“家庭路线”的秒传恢复。
-// 注意：这里的“家庭路线”只描述上传/秒传路径，不代表最终目录一定是家庭目录。
+const familyBatchAPIBase = "https://api.cloud.189.cn"
+
 type familyRestoreAdapter struct{}
 
 type familyRestoreResult struct {
@@ -19,13 +29,35 @@ type familyRestoreResult struct {
 	RestoredFileName string
 }
 
+type batchTaskCreateResp struct {
+	ResCode    any    `json:"res_code"`
+	ResMessage string `json:"res_message"`
+	TaskID     string `json:"taskId"`
+}
+
+type batchTaskCheckResp struct {
+	ResCode        any    `json:"res_code"`
+	ResMessage     string `json:"res_message"`
+	TaskStatus     int    `json:"taskStatus"`
+	TaskID         string `json:"taskId"`
+	FailedCount    int    `json:"failedCount"`
+	SuccessedCount int    `json:"successedCount"`
+	SkipCount      int    `json:"skipCount"`
+}
+
+// familyRestoreAdapter 负责“家庭路线”的秒传恢复。
+// 严格按参照代码：家庭秒传成功后，如最终目标是个人目录，则走 AccessToken 签名的 batch COPY。
 func (a *familyRestoreAdapter) TryRestore(
+	session *appsession.Session,
 	panClient *cloudpan.PanClient,
 	destinationType DestinationType,
 	targetFolderID string,
 	fileName string,
 	info *casparser.CasInfo,
 ) (*familyRestoreResult, error) {
+	if session == nil {
+		return nil, errors.New("AppSession不能为空")
+	}
 	if panClient == nil {
 		return nil, errors.New("PanClient不能为空")
 	}
@@ -40,10 +72,9 @@ func (a *familyRestoreAdapter) TryRestore(
 		fileName = info.Name
 	}
 
-	// 家庭路线下，家庭目录可直接作为上传父目录；若最终目标是个人目录，则先落家庭，再转个人。
 	familyParentID := ""
 	if destinationType == DestinationTypeFamily {
-		familyParentID = targetFolderID
+		familyParentID = normalizeFamilyFolderID(targetFolderID)
 	}
 
 	createRes, apiErr := panClient.AppFamilyCreateUploadFile(&cloudpan.AppCreateUploadFileParam{
@@ -82,38 +113,25 @@ func (a *familyRestoreAdapter) TryRestore(
 	if apiErr != nil {
 		return nil, errors.Wrap(apiErr, "提交家庭恢复失败")
 	}
-	if commitRes == nil || commitRes.Id == "" {
+	if commitRes == nil || strings.TrimSpace(commitRes.Id) == "" {
 		return nil, fmt.Errorf("家庭恢复提交成功但未返回文件ID")
 	}
+	familyFileID := strings.TrimSpace(commitRes.Id)
 
 	result := &familyRestoreResult{
 		FamilyID:         familyID,
-		RestoredFileID:   commitRes.Id,
+		RestoredFileID:   familyFileID,
 		RestoredFileName: commitRes.Name,
 	}
 	if destinationType == DestinationTypeFamily {
 		return result, nil
 	}
 
-	ok, apiErr := panClient.AppFamilySaveFileToPersonCloud(familyID, []string{commitRes.Id})
-	if apiErr != nil {
-		return nil, errors.Wrap(apiErr, "家庭文件回灌个人云失败")
+	if err := a.copyFamilyFileToPersonal(session, familyID, familyFileID, targetFolderID, fileName); err != nil {
+		_ = a.safeDeleteFamilyFile(panClient, familyID, familyFileID, fileName)
+		return nil, err
 	}
-	if !ok {
-		return nil, fmt.Errorf("家庭文件回灌个人云失败")
-	}
-
-	if targetFolderID != "" {
-		moved, apiErr := panClient.AppMoveFile([]string{commitRes.Id}, targetFolderID)
-		if apiErr != nil {
-			return nil, errors.Wrap(apiErr, "回灌个人云后移动文件失败")
-		}
-		if moved != nil && len(moved.FileList) > 0 && moved.FileList[0] != nil {
-			result.RestoredFileID = moved.FileList[0].FileId
-			result.RestoredFileName = moved.FileList[0].FileName
-		}
-	}
-
+	_ = a.safeDeleteFamilyFile(panClient, familyID, familyFileID, fileName)
 	return result, nil
 }
 
@@ -126,4 +144,171 @@ func (a *familyRestoreAdapter) pickFamilyID(panClient *cloudpan.PanClient) (int6
 		return 0, fmt.Errorf("当前账号没有可用家庭")
 	}
 	return resp.FamilyInfoList[0].FamilyId, nil
+}
+
+// copyFamilyFileToPersonal 严格参照 cloud189-auto-save 的 _copyFamilyFileToPersonal：
+// 使用 AccessToken + Timestamp + 参数字典序拼接后的 MD5 小写签名，请求 /open/batch/createBatchTask.action(type=COPY, copyType=2)。
+func (a *familyRestoreAdapter) copyFamilyFileToPersonal(session *appsession.Session, familyID int64, familyFileID, personalFolderID, fileName string) error {
+	accessToken := strings.TrimSpace(session.Token.AccessToken)
+	if accessToken == "" {
+		return fmt.Errorf("家庭中转COPY失败: 无法获取AccessToken")
+	}
+	params := map[string]string{
+		"type":           "COPY",
+		"taskInfos":      fmt.Sprintf(`[{"fileId":"%s","fileName":"%s","isFolder":0}]`, familyFileID, escapeJSONString(fileName)),
+		"targetFolderId": normalizePersonFolderID(targetFolderIDOrEmpty(personalFolderID)),
+		"familyId":       strconv.FormatInt(familyID, 10),
+		"groupId":        "null",
+		"copyType":       "2",
+		"shareId":        "null",
+	}
+	resp := new(batchTaskCreateResp)
+	if err := doAccessTokenFormJSONRequest(accessToken, familyBatchAPIBase+"/open/batch/createBatchTask.action", params, 30*time.Second, resp); err != nil {
+		return errors.Wrap(err, "家庭中转COPY失败")
+	}
+	if batchRespError(resp.ResCode, resp.ResMessage) {
+		return fmt.Errorf("家庭中转COPY失败: %s", resp.ResMessage)
+	}
+	if resp.TaskID == "" {
+		return fmt.Errorf("家庭中转COPY失败: 缺少taskId")
+	}
+	return a.waitForBatchTask(accessToken, "COPY", resp.TaskID, 30*time.Second)
+}
+
+// waitForBatchTask 严格参照 _waitForBatchTask：1s 轮询 /open/batch/checkBatchTask.action，taskStatus=4 视为成功。
+func (a *familyRestoreAdapter) waitForBatchTask(accessToken, taskType, taskID string, maxWait time.Duration) error {
+	if strings.TrimSpace(accessToken) == "" {
+		return fmt.Errorf("批量任务查询失败: 无法获取AccessToken")
+	}
+	deadline := time.Now().Add(maxWait)
+	lastStatus := 0
+	for time.Now().Before(deadline) {
+		time.Sleep(1 * time.Second)
+		resp := new(batchTaskCheckResp)
+		if err := doAccessTokenFormJSONRequest(accessToken, familyBatchAPIBase+"/open/batch/checkBatchTask.action", map[string]string{
+			"type":   taskType,
+			"taskId": taskID,
+		}, 15*time.Second, resp); err != nil {
+			return errors.Wrap(err, "批量任务查询失败")
+		}
+		if batchRespError(resp.ResCode, resp.ResMessage) {
+			return fmt.Errorf("批量任务查询失败: %s", resp.ResMessage)
+		}
+		lastStatus = resp.TaskStatus
+		if lastStatus == 4 {
+			return nil
+		}
+	}
+	return fmt.Errorf("家庭中转批量任务超时 taskStatus=%d", lastStatus)
+}
+
+func (a *familyRestoreAdapter) safeDeleteFamilyFile(panClient *cloudpan.PanClient, familyID int64, fileID, fileName string) error {
+	_, apiErr := panClient.AppCreateBatchTask(familyID, &cloudpan.BatchTaskParam{
+		TypeFlag: cloudpan.BatchTaskTypeDelete,
+		TaskInfos: cloudpan.BatchTaskInfoList{&cloudpan.BatchTaskInfo{
+			FileId:   fileID,
+			FileName: fileName,
+			IsFolder: 0,
+		}},
+	})
+	if apiErr != nil {
+		return apiErr
+	}
+	return nil
+}
+
+func doAccessTokenFormJSONRequest(accessToken string, targetURL string, params map[string]string, timeout time.Duration, out any) error {
+	timestamp, signature := buildAccessTokenSignature(strings.TrimSpace(accessToken), params)
+	req, err := http.NewRequest(http.MethodPost, targetURL, strings.NewReader(formURLEncode(params)))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Accept", "application/json;charset=UTF-8")
+	req.Header.Set("Sign-Type", "1")
+	req.Header.Set("Signature", signature)
+	req.Header.Set("Timestamp", timestamp)
+	req.Header.Set("AccessToken", strings.TrimSpace(accessToken))
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36")
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	client := &http.Client{Timeout: timeout}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("http %d: %s", resp.StatusCode, string(body))
+	}
+	if out != nil {
+		return json.Unmarshal(body, out)
+	}
+	return nil
+}
+
+// buildAccessTokenSignature 严格参照 JS：
+// AccessToken=xxx&Timestamp=xxx&key1=val1&key2=val2...（按 key 字典序） -> md5 hex lower。
+func buildAccessTokenSignature(accessToken string, params map[string]string) (string, string) {
+	timestamp := strconv.FormatInt(time.Now().UnixMilli(), 10)
+	keys := make([]string, 0, len(params))
+	for k := range params {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	parts := []string{"AccessToken=" + accessToken, "Timestamp=" + timestamp}
+	for _, k := range keys {
+		parts = append(parts, k+"="+params[k])
+	}
+	sum := md5.Sum([]byte(strings.Join(parts, "&")))
+	return timestamp, hex.EncodeToString(sum[:])
+}
+
+func formURLEncode(params map[string]string) string {
+	vals := url.Values{}
+	for k, v := range params {
+		vals.Set(k, v)
+	}
+	return vals.Encode()
+}
+
+func batchRespError(code any, _ string) bool {
+	switch v := code.(type) {
+	case nil:
+		return false
+	case float64:
+		return int(v) != 0
+	case int:
+		return v != 0
+	case string:
+		return v != "" && v != "0"
+	default:
+		return false
+	}
+}
+
+func normalizeFamilyFolderID(folderID string) string {
+	if folderID == "-11" {
+		return ""
+	}
+	return folderID
+}
+
+func normalizePersonFolderID(folderID string) string {
+	return folderID
+}
+
+func targetFolderIDOrEmpty(folderID string) string {
+	return folderID
+}
+
+func escapeJSONString(s string) string {
+	b, _ := json.Marshal(s)
+	if len(b) >= 2 {
+		return string(b[1 : len(b)-1])
+	}
+	return s
 }

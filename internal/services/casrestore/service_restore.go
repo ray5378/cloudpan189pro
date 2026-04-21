@@ -100,7 +100,7 @@ func (s *service) ensureRestoredOnce(ctx appctx.Context, req RestoreRequest) (re
 			result.FamilyID = familyID
 		}
 	case UploadRouteFamily:
-		familyResult, familyErr := (&familyRestoreAdapter{}).TryRestore(panClient, req.DestinationType, req.TargetFolderID, restoreName, casInfo)
+		familyResult, familyErr := (&familyRestoreAdapter{}).TryRestore(session, panClient, req.DestinationType, req.TargetFolderID, restoreName, casInfo)
 		if familyErr != nil {
 			return nil, fmt.Errorf("家庭路线恢复失败: %w", familyErr)
 		}
