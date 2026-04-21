@@ -15,7 +15,7 @@ func (s *service) EnsureRestored(ctx appctx.Context, req RestoreRequest) (*Resto
 	})
 }
 
-func (s *service) ensureRestoredOnce(ctx appctx.Context, req RestoreRequest) (*RestoreResult, error) {
+func (s *service) ensureRestoredOnce(ctx appctx.Context, req RestoreRequest) (result *RestoreResult, err error) {
 	if req.CasFileID == "" {
 		return nil, fmt.Errorf("casFileID不能为空")
 	}
@@ -37,9 +37,24 @@ func (s *service) ensureRestoredOnce(ctx appctx.Context, req RestoreRequest) (*R
 		zap.String("target_folder_id", req.TargetFolderID),
 	)
 
+	record, err := s.getOrCreateRecord(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err != nil {
+			_ = s.markRestoreFailed(ctx, record.ID, err)
+		}
+	}()
+
 	resolver := s.newCASMetadataResolver()
 	casInfo, vf, err := resolver.Resolve(ctx, req.MountPointID, req.CasVirtualID)
 	if err != nil {
+		return nil, err
+	}
+
+	restoreName := casparser.GetOriginalFileName(vf.Name, casInfo)
+	if err = s.markRestoring(ctx, record.ID, restoreName, casInfo.Size, casInfo.MD5, casInfo.SliceMD5); err != nil {
 		return nil, err
 	}
 
@@ -52,16 +67,38 @@ func (s *service) ensureRestoredOnce(ctx appctx.Context, req RestoreRequest) (*R
 		return nil, fmt.Errorf("创建PanClient失败")
 	}
 
-	restoreName := casparser.GetOriginalFileName(vf.Name, casInfo)
-	personResult, err := (&personRestoreAdapter{}).TryRestore(panClient, req.TargetFolderID, restoreName, casInfo)
-	if err != nil {
-		return nil, err
+	personResult, personErr := (&personRestoreAdapter{}).TryRestore(panClient, req.TargetFolderID, restoreName, casInfo)
+	if personErr == nil {
+		result = &RestoreResult{
+			RestoredFileID:   personResult.RestoredFileID,
+			RestoredFileName: personResult.RestoredFileName,
+			TargetFolderID:   req.TargetFolderID,
+			CasInfo:          casInfo,
+		}
+		if err = s.markRestored(ctx, record.ID, result); err != nil {
+			return nil, err
+		}
+		return result, nil
 	}
 
-	return &RestoreResult{
-		RestoredFileID:   personResult.RestoredFileID,
-		RestoredFileName: personResult.RestoredFileName,
+	ctx.Logger.Warn("person最小恢复失败，准备进入family fallback",
+		zap.Error(personErr),
+		zap.String("cas_file_id", req.CasFileID),
+	)
+
+	familyResult, familyErr := (&familyRestoreAdapter{}).TryRestore(panClient, req.TargetFolderID, restoreName, casInfo)
+	if familyErr != nil {
+		return nil, fmt.Errorf("person恢复失败: %v; family fallback失败: %w", personErr, familyErr)
+	}
+
+	result = &RestoreResult{
+		RestoredFileID:   familyResult.RestoredFileID,
+		RestoredFileName: familyResult.RestoredFileName,
 		TargetFolderID:   req.TargetFolderID,
 		CasInfo:          casInfo,
-	}, nil
+	}
+	if err = s.markRestored(ctx, record.ID, result); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
