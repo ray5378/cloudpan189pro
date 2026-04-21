@@ -73,3 +73,19 @@ What must not happen:
 - do **not** simplify protocol steps without explicit evidence from the reference implementation
 
 In short: this module is a Go translation of the working JS reference flow, not an independent redesign.
+
+## Do-not-change alignment checklist
+
+The following aligned items are intentional and must not be casually changed back to SDK substitutions or renamed abstractions:
+
+- upload-domain flow must keep: `getSessionKeyForUpload` -> RSA key cache -> `/person|family/initMultiUpload` -> `/person|family/checkTransSecond` -> `/person|family/commitMultiUploadFile`
+- init stage must keep `lazyCheck=1` and must not send md5
+- commit stage must keep `fileMd5` + `sliceMd5` + `lazyCheck=1` + `opertype=3`
+- commit 403 retry must keep: clear RSA cache -> wait `retry * 2000ms` -> retry
+- family -> person must keep AccessToken-signed batch `COPY` + `checkBatchTask` + family cleanup `DELETE`
+- family root resolution must keep reference-style lookup instead of hardcoding `-11`
+- black-list detection must keep `InfoSecurityErrorCode` / `black list` handling
+- commit file-id extraction order must keep reference order
+- combinations without a reference-backed cloud-operation chain must remain unsupported
+
+If any future change wants to replace one of the items above, it must first prove the exact reference basis.

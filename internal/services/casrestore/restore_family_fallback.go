@@ -51,6 +51,14 @@ type batchTaskCheckResp struct {
 // 1. upload.cloud.189.cn 家庭秒传（init/check/commit）
 // 2. 如目标是个人目录，则走 AccessToken 签名的 batch COPY
 // 3. 成功后清理家庭中转文件
+//
+// 下面这些属于已对齐项，不能随意改动：
+// - familyId 选择优先 userRole=1
+// - family root 通过 listFiles/path 解析，不再硬编码 -11
+// - init 不传 md5，且 lazyCheck=1
+// - commit 必须保留 403 retry + 清 RSA cache
+// - family -> person 必须保留 COPY -> checkBatchTask -> DELETE cleanup 这条参考链
+// - familyFileId 提取顺序必须保持参考顺序
 func (a *familyRestoreAdapter) TryRestore(
 	session *appsession.Session,
 	panClient *cloudpan.PanClient,

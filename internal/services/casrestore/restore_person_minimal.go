@@ -16,6 +16,13 @@ import (
 // personRestoreAdapter 负责“个人路线”的秒传恢复。
 // 注意：这里的“个人路线”只描述上传/秒传路径，不代表最终目录一定是个人目录。
 // 严格按参考实现：个人秒传主链走 upload.cloud.189.cn 的 init/check/commit。
+//
+// 下面这些属于已对齐项，不能随意改动：
+// - init 不传 md5，且 lazyCheck=1
+// - 主链固定为 /person/initMultiUpload -> /person/checkTransSecond -> /person/commitMultiUploadFile
+// - commit 必须保留 403 retry + 清 RSA cache
+// - commit 文件ID提取顺序必须保持参考顺序
+// - 当前未找到 reference-backed 的 person -> family 主链，因此这里必须保持 unsupported，不能再补猜测型实现
 type personRestoreAdapter struct{}
 
 // personRestoreResult 表示个人路线恢复后的中间结果。

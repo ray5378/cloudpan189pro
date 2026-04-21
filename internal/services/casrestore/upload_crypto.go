@@ -89,6 +89,9 @@ func getSessionKeyForUpload(session *appsession.Session) (string, error) {
 	return sessionKey, nil
 }
 
+// uploadRequest 是 upload.cloud.189.cn 参考链的固定入口。
+// 注意：这里已经按参考实现对齐了 sessionKey 获取、RSA key cache、AES/RSA/HMAC、黑名单识别、403 时清 RSA cache。
+// 这些行为属于“已对齐项”，不要再改回看起来等价的 SDK/简化实现。
 func uploadRequest(session *appsession.Session, requestURI string, params map[string]string) (*uploadResponse, error) {
 	if session == nil {
 		return nil, fmt.Errorf("AppSession不能为空")
