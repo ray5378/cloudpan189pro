@@ -40,6 +40,9 @@ const (
 // 这里有两个容易混淆的维度，必须同时保留：
 // 1. UploadRoute: 秒传/上传时走哪条路线（默认 family）
 // 2. DestinationType: 文件最终落在哪类目录（person/family）
+//
+// 注意：产品语义可以表达四种组合，但真正允许进入执行层的组合仍必须有 reference-backed 主链支撑。
+// 当前 person -> family 仍无可直接照搬的参考链，因此应视为 unsupported，而不是拿 SDK 等价路径兜底。
 type RestoreRequest struct {
 	StorageID    int64
 	MountPointID int64

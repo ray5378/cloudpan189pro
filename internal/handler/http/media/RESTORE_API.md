@@ -112,6 +112,20 @@ Content-Type: application/json
 - `targetFolderId` 必填
 - `casVirtualId` / `casPath` 至少传一个（除非你手动显式把上下文都传全）
 
+### 当前 reference-backed 支持范围
+
+当前已经按参考实现收口、可以测试的组合只有：
+
+- `uploadRoute=person`, `destinationType=person`
+- `uploadRoute=family`, `destinationType=family`
+- `uploadRoute=family`, `destinationType=person`
+
+当前 **不支持**：
+
+- `uploadRoute=person`, `destinationType=family`
+
+原因不是产品语义不允许，而是：当前尚未找到可直接照搬的 reference-backed cloud-operation 主链，因此接口层会直接拒绝该组合。
+
 ### curl 示例
 
 #### 1) 家庭路线，最终落家庭目录

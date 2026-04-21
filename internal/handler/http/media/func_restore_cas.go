@@ -52,6 +52,11 @@ func (h *handler) RestoreCas() httpcontext.HandlerFunc {
 			ctx.AbortWithInvalidParams(fmt.Errorf("casVirtualId 和 casPath 至少传一个"))
 			return
 		}
+		// 已对齐参考实现的组合必须在接口层显式收口，避免外部误以为所有产品语义组合都已具备 reference-backed 主链。
+		if req.UploadRoute == casrestoreSvi.UploadRoutePerson && req.DestinationType == casrestoreSvi.DestinationTypeFamily {
+			ctx.AbortWithInvalidParams(fmt.Errorf("不支持的操作: 当前仅支持 reference-backed 的 restore 组合，person -> family 暂未实现"))
+			return
+		}
 
 		restoreReq, err := h.buildRestoreRequest(ctx, req)
 		if err != nil {
