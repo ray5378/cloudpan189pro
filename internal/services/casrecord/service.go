@@ -11,8 +11,6 @@ type Service interface {
 	Create(ctx context.Context, record *models.CasMediaRecord) (int64, error)
 	Query(ctx context.Context, id int64) (*models.CasMediaRecord, error)
 	QueryByStorageAndCasFileID(ctx context.Context, storageID int64, casFileID string) (*models.CasMediaRecord, error)
-	List(ctx context.Context, req *ListRequest) ([]*models.CasMediaRecord, error)
-	Count(ctx context.Context, req *ListRequest) (int64, error)
 	Update(ctx context.Context, id int64, updates map[string]any) error
 }
 

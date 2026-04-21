@@ -12,7 +12,6 @@ import (
 	cloudbridgeSvi "github.com/xxcheng123/cloudpan189-share/internal/services/cloudbridge"
 	cloudtokenSvi "github.com/xxcheng123/cloudpan189-share/internal/services/cloudtoken"
 	mountpointSvi "github.com/xxcheng123/cloudpan189-share/internal/services/mountpoint"
-	virtualfileSvi "github.com/xxcheng123/cloudpan189-share/internal/services/virtualfile"
 )
 
 // UploadRoute 表示秒传/上传时优先走哪条云盘路线。
@@ -56,19 +55,6 @@ type RestoreRequest struct {
 	TargetFolderID string
 }
 
-// RetryRequest 是基于已有恢复记录重试的请求。
-// 注意：record 里目前不持久化 uploadRoute / destinationType，因此重试时仍需显式给出目标语义。
-type RetryRequest struct {
-	RecordID int64
-
-	// UploadRoute 决定本次重试走哪条秒传/上传路线；默认 family。
-	UploadRoute UploadRoute
-	// DestinationType 决定本次重试最终目录属于个人云还是家庭云。
-	DestinationType DestinationType
-	// TargetFolderID 为空时，默认沿用记录中的 restored_parent_id。
-	TargetFolderID string
-}
-
 // RestoreResult 是恢复完成后的结果。
 type RestoreResult struct {
 	RestoredFileID   string
@@ -82,7 +68,6 @@ type RestoreResult struct {
 
 type Service interface {
 	EnsureRestored(ctx appctx.Context, req RestoreRequest) (*RestoreResult, error)
-	RetryRecord(ctx appctx.Context, req RetryRequest) (*RestoreResult, error)
 }
 
 type service struct {
@@ -90,7 +75,6 @@ type service struct {
 	recordSvc          casrecord.Service
 	appSessionService  appsession.Service
 	cloudBridgeService cloudbridgeSvi.Service
-	virtualFileService virtualfileSvi.Service
 	inflightMu         sync.Mutex
 	inflight           map[string]*restoreCall
 }
@@ -110,7 +94,6 @@ func NewService(svc bootstrap.ServiceContext) Service {
 		recordSvc:          casrecord.NewService(svc),
 		appSessionService:  appsession.NewService(svc, cloudTokenSvc, mountPointSvc),
 		cloudBridgeService: cloudBridgeSvc,
-		virtualFileService: virtualfileSvi.NewService(svc),
 		inflight:           make(map[string]*restoreCall),
 	}
 }

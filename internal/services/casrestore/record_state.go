@@ -36,20 +36,6 @@ func (s *service) getOrCreateRecord(ctx appctx.Context, req RestoreRequest) (*mo
 	return record, nil
 }
 
-func (s *service) markResolvedSource(ctx appctx.Context, recordID int64, casFilePath string, sourceParentID string) error {
-	updates := map[string]any{}
-	if casFilePath != "" {
-		updates["cas_file_path"] = casFilePath
-	}
-	if sourceParentID != "" {
-		updates["source_parent_id"] = sourceParentID
-	}
-	if len(updates) == 0 {
-		return nil
-	}
-	return s.recordSvc.Update(ctx, recordID, updates)
-}
-
 func (s *service) markRestoring(ctx appctx.Context, recordID int64, originalName string, originalSize int64, fileMD5, sliceMD5 string) error {
 	return s.recordSvc.Update(ctx, recordID, map[string]any{
 		"restore_status":     models.CasRestoreStatusRestoring,

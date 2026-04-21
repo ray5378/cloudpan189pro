@@ -4,7 +4,6 @@ import (
 	"github.com/xxcheng123/cloudpan189-share/internal/consts"
 	"github.com/xxcheng123/cloudpan189-share/internal/framework/httpcontext"
 	"github.com/xxcheng123/cloudpan189-share/internal/pkgs/taskengine"
-	casrecordSvi "github.com/xxcheng123/cloudpan189-share/internal/services/casrecord"
 	casrestoreSvi "github.com/xxcheng123/cloudpan189-share/internal/services/casrestore"
 	mediaconfigSvi "github.com/xxcheng123/cloudpan189-share/internal/services/mediaconfig"
 	mediafileSvi "github.com/xxcheng123/cloudpan189-share/internal/services/mediafile"
@@ -25,28 +24,22 @@ type Handler interface {
 	Clear() httpcontext.HandlerFunc
 	RebuildStrmFile() httpcontext.HandlerFunc
 	RestoreCas() httpcontext.HandlerFunc
-	RetryRestore() httpcontext.HandlerFunc
-	RestoreStatus() httpcontext.HandlerFunc
-	RestoreList() httpcontext.HandlerFunc
 }
 
 var bi = httpcontext.NewBusinessGenerator(consts.BusCodeMediaStartCode)
 
 var (
 	// 配置相关错误码
-	codeConfigQueryFailed    = bi.Next("查询媒体配置失败")
-	codeConfigInitFailed     = bi.Next("初始化媒体配置失败")
-	codeConfigUpdateFailed   = bi.Next("更新媒体配置失败")
-	codeConfigToggleFailed   = bi.Next("切换媒体配置启用状态失败")
+	codeConfigQueryFailed  = bi.Next("查询媒体配置失败")
+	codeConfigInitFailed   = bi.Next("初始化媒体配置失败")
+	codeConfigUpdateFailed = bi.Next("更新媒体配置失败")
+	codeConfigToggleFailed = bi.Next("切换媒体配置启用状态失败")
 
 	// 操作相关错误码
-	codeMediaNotEnabled     = bi.Next("媒体功能未启用")
-	codeClearFailed         = bi.Next("清理媒体文件失败")
-	codeRebuildFailed       = bi.Next("重建strm文件失败")
-	codeRestoreCasFailed    = bi.Next("恢复CAS文件失败")
-	codeRetryRestoreFailed  = bi.Next("重试CAS恢复失败")
-	codeRestoreStatusFailed = bi.Next("查询CAS恢复状态失败")
-	codeRestoreListFailed   = bi.Next("查询CAS恢复记录列表失败")
+	codeMediaNotEnabled = bi.Next("媒体功能未启用")
+	codeClearFailed     = bi.Next("清理媒体文件失败")
+	codeRebuildFailed   = bi.Next("重建strm文件失败")
+	codeRestoreCasFailed = bi.Next("恢复CAS文件失败")
 )
 
 // handler 依赖的服务
@@ -57,7 +50,6 @@ type handler struct {
 	virtualfileService virtualfileSvi.Service
 	verifyService      verifySvi.Service
 	casRestoreService  casrestoreSvi.Service
-	casRecordService   casrecordSvi.Service
 	taskEngine         taskengine.TaskEngine
 }
 
@@ -69,7 +61,6 @@ func NewHandler(
 	virtualfileService virtualfileSvi.Service,
 	verifyService verifySvi.Service,
 	casRestoreService casrestoreSvi.Service,
-	casRecordService casrecordSvi.Service,
 	taskEngine taskengine.TaskEngine,
 ) Handler {
 	return &handler{
@@ -79,7 +70,6 @@ func NewHandler(
 		virtualfileService: virtualfileService,
 		verifyService:      verifyService,
 		casRestoreService:  casRestoreService,
-		casRecordService:   casRecordService,
 		taskEngine:         taskEngine,
 	}
 }

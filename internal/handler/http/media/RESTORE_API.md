@@ -1,13 +1,10 @@
 # CAS Restore API
 
-这份说明对应：
+这份说明当前只对应：
 
 - `POST /api/media/restore_cas`
-- `POST /api/media/retry_restore`
-- `GET /api/media/restore_status`
-- `GET /api/media/restore_list`
 
-用于手动联调 cloud189 `.cas` 恢复链。
+目标很单纯：先手动打通 cloud189 `.cas` 恢复链。
 
 ---
 
@@ -89,68 +86,35 @@ Content-Type: application/json
 - `targetFolderId` 必填
 - `casVirtualId` / `casPath` 至少传一个（除非你手动显式把上下文都传全）
 
----
+### curl 示例
 
-## `POST /api/media/retry_restore`
+#### 1) 家庭路线，最终落家庭目录
 
-基于已有恢复记录重新触发恢复。
-
-### 兼容策略
-
-当前 retry 会按下面顺序重新定位 `.cas` 虚拟文件：
-
-1. 优先使用记录里的 `casFilePath`
-2. 如果旧记录没有 `casFilePath`，则尝试在同一挂载点下按 `casFileId` 精确匹配
-3. 还不行则按 `casFileName(.cas)` 缩窄匹配
-
-所以旧记录现在不一定必须有 `casFilePath` 才能重试；但如果三种定位都失败，接口仍会返回错误。
-
-### 请求体
-
-```json
-{
-  "recordId": 1,
-  "uploadRoute": "family",
-  "destinationType": "family",
-  "targetFolderId": "-11"
-}
+```bash
+curl -X POST 'http://127.0.0.1:12395/api/media/restore_cas' \
+  -H 'Authorization: Bearer <token>' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "casVirtualId": 1001,
+    "uploadRoute": "family",
+    "destinationType": "family",
+    "targetFolderId": "-11"
+  }'
 ```
 
-### 字段说明
+#### 2) 家庭路线，最终落个人目录
 
-- `recordId` 必填
-- `uploadRoute` 可选，默认 `family`
-- `destinationType` 必填
-- `targetFolderId` 可选；不传时默认沿用记录中的 `restoredParentId`
-
----
-
-## `GET /api/media/restore_status`
-
-查询单个 CAS 恢复记录。
-
-### 支持三种定位方式
-
-- `recordId`
-- `casVirtualId`
-- `casPath`
-
----
-
-## `GET /api/media/restore_list`
-
-分页查询恢复记录列表。
-
-### 支持筛选字段
-
-- `storageId`
-- `mountPointId`
-- `restoreStatus`
-- `casFileName`
-- `beginAt`
-- `endAt`
-- `currentPage`
-- `pageSize`
+```bash
+curl -X POST 'http://127.0.0.1:12395/api/media/restore_cas' \
+  -H 'Authorization: Bearer <token>' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "casPath": "/电影库/movie.cas",
+    "uploadRoute": "family",
+    "destinationType": "person",
+    "targetFolderId": "123456"
+  }'
+```
 
 ---
 
