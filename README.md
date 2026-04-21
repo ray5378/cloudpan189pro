@@ -120,6 +120,15 @@ docker build --no-cache -t ray5378/cloudpan189pro:latest .
 
 ---
 
+## 需求与技术设计文档
+
+本轮新增 CAS 按需恢复播放方案文档：
+
+- 需求文档：`docs/CAS_STRM_REQUIREMENTS.md`
+- 技术设计：`docs/CAS_STRM_TECH_DESIGN.md`
+
+---
+
 ## 其它保持不变的能力（摘）
 - 外部接口创建存储：`POST /api/external/create-storage`
 - 自动刷新/持久检测/自动删除失效存储
