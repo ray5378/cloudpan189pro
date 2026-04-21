@@ -14,28 +14,54 @@ import (
 	mountpointSvi "github.com/xxcheng123/cloudpan189-share/internal/services/mountpoint"
 )
 
-type RestoreTarget string
+// UploadRoute 表示秒传/上传时优先走哪条云盘路线。
+// 注意：它描述的是“恢复链如何写入云端”，不是最终目录归属。
+type UploadRoute string
 
 const (
-	RestoreTargetPerson RestoreTarget = "person"
-	RestoreTargetFamily RestoreTarget = "family"
+	// UploadRouteFamily 表示优先走家庭云秒传链路。是默认值。
+	UploadRouteFamily UploadRoute = "family"
+	// UploadRoutePerson 表示优先走个人云秒传链路。
+	UploadRoutePerson UploadRoute = "person"
 )
 
+// DestinationType 表示恢复完成后文件最终位于哪类目录。
+// 注意：它描述的是“最终目录归属”，不是秒传/上传路线。
+type DestinationType string
+
+const (
+	// DestinationTypePerson 表示最终目录属于个人云。
+	DestinationTypePerson DestinationType = "person"
+	// DestinationTypeFamily 表示最终目录属于家庭云。
+	DestinationTypeFamily DestinationType = "family"
+)
+
+// RestoreRequest 是 CAS 恢复请求。
+// 这里有两个容易混淆的维度，必须同时保留：
+// 1. UploadRoute: 秒传/上传时走哪条路线（默认 family）
+// 2. DestinationType: 文件最终落在哪类目录（person/family）
 type RestoreRequest struct {
-	StorageID      int64
-	MountPointID   int64
-	CasFileID      string
-	CasFileName    string
-	CasVirtualID   int64
+	StorageID    int64
+	MountPointID int64
+	CasFileID    string
+	CasFileName  string
+	CasVirtualID int64
+
+	// UploadRoute 决定秒传/上传时优先走哪条链路；默认 family。
+	UploadRoute UploadRoute
+	// DestinationType 决定最终目录属于个人云还是家庭云。
+	DestinationType DestinationType
+	// TargetFolderID 是最终目录 ID；它只表达目录，不表达路线。
 	TargetFolderID string
-	Target         RestoreTarget
 }
 
+// RestoreResult 是恢复完成后的结果。
 type RestoreResult struct {
 	RestoredFileID   string
 	RestoredFileName string
 	TargetFolderID   string
-	Target           RestoreTarget
+	UploadRoute      UploadRoute
+	DestinationType  DestinationType
 	FamilyID         int64
 	CasInfo          *casparser.CasInfo
 }
@@ -73,7 +99,7 @@ func NewService(svc bootstrap.ServiceContext) Service {
 }
 
 func inflightKey(req RestoreRequest) string {
-	return req.CasFileID + "::" + string(req.Target) + "::" + req.TargetFolderID
+	return req.CasFileID + "::" + string(req.UploadRoute) + "::" + string(req.DestinationType) + "::" + req.TargetFolderID
 }
 
 func (s *service) withInflight(_ stdctx.Context, key string, fn func() (*RestoreResult, error)) (*RestoreResult, error) {

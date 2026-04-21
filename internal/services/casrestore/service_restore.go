@@ -25,20 +25,26 @@ func (s *service) ensureRestoredOnce(ctx appctx.Context, req RestoreRequest) (re
 	if req.MountPointID <= 0 {
 		return nil, fmt.Errorf("mountPointID不能为空")
 	}
-	if req.Target == "" {
-		req.Target = RestoreTargetPerson
+	if req.UploadRoute == "" {
+		// 默认路线是家庭优先；这是产品默认值，不等于最终目录一定是家庭目录。
+		req.UploadRoute = UploadRouteFamily
+	}
+	if req.DestinationType == "" {
+		// 最终目录类型必须显式给出；它和 UploadRoute 是两个独立维度。
+		return nil, fmt.Errorf("destinationType不能为空")
 	}
 	if req.TargetFolderID == "" {
 		return nil, fmt.Errorf("targetFolderID不能为空")
 	}
 
-	ctx.Logger.Info("CAS恢复开始(family-first, configurable-target)",
+	ctx.Logger.Info("CAS恢复开始(route + destination separated)",
 		zap.Int64("storage_id", req.StorageID),
 		zap.Int64("mount_point_id", req.MountPointID),
 		zap.Int64("cas_virtual_id", req.CasVirtualID),
 		zap.String("cas_file_id", req.CasFileID),
+		zap.String("upload_route", string(req.UploadRoute)),
+		zap.String("destination_type", string(req.DestinationType)),
 		zap.String("target_folder_id", req.TargetFolderID),
-		zap.String("target", string(req.Target)),
 	)
 
 	record, err := s.getOrCreateRecord(ctx, req)
@@ -74,22 +80,39 @@ func (s *service) ensureRestoredOnce(ctx appctx.Context, req RestoreRequest) (re
 		return nil, fmt.Errorf("创建PanClient失败")
 	}
 
-	familyResult, familyErr := (&familyRestoreAdapter{}).TryRestore(panClient, req.Target, req.TargetFolderID, restoreName, casInfo)
-	if familyErr != nil {
-		return nil, fmt.Errorf("family-first恢复失败: %w", familyErr)
-	}
-
 	result = &RestoreResult{
-		RestoredFileID:   familyResult.RestoredFileID,
-		RestoredFileName: familyResult.RestoredFileName,
-		TargetFolderID:   req.TargetFolderID,
-		Target:           req.Target,
-		FamilyID:         familyResult.FamilyID,
-		CasInfo:          casInfo,
+		TargetFolderID:  req.TargetFolderID,
+		UploadRoute:     req.UploadRoute,
+		DestinationType: req.DestinationType,
+		CasInfo:         casInfo,
 	}
 
-	if req.Target == RestoreTargetFamily {
-		fileID, fileName, verifyErr := s.verifyRestoredInFamilyFolder(ctx, req.MountPointID, familyResult.FamilyID, req.TargetFolderID, restoreName)
+	switch req.UploadRoute {
+	case UploadRoutePerson:
+		personResult, personErr := (&personRestoreAdapter{}).TryRestore(panClient, req.DestinationType, req.TargetFolderID, restoreName, casInfo)
+		if personErr != nil {
+			return nil, fmt.Errorf("个人路线恢复失败: %w", personErr)
+		}
+		result.RestoredFileID = personResult.RestoredFileID
+		result.RestoredFileName = personResult.RestoredFileName
+		familyID, pickErr := (&familyRestoreAdapter{}).pickFamilyID(panClient)
+		if pickErr == nil {
+			result.FamilyID = familyID
+		}
+	case UploadRouteFamily:
+		familyResult, familyErr := (&familyRestoreAdapter{}).TryRestore(panClient, req.DestinationType, req.TargetFolderID, restoreName, casInfo)
+		if familyErr != nil {
+			return nil, fmt.Errorf("家庭路线恢复失败: %w", familyErr)
+		}
+		result.RestoredFileID = familyResult.RestoredFileID
+		result.RestoredFileName = familyResult.RestoredFileName
+		result.FamilyID = familyResult.FamilyID
+	default:
+		return nil, fmt.Errorf("不支持的uploadRoute: %s", req.UploadRoute)
+	}
+
+	if req.DestinationType == DestinationTypeFamily {
+		fileID, fileName, verifyErr := s.verifyRestoredInFamilyFolder(ctx, req.MountPointID, result.FamilyID, req.TargetFolderID, restoreName)
 		if verifyErr != nil {
 			return nil, verifyErr
 		}

@@ -9,19 +9,19 @@ import (
 	"github.com/xxcheng123/cloudpan189-share/internal/services/casparser"
 )
 
+// familyRestoreAdapter 负责“家庭路线”的秒传恢复。
+// 注意：这里的“家庭路线”只描述上传/秒传路径，不代表最终目录一定是家庭目录。
 type familyRestoreAdapter struct{}
 
 type familyRestoreResult struct {
 	FamilyID         int64
 	RestoredFileID   string
 	RestoredFileName string
-	Target           RestoreTarget
-	TargetFolderID   string
 }
 
 func (a *familyRestoreAdapter) TryRestore(
 	panClient *cloudpan.PanClient,
-	target RestoreTarget,
+	destinationType DestinationType,
 	targetFolderID string,
 	fileName string,
 	info *casparser.CasInfo,
@@ -32,9 +32,6 @@ func (a *familyRestoreAdapter) TryRestore(
 	if info == nil {
 		return nil, errors.New("CAS信息不能为空")
 	}
-	if target == "" {
-		target = RestoreTargetPerson
-	}
 	familyID, err := a.pickFamilyID(panClient)
 	if err != nil {
 		return nil, err
@@ -43,8 +40,9 @@ func (a *familyRestoreAdapter) TryRestore(
 		fileName = info.Name
 	}
 
+	// 家庭路线下，家庭目录可直接作为上传父目录；若最终目标是个人目录，则先落家庭，再转个人。
 	familyParentID := ""
-	if target == RestoreTargetFamily {
+	if destinationType == DestinationTypeFamily {
 		familyParentID = targetFolderID
 	}
 
@@ -92,10 +90,8 @@ func (a *familyRestoreAdapter) TryRestore(
 		FamilyID:         familyID,
 		RestoredFileID:   commitRes.Id,
 		RestoredFileName: commitRes.Name,
-		Target:           target,
-		TargetFolderID:   targetFolderID,
 	}
-	if target == RestoreTargetFamily {
+	if destinationType == DestinationTypeFamily {
 		return result, nil
 	}
 

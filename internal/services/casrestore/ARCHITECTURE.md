@@ -1,22 +1,39 @@
 # CAS Restore Architecture
 
-## Upload / restore invariant
+## Two dimensions that must not be mixed
 
-For cloud189 CAS restore, **all upload-style restore flows must go through family cloud first**.
+### 1) UploadRoute
+Describes which instant-upload / second-pass route is used to restore the file.
 
-Required order:
+- `family` — family route, default
+- `person` — person route
 
-1. Second-pass / instant restore into **family cloud**
-2. Then choose the final target by configuration:
-   - transfer/save into **personal cloud**, or
-   - keep the restored file in **family cloud**
-3. Verify the file actually appears in the selected target folder
+This is **not** the same thing as the final folder type.
 
-## Forbidden path
+### 2) DestinationType
+Describes where the restored file should finally live.
 
-- Direct person upload / direct person instant-restore as the primary restore path
+- `family` — final folder belongs to family cloud
+- `person` — final folder belongs to personal cloud
 
-## Product implication
+This is **not** the same thing as the upload route.
 
-Backend restore requests must carry a target selector (`person` or `family`).
-Frontend can expose this as a switch without changing the family-first invariant.
+## Supported combinations
+
+Examples:
+
+- `uploadRoute=family`, `destinationType=family`
+- `uploadRoute=family`, `destinationType=person`
+- `uploadRoute=person`, `destinationType=person`
+- `uploadRoute=person`, `destinationType=family`
+
+## Product defaults
+
+- Default `uploadRoute` = `family`
+- `destinationType` should be explicit in requests/UI
+- `targetFolderID` only means the final folder ID; it must never be reused to imply upload route semantics
+
+## Coding note
+
+When editing this module, always keep comments around `UploadRoute`, `DestinationType`, and `TargetFolderID`.
+They exist specifically to prevent semantic confusion.
