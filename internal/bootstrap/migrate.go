@@ -21,6 +21,7 @@ func migrateDB(db *gorm.DB) (err error) {
 		new(models.AutoIngestPlan),
 		new(models.LoginLog),
 		new(models.MediaConfig),
+		new(models.CasMediaRecord),
 	)
 }
 
