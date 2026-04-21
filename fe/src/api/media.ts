@@ -57,6 +57,30 @@ export const toggleMediaConfig = (data: ConfigToggleRequest): Promise<ApiRespons
 
 // ===== 媒体操作（Media Operations）相关接口 =====
 
+export type CasUploadRoute = 'family' | 'person'
+export type CasDestinationType = 'family' | 'person'
+
+export interface RestoreCasRequest {
+  storageId?: number
+  mountPointId?: number
+  casFileId?: string
+  casFileName?: string
+  casVirtualId?: number
+  casPath?: string
+  uploadRoute?: CasUploadRoute
+  destinationType: CasDestinationType
+  targetFolderId: string
+}
+
+export interface RestoreCasResult {
+  restoredFileId: string
+  restoredFileName: string
+  targetFolderId: string
+  uploadRoute: CasUploadRoute
+  destinationType: CasDestinationType
+  familyId?: number
+}
+
 // 清理媒体文件 - 清理媒体存储路径下的所有媒体文件
 export const clearMediaFiles = (): Promise<ApiResponse> => {
   return api.post('/media/clear').then((res) => res.data)
@@ -65,4 +89,13 @@ export const clearMediaFiles = (): Promise<ApiResponse> => {
 // 重建strm文件 - 扫描所有挂载点并重新生成strm文件
 export const rebuildStrmFiles = (): Promise<ApiResponse> => {
   return api.post('/media/rebuild_strm_file').then((res) => res.data)
+}
+
+// 手动触发一次 CAS 恢复。
+// 注意：这里只暴露当前 reference-backed 的组合：
+// - person -> person
+// - family -> family
+// - family -> person
+export const restoreCas = (data: RestoreCasRequest): Promise<ApiResponse<RestoreCasResult>> => {
+  return api.post('/media/restore_cas', data).then((res) => res.data)
 }
