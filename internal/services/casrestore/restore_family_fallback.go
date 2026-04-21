@@ -11,17 +11,29 @@ import (
 
 type familyRestoreAdapter struct{}
 
+type familyRestoreResult struct {
+	FamilyID         int64
+	RestoredFileID   string
+	RestoredFileName string
+	Target           RestoreTarget
+	TargetFolderID   string
+}
+
 func (a *familyRestoreAdapter) TryRestore(
 	panClient *cloudpan.PanClient,
+	target RestoreTarget,
 	targetFolderID string,
 	fileName string,
 	info *casparser.CasInfo,
-) (*personRestoreResult, error) {
+) (*familyRestoreResult, error) {
 	if panClient == nil {
 		return nil, errors.New("PanClient不能为空")
 	}
 	if info == nil {
 		return nil, errors.New("CAS信息不能为空")
+	}
+	if target == "" {
+		target = RestoreTargetPerson
 	}
 	familyID, err := a.pickFamilyID(panClient)
 	if err != nil {
@@ -31,9 +43,14 @@ func (a *familyRestoreAdapter) TryRestore(
 		fileName = info.Name
 	}
 
+	familyParentID := ""
+	if target == RestoreTargetFamily {
+		familyParentID = targetFolderID
+	}
+
 	createRes, apiErr := panClient.AppFamilyCreateUploadFile(&cloudpan.AppCreateUploadFileParam{
 		FamilyId:       familyID,
-		ParentFolderId: "",
+		ParentFolderId: familyParentID,
 		FileName:       fileName,
 		Size:           info.Size,
 		Md5:            info.MD5,
@@ -71,6 +88,17 @@ func (a *familyRestoreAdapter) TryRestore(
 		return nil, fmt.Errorf("家庭恢复提交成功但未返回文件ID")
 	}
 
+	result := &familyRestoreResult{
+		FamilyID:         familyID,
+		RestoredFileID:   commitRes.Id,
+		RestoredFileName: commitRes.Name,
+		Target:           target,
+		TargetFolderID:   targetFolderID,
+	}
+	if target == RestoreTargetFamily {
+		return result, nil
+	}
+
 	ok, apiErr := panClient.AppFamilySaveFileToPersonCloud(familyID, []string{commitRes.Id})
 	if apiErr != nil {
 		return nil, errors.Wrap(apiErr, "家庭文件回灌个人云失败")
@@ -79,10 +107,18 @@ func (a *familyRestoreAdapter) TryRestore(
 		return nil, fmt.Errorf("家庭文件回灌个人云失败")
 	}
 
-	return &personRestoreResult{
-		RestoredFileID:   commitRes.Id,
-		RestoredFileName: commitRes.Name,
-	}, nil
+	if targetFolderID != "" {
+		moved, apiErr := panClient.AppMoveFile([]string{commitRes.Id}, targetFolderID)
+		if apiErr != nil {
+			return nil, errors.Wrap(apiErr, "回灌个人云后移动文件失败")
+		}
+		if moved != nil && len(moved.FileList) > 0 && moved.FileList[0] != nil {
+			result.RestoredFileID = moved.FileList[0].FileId
+			result.RestoredFileName = moved.FileList[0].FileName
+		}
+	}
+
+	return result, nil
 }
 
 func (a *familyRestoreAdapter) pickFamilyID(panClient *cloudpan.PanClient) (int64, error) {

@@ -14,6 +14,13 @@ import (
 	mountpointSvi "github.com/xxcheng123/cloudpan189-share/internal/services/mountpoint"
 )
 
+type RestoreTarget string
+
+const (
+	RestoreTargetPerson RestoreTarget = "person"
+	RestoreTargetFamily RestoreTarget = "family"
+)
+
 type RestoreRequest struct {
 	StorageID      int64
 	MountPointID   int64
@@ -21,12 +28,15 @@ type RestoreRequest struct {
 	CasFileName    string
 	CasVirtualID   int64
 	TargetFolderID string
+	Target         RestoreTarget
 }
 
 type RestoreResult struct {
 	RestoredFileID   string
 	RestoredFileName string
 	TargetFolderID   string
+	Target           RestoreTarget
+	FamilyID         int64
 	CasInfo          *casparser.CasInfo
 }
 
@@ -63,7 +73,7 @@ func NewService(svc bootstrap.ServiceContext) Service {
 }
 
 func inflightKey(req RestoreRequest) string {
-	return req.CasFileID + "::" + req.TargetFolderID
+	return req.CasFileID + "::" + string(req.Target) + "::" + req.TargetFolderID
 }
 
 func (s *service) withInflight(_ stdctx.Context, key string, fn func() (*RestoreResult, error)) (*RestoreResult, error) {

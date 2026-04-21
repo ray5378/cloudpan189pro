@@ -25,16 +25,20 @@ func (s *service) ensureRestoredOnce(ctx appctx.Context, req RestoreRequest) (re
 	if req.MountPointID <= 0 {
 		return nil, fmt.Errorf("mountPointID不能为空")
 	}
+	if req.Target == "" {
+		req.Target = RestoreTargetPerson
+	}
 	if req.TargetFolderID == "" {
 		return nil, fmt.Errorf("targetFolderID不能为空")
 	}
 
-	ctx.Logger.Info("CAS恢复开始(family-first)",
+	ctx.Logger.Info("CAS恢复开始(family-first, configurable-target)",
 		zap.Int64("storage_id", req.StorageID),
 		zap.Int64("mount_point_id", req.MountPointID),
 		zap.Int64("cas_virtual_id", req.CasVirtualID),
 		zap.String("cas_file_id", req.CasFileID),
 		zap.String("target_folder_id", req.TargetFolderID),
+		zap.String("target", string(req.Target)),
 	)
 
 	record, err := s.getOrCreateRecord(ctx, req)
@@ -70,21 +74,34 @@ func (s *service) ensureRestoredOnce(ctx appctx.Context, req RestoreRequest) (re
 		return nil, fmt.Errorf("创建PanClient失败")
 	}
 
-	familyResult, familyErr := (&familyRestoreAdapter{}).TryRestore(panClient, req.TargetFolderID, restoreName, casInfo)
+	familyResult, familyErr := (&familyRestoreAdapter{}).TryRestore(panClient, req.Target, req.TargetFolderID, restoreName, casInfo)
 	if familyErr != nil {
 		return nil, fmt.Errorf("family-first恢复失败: %w", familyErr)
 	}
 
-	fileID, fileName, verifyErr := s.verifyRestoredInPersonFolder(ctx, req.MountPointID, req.TargetFolderID, restoreName)
-	if verifyErr != nil {
-		return nil, verifyErr
-	}
-	result = normalizeRestoreResult(&RestoreResult{
+	result = &RestoreResult{
 		RestoredFileID:   familyResult.RestoredFileID,
 		RestoredFileName: familyResult.RestoredFileName,
 		TargetFolderID:   req.TargetFolderID,
+		Target:           req.Target,
+		FamilyID:         familyResult.FamilyID,
 		CasInfo:          casInfo,
-	}, fileID, fileName, req.TargetFolderID)
+	}
+
+	if req.Target == RestoreTargetFamily {
+		fileID, fileName, verifyErr := s.verifyRestoredInFamilyFolder(ctx, req.MountPointID, familyResult.FamilyID, req.TargetFolderID, restoreName)
+		if verifyErr != nil {
+			return nil, verifyErr
+		}
+		result = normalizeRestoreResult(result, fileID, fileName, req.TargetFolderID)
+	} else {
+		fileID, fileName, verifyErr := s.verifyRestoredInPersonFolder(ctx, req.MountPointID, req.TargetFolderID, restoreName)
+		if verifyErr != nil {
+			return nil, verifyErr
+		}
+		result = normalizeRestoreResult(result, fileID, fileName, req.TargetFolderID)
+	}
+
 	if err = s.markRestored(ctx, record.ID, result); err != nil {
 		return nil, err
 	}

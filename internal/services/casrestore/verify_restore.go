@@ -28,7 +28,27 @@ func (s *service) verifyRestoredInPersonFolder(ctx appctx.Context, mountPointID 
 			return item.ID, item.Name, nil
 		}
 	}
-	return "", "", fmt.Errorf("未在目标目录中找到恢复后的文件: %s", expectedName)
+	return "", "", fmt.Errorf("未在个人目标目录中找到恢复后的文件: %s", expectedName)
+}
+
+func (s *service) verifyRestoredInFamilyFolder(ctx appctx.Context, mountPointID int64, familyID int64, targetFolderID string, expectedName string) (string, string, error) {
+	token, err := s.loadMountAuthToken(ctx, mountPointID)
+	if err != nil {
+		return "", "", err
+	}
+	resp, err := s.cloudBridgeService.FamilyFileList(ctx, token, fmt.Sprintf("%d", familyID), targetFolderID, 1, 200)
+	if err != nil {
+		return "", "", err
+	}
+	for _, item := range resp.Data {
+		if item == nil || item.IsFolder == 1 {
+			continue
+		}
+		if strings.EqualFold(strings.TrimSpace(item.Name), strings.TrimSpace(expectedName)) {
+			return item.ID, item.Name, nil
+		}
+	}
+	return "", "", fmt.Errorf("未在家庭目标目录中找到恢复后的文件: %s", expectedName)
 }
 
 func (s *service) loadMountAuthToken(ctx appctx.Context, mountPointID int64) (cloudbridgeSvi.AuthToken, error) {
