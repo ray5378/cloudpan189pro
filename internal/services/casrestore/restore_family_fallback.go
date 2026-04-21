@@ -15,6 +15,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/tickstep/cloudpan189-api/cloudpan"
+	"github.com/tickstep/cloudpan189-api/cloudpan/apiutil"
 	"github.com/xxcheng123/cloudpan189-share/internal/services/appsession"
 	"github.com/xxcheng123/cloudpan189-share/internal/services/casparser"
 )
@@ -188,10 +189,79 @@ func (a *familyRestoreAdapter) pickFamilyID(panClient *cloudpan.PanClient) (int6
 	if apiErr != nil {
 		return 0, errors.Wrap(apiErr, "获取家庭列表失败")
 	}
-	if resp == nil || len(resp.FamilyInfoList) == 0 || resp.FamilyInfoList[0] == nil {
+	if resp == nil || len(resp.FamilyInfoList) == 0 {
 		return 0, fmt.Errorf("当前账号没有可用家庭")
 	}
-	return resp.FamilyInfoList[0].FamilyId, nil
+	for _, item := range resp.FamilyInfoList {
+		if item != nil && item.UserRole == 1 && item.FamilyId > 0 {
+			return item.FamilyId, nil
+		}
+	}
+	for _, item := range resp.FamilyInfoList {
+		if item != nil && item.FamilyId > 0 {
+			return item.FamilyId, nil
+		}
+	}
+	return 0, fmt.Errorf("当前账号没有可用家庭")
+}
+
+func (a *familyRestoreAdapter) getFamilyRootFolderID(session *appsession.Session, familyID int64) (string, error) {
+	if session == nil {
+		return "", fmt.Errorf("AppSession不能为空")
+	}
+	if familyID <= 0 {
+		return "", fmt.Errorf("家庭中转不可用: 当前账号没有家庭组")
+	}
+	targetURL := fmt.Sprintf("https://api.cloud.189.cn/family/file/listFiles.action?familyId=%d&folderId=&needPath=true&pageNum=1&pageSize=1", familyID)
+	req, err := http.NewRequest(http.MethodGet, targetURL, nil)
+	if err != nil {
+		return "", err
+	}
+	dateOfGmt := apiutil.DateOfGmtStr()
+	req.Header.Set("Accept", "application/json;charset=UTF-8")
+	req.Header.Set("Date", dateOfGmt)
+	req.Header.Set("SessionKey", session.Token.FamilySessionKey)
+	req.Header.Set("Signature", apiutil.SignatureOfHmac(session.Token.FamilySessionSecret, session.Token.FamilySessionKey, http.MethodGet, targetURL, dateOfGmt))
+	req.Header.Set("X-Request-ID", apiutil.XRequestId())
+	client := &http.Client{Timeout: 15 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	if resp.StatusCode >= 400 {
+		return "", fmt.Errorf("获取家庭根目录ID失败: http %d: %s", resp.StatusCode, string(body))
+	}
+	var parsed struct {
+		Path []struct {
+			FileID string `json:"fileId"`
+		} `json:"path"`
+		FileListAO struct {
+			Path []struct {
+				FileID string `json:"fileId"`
+			} `json:"path"`
+		} `json:"fileListAO"`
+	}
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return "", err
+	}
+	for i := len(parsed.Path) - 1; i >= 0; i-- {
+		fileID := strings.TrimSpace(parsed.Path[i].FileID)
+		if fileID != "" && fileID != "-11" && fileID != "-16" {
+			return fileID, nil
+		}
+	}
+	if len(parsed.FileListAO.Path) > 0 {
+		fileID := strings.TrimSpace(parsed.FileListAO.Path[0].FileID)
+		if fileID != "" {
+			return fileID, nil
+		}
+	}
+	return "", nil
 }
 
 // copyFamilyFileToPersonal 严格参照 cloud189-auto-save 的 _copyFamilyFileToPersonal：
