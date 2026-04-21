@@ -6,14 +6,20 @@ import (
 
 	"github.com/xxcheng123/cloudpan189-share/internal/bootstrap"
 	appctx "github.com/xxcheng123/cloudpan189-share/internal/framework/context"
+	"github.com/xxcheng123/cloudpan189-share/internal/services/appsession"
 	"github.com/xxcheng123/cloudpan189-share/internal/services/casparser"
 	"github.com/xxcheng123/cloudpan189-share/internal/services/casrecord"
+	cloudbridgeSvi "github.com/xxcheng123/cloudpan189-share/internal/services/cloudbridge"
+	cloudtokenSvi "github.com/xxcheng123/cloudpan189-share/internal/services/cloudtoken"
+	mountpointSvi "github.com/xxcheng123/cloudpan189-share/internal/services/mountpoint"
 )
 
 type RestoreRequest struct {
 	StorageID      int64
+	MountPointID   int64
 	CasFileID      string
 	CasFileName    string
+	CasVirtualID   int64
 	TargetFolderID string
 }
 
@@ -29,10 +35,11 @@ type Service interface {
 }
 
 type service struct {
-	svc        bootstrap.ServiceContext
-	recordSvc  casrecord.Service
-	inflightMu sync.Mutex
-	inflight   map[string]*restoreCall
+	svc               bootstrap.ServiceContext
+	recordSvc         casrecord.Service
+	appSessionService appsession.Service
+	inflightMu        sync.Mutex
+	inflight          map[string]*restoreCall
 }
 
 type restoreCall struct {
@@ -42,10 +49,14 @@ type restoreCall struct {
 }
 
 func NewService(svc bootstrap.ServiceContext) Service {
+	cloudTokenSvc := cloudtokenSvi.NewService(svc)
+	cloudBridgeSvc := cloudbridgeSvi.NewService(svc)
+	mountPointSvc := mountpointSvi.NewService(svc, cloudTokenSvc, cloudBridgeSvc)
 	return &service{
-		svc:       svc,
-		recordSvc: casrecord.NewService(svc),
-		inflight:  make(map[string]*restoreCall),
+		svc:               svc,
+		recordSvc:         casrecord.NewService(svc),
+		appSessionService: appsession.NewService(svc, cloudTokenSvc, mountPointSvc),
+		inflight:          make(map[string]*restoreCall),
 	}
 }
 
