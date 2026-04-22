@@ -297,6 +297,10 @@ func (h *handler) collectSubscribeShareCAS(ctx context.Context, runtime *casColl
 }
 
 func (h *handler) tryCollectCASFromVirtualFile(ctx context.Context, file *models.VirtualFile) error {
+	return h.tryCollectCASFromVirtualFileWithRetry(ctx, file, 0)
+}
+
+func (h *handler) tryCollectCASFromVirtualFileWithRetry(ctx context.Context, file *models.VirtualFile, retryCount int) error {
 	cfg := shared.SettingAddition
 	if !cfg.CasTargetEnabled || !cfg.CasAutoCollectEnabled {
 		return nil
@@ -398,6 +402,9 @@ func (h *handler) tryCollectCASFromVirtualFile(ctx context.Context, file *models
 	switch file.OsType {
 	case models.OsTypeSubscribeShareFile:
 		if err := h.collectSubscribeShareCAS(ctx, runtime, panClient, targetFolderID, file); err != nil {
+			// 这里是“订阅 .cas 自动转存”的 SHARE_SAVE 主链。
+			// 失败后不写缓存，并且只安排一次“5 分钟后重新发起新的 SHARE_SAVE”延迟重试。
+			h.scheduleRetryCASCollect(ctx, file, retryCount, err)
 			return err
 		}
 	case models.OsTypeShareFile:
