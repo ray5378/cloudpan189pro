@@ -47,7 +47,7 @@ func (h *handler) PlayCas() httpcontext.HandlerFunc {
 			return
 		}
 
-		targetFolderID, err := h.resolvePlaybackTargetFolder(ctx, record, setting)
+		targetFolderID, familyID, err := h.resolvePlaybackTargetFolder(ctx, record, setting)
 		if err != nil {
 			ctx.GetContext().Logger.Error("CAS播放入口解析目标目录失败", zap.Int64("record_id", recordID), zap.Error(err))
 			ctx.String(http.StatusBadGateway, fmt.Sprintf("resolve playback target folder failed: %v", err))
@@ -55,10 +55,7 @@ func (h *handler) PlayCas() httpcontext.HandlerFunc {
 		}
 
 		localCASPath := filepath.Join("/local_cas", filepath.FromSlash(strings.TrimPrefix(strings.TrimSpace(record.CasFilePath), "/")))
-		destinationType := casrestore.DestinationTypePerson
-		if strings.EqualFold(strings.TrimSpace(setting.CasTargetType), "family") {
-			destinationType = casrestore.DestinationTypeFamily
-		}
+		destinationType := casrestore.DestinationTypeFamily
 
 		result, err := h.casRestoreService.EnsureRestoredFromLocalCAS(ctx.GetContext(), casrestore.RestoreRequest{
 			StorageID:       record.StorageID,
@@ -70,6 +67,7 @@ func (h *handler) PlayCas() httpcontext.HandlerFunc {
 			UploadRoute:     casrestore.UploadRouteFamily,
 			DestinationType: destinationType,
 			TargetFolderID:  targetFolderID,
+			FamilyID:        familyID,
 		})
 		if err != nil {
 			ctx.GetContext().Logger.Error("CAS播放入口恢复失败", zap.Int64("record_id", recordID), zap.Error(err))
@@ -87,6 +85,14 @@ func (h *handler) PlayCas() httpcontext.HandlerFunc {
 			record = freshRecord
 			record.RestoredFileID = result.RestoredFileID
 		}
+		setting.CasTargetType = "family"
+		if strings.TrimSpace(setting.CasTargetFamilyId) == "" {
+			if result != nil && result.FamilyID > 0 {
+				setting.CasTargetFamilyId = strconv.FormatInt(result.FamilyID, 10)
+			} else if familyID > 0 {
+				setting.CasTargetFamilyId = strconv.FormatInt(familyID, 10)
+			}
+		}
 
 		directLink, ok := h.tryDirectPlaybackLink(ctx, record, setting)
 		if !ok || strings.TrimSpace(directLink) == "" {
@@ -97,32 +103,48 @@ func (h *handler) PlayCas() httpcontext.HandlerFunc {
 	}
 }
 
-func (h *handler) resolvePlaybackTargetFolder(ctx *httpcontext.Context, record *models.CasMediaRecord, setting models.SettingAddition) (string, error) {
+func (h *handler) resolvePlaybackTargetFolder(ctx *httpcontext.Context, record *models.CasMediaRecord, setting models.SettingAddition) (string, int64, error) {
 	baseTargetFolderID := strings.TrimSpace(setting.CasTargetFolderId)
+	if strings.TrimSpace(setting.CasTargetType) != "family" {
+		baseTargetFolderID = "-11"
+	}
 	if baseTargetFolderID == "" {
 		baseTargetFolderID = "-11"
 	}
 	relDir := strings.Trim(strings.TrimPrefix(path.Dir(strings.TrimSpace(record.CasFilePath)), "/"), " ")
 	if relDir == "" || relDir == "." || h.appSessionService == nil {
-		return baseTargetFolderID, nil
+		return baseTargetFolderID, 0, nil
 	}
 	session, err := h.appSessionService.GetByTokenID(ctx.GetContext(), setting.CasTargetTokenId)
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
 	webToken := cloudpan.WebLoginToken{}
 	if cookie := cloudpan.RefreshCookieToken(session.Token.SessionKey); cookie != "" {
 		webToken.CookieLoginUser = cookie
 	}
 	panClient := cloudpan.NewPanClient(webToken, session.Token)
-	folder, apiErr := panClient.AppMkdirRecursive(0, baseTargetFolderID, relDir, 0, strings.Split(relDir, "/"))
+	familyID := int64(0)
+	if strings.TrimSpace(setting.CasTargetFamilyId) != "" {
+		if parsed, perr := strconv.ParseInt(strings.TrimSpace(setting.CasTargetFamilyId), 10, 64); perr == nil {
+			familyID = parsed
+		}
+	}
+	if familyID <= 0 {
+		return "", 0, fmt.Errorf("未配置CAS指定恢复位置(casTargetFamilyId)")
+	}
+	familyParentID := baseTargetFolderID
+	if familyParentID == "-11" {
+		familyParentID = ""
+	}
+	folder, apiErr := panClient.AppMkdirRecursive(familyID, familyParentID, relDir, 0, strings.Split(relDir, "/"))
 	if apiErr != nil {
-		return "", apiErr
+		return "", 0, apiErr
 	}
 	if folder == nil || strings.TrimSpace(folder.FileId) == "" {
-		return "", fmt.Errorf("创建播放目标目录失败: 未返回最终目标目录ID relativeDir=%s", relDir)
+		return "", 0, fmt.Errorf("创建播放目标目录失败: 未返回最终目标目录ID relativeDir=%s", relDir)
 	}
-	return strings.TrimSpace(folder.FileId), nil
+	return strings.TrimSpace(folder.FileId), familyID, nil
 }
 
 func (h *handler) tryDirectPlaybackLink(ctx *httpcontext.Context, record *models.CasMediaRecord, setting models.SettingAddition) (string, bool) {
@@ -137,6 +159,31 @@ func (h *handler) tryDirectPlaybackLink(ctx *httpcontext.Context, record *models
 
 	if strings.EqualFold(strings.TrimSpace(setting.CasTargetType), "family") {
 		familyID := strings.TrimSpace(setting.CasTargetFamilyId)
+		if familyID == "" && h.appSessionService != nil {
+			if session, serr := h.appSessionService.GetByTokenID(ctx.GetContext(), setting.CasTargetTokenId); serr == nil && session != nil {
+				webToken := cloudpan.WebLoginToken{}
+				if cookie := cloudpan.RefreshCookieToken(session.Token.SessionKey); cookie != "" {
+					webToken.CookieLoginUser = cookie
+				}
+				panClient := cloudpan.NewPanClient(webToken, session.Token)
+				if families, ferr := panClient.AppFamilyGetFamilyList(); ferr == nil && families != nil {
+					for _, item := range families.FamilyInfoList {
+						if item != nil && item.UserRole == 1 {
+							familyID = strconv.FormatInt(item.FamilyId, 10)
+							break
+						}
+					}
+					if familyID == "" {
+						for _, item := range families.FamilyInfoList {
+							if item != nil {
+								familyID = strconv.FormatInt(item.FamilyId, 10)
+								break
+							}
+						}
+					}
+				}
+			}
+		}
 		if familyID == "" {
 			return "", false
 		}

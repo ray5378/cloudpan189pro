@@ -168,11 +168,6 @@ func (s *service) ensureRestoredOnce(ctx appctx.Context, req RestoreRequest) (re
 		result.RestoredFileName = personResult.RestoredFileName
 		if req.FamilyID > 0 {
 			result.FamilyID = req.FamilyID
-		} else {
-			familyID, pickErr := (&familyRestoreAdapter{}).pickFamilyID(panClient)
-			if pickErr == nil {
-				result.FamilyID = familyID
-			}
 		}
 	case UploadRouteFamily:
 		familyResult, familyErr := (&familyRestoreAdapter{}).TryRestore(session, panClient, req.DestinationType, req.TargetFolderID, restoreName, casInfo)

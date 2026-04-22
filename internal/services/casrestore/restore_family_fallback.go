@@ -76,9 +76,10 @@ func (a *familyRestoreAdapter) TryRestore(
 	if info == nil {
 		return nil, errors.New("CAS信息不能为空")
 	}
-	familyID, err := a.pickFamilyID(panClient)
-	if err != nil {
-		return nil, err
+	familyID := reqFamilyIDFromContext(session)
+	var err error
+	if familyID <= 0 {
+		return nil, fmt.Errorf("未配置CAS指定恢复位置(casTargetFamilyId)")
 	}
 	if fileName == "" {
 		fileName = info.Name

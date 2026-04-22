@@ -130,15 +130,23 @@ func (h *handler) buildRestoreRequest(ctx *httpcontext.Context, req *restoreCasR
 		// 这里沿用 storage/list 的 ID 语义：storageId 对应 mount point root file_id。
 		restoreReq.StorageID = mp.FileId
 	}
-	if h.settingService != nil && restoreReq.DestinationType == casrestoreSvi.DestinationTypeFamily {
-		if latest, qerr := h.settingService.Query(ctx.GetContext()); qerr == nil && latest != nil {
-			addition := latest.Addition
-			if addition.CasTargetType == string(casrestoreSvi.DestinationTypeFamily) && addition.CasTargetFamilyId != "" {
-				if parsed, perr := strconv.ParseInt(addition.CasTargetFamilyId, 10, 64); perr == nil && parsed > 0 {
-					restoreReq.FamilyID = parsed
-				}
-			}
+	if restoreReq.DestinationType == casrestoreSvi.DestinationTypeFamily {
+		if h.settingService == nil {
+			return casrestoreSvi.RestoreRequest{}, fmt.Errorf("缺少系统设置服务，无法读取CAS指定恢复位置")
 		}
+		latest, qerr := h.settingService.Query(ctx.GetContext())
+		if qerr != nil || latest == nil {
+			return casrestoreSvi.RestoreRequest{}, fmt.Errorf("读取CAS指定恢复位置失败")
+		}
+		addition := latest.Addition
+		if addition.CasTargetType != string(casrestoreSvi.DestinationTypeFamily) || addition.CasTargetFamilyId == "" {
+			return casrestoreSvi.RestoreRequest{}, fmt.Errorf("未配置CAS指定恢复位置(casTargetFamilyId)")
+		}
+		parsed, perr := strconv.ParseInt(addition.CasTargetFamilyId, 10, 64)
+		if perr != nil || parsed <= 0 {
+			return casrestoreSvi.RestoreRequest{}, fmt.Errorf("CAS指定恢复位置无效: %s", addition.CasTargetFamilyId)
+		}
+		restoreReq.FamilyID = parsed
 	}
 
 	return restoreReq, nil
