@@ -8,6 +8,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/tickstep/cloudpan189-api/cloudpan"
+	"github.com/tickstep/cloudpan189-api/cloudpan/apiutil"
 	"github.com/xxcheng123/cloudpan189-share/internal/bootstrap"
 	"github.com/xxcheng123/cloudpan189-share/internal/framework/context"
 	"github.com/xxcheng123/cloudpan189-share/internal/repository/models"
@@ -71,7 +72,7 @@ func getSessionByAccessToken(accessToken string) (*appRefreshUserSessionResp, er
 	if accessToken == "" {
 		return nil, errors.New("accessToken为空")
 	}
-	url := fmt.Sprintf("https://api.cloud.189.cn/getSessionForPC.action?appId=%s&accessToken=%s&clientSn=%s&clientType=%s&version=%s&model=%s", "8025431004", accessToken, "cloudpan189pro", "TELEMAC", "1.0.0", "PC")
+	url := fmt.Sprintf("https://api.cloud.189.cn/getSessionForPC.action?appId=%s&accessToken=%s&clientSn=%s&%s", "8025431004", accessToken, apiutil.Uuid(), apiutil.PcClientInfoSuffixParam())
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
