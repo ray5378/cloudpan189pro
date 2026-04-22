@@ -14,6 +14,7 @@ import (
 	"github.com/xxcheng123/cloudpan189-share/internal/consts"
 	"github.com/xxcheng123/cloudpan189-share/internal/framework/context"
 	"github.com/xxcheng123/cloudpan189-share/internal/framework/taskcontext"
+	"github.com/xxcheng123/cloudpan189-share/internal/pkgs/datatypes"
 	"github.com/xxcheng123/cloudpan189-share/internal/pkgs/utils"
 	"github.com/xxcheng123/cloudpan189-share/internal/repository/models"
 	"github.com/xxcheng123/cloudpan189-share/internal/types/apierrcode"
@@ -316,8 +317,8 @@ func (h *handler) ScanFile() taskcontext.HandlerFunc {
 			for cloudId, newFile := range newFileMap {
 				if oldFile, exists := oldFileMap[cloudId]; exists {
 					// 订阅扫描链补字段：即使 rev 不变，也要把新 addition 中补充出来的字段（如 access_url）同步回库。
-					mergeAddition := func(oldAddition, newAddition map[string]any) (map[string]any, bool) {
-						merged := make(map[string]any, len(oldAddition)+len(newAddition))
+					mergeAddition := func(oldAddition, newAddition datatypes.JSONMap) (datatypes.JSONMap, bool) {
+						merged := make(datatypes.JSONMap, len(oldAddition)+len(newAddition))
 						changed := false
 						for k, v := range oldAddition {
 							merged[k] = v
