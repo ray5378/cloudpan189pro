@@ -2,6 +2,7 @@ package media
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/xxcheng123/cloudpan189-share/internal/framework/httpcontext"
 	casrestoreSvi "github.com/xxcheng123/cloudpan189-share/internal/services/casrestore"
@@ -128,6 +129,16 @@ func (h *handler) buildRestoreRequest(ctx *httpcontext.Context, req *restoreCasR
 	if restoreReq.StorageID == 0 {
 		// 这里沿用 storage/list 的 ID 语义：storageId 对应 mount point root file_id。
 		restoreReq.StorageID = mp.FileId
+	}
+	if h.settingService != nil && restoreReq.DestinationType == casrestoreSvi.DestinationTypeFamily {
+		if latest, qerr := h.settingService.Query(ctx.GetContext()); qerr == nil && latest != nil {
+			addition := latest.Addition
+			if addition.CasTargetType == string(casrestoreSvi.DestinationTypeFamily) && addition.CasTargetFamilyId != "" {
+				if parsed, perr := strconv.ParseInt(addition.CasTargetFamilyId, 10, 64); perr == nil && parsed > 0 {
+					restoreReq.FamilyID = parsed
+				}
+			}
+		}
 	}
 
 	return restoreReq, nil
