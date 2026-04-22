@@ -113,7 +113,7 @@ func doAccessTokenFormJSONRequest(accessToken string, targetURL string, params m
 	return nil
 }
 
-func waitForShareSaveTask(accessToken, taskID string, maxWait time.Duration) error {
+func waitForShareSaveTask(ctx context.Context, accessToken, taskID string, maxWait time.Duration) error {
 	if strings.TrimSpace(accessToken) == "" {
 		return fmt.Errorf("自动归集CAS失败: 无法获取AccessToken")
 	}
@@ -128,6 +128,13 @@ func waitForShareSaveTask(accessToken, taskID string, maxWait time.Duration) err
 		}, 15*time.Second, resp); err != nil {
 			return fmt.Errorf("自动归集CAS失败: 查询SHARE_SAVE任务失败: %w", err)
 		}
+		ctx.Info("CAS自动归集轮询SHARE_SAVE任务",
+			zap.String("taskId", taskID),
+			zap.Any("resCode", resp.ResCode),
+			zap.String("resMessage", resp.ResMessage),
+			zap.Int("taskStatus", resp.TaskStatus),
+			zap.Int("failedCount", resp.FailedCount),
+		)
 		if batchRespError(resp.ResCode) {
 			return fmt.Errorf("自动归集CAS失败: 查询SHARE_SAVE任务失败: %s", resp.ResMessage)
 		}
@@ -155,6 +162,13 @@ func (h *handler) collectSubscribeShareCAS(ctx context.Context, panClient *cloud
 	// 优先使用 cloud token 的 accessToken 直连 SHARE_SAVE，避免强依赖 AppLogin(username/password)。
 	if shared.SettingAddition.CasTargetTokenId > 0 {
 		if token, err := h.cloudTokenService.Query(ctx, shared.SettingAddition.CasTargetTokenId); err == nil && token != nil && strings.TrimSpace(token.AccessToken) != "" {
+			ctx.Info("CAS自动归集准备提交SHARE_SAVE任务(accessToken直连)",
+				zap.String("fileName", file.Name),
+				zap.String("fileId", fileID),
+				zap.Int64("shareId", shareID),
+				zap.String("targetFolderId", targetFolderID),
+				zap.Int64("tokenId", shared.SettingAddition.CasTargetTokenId),
+			)
 			resp := new(batchTaskCreateResp)
 			if err := doAccessTokenFormJSONRequest(strings.TrimSpace(token.AccessToken), "https://api.cloud.189.cn/open/batch/createBatchTask.action", map[string]string{
 				"type":           "SHARE_SAVE",
@@ -164,19 +178,31 @@ func (h *handler) collectSubscribeShareCAS(ctx context.Context, panClient *cloud
 			}, 30*time.Second, resp); err != nil {
 				return fmt.Errorf("自动归集CAS失败: 提交SHARE_SAVE任务失败: %w", err)
 			}
+			ctx.Info("CAS自动归集提交SHARE_SAVE任务返回(accessToken直连)",
+				zap.String("fileName", file.Name),
+				zap.Any("resCode", resp.ResCode),
+				zap.String("resMessage", resp.ResMessage),
+				zap.String("taskId", resp.TaskID),
+			)
 			if batchRespError(resp.ResCode) {
 				return fmt.Errorf("自动归集CAS失败: 提交SHARE_SAVE任务失败: %s", resp.ResMessage)
 			}
 			if strings.TrimSpace(resp.TaskID) == "" {
 				return fmt.Errorf("自动归集CAS失败: SHARE_SAVE未返回任务ID")
 			}
-			return waitForShareSaveTask(strings.TrimSpace(token.AccessToken), resp.TaskID, 2*time.Minute)
+			return waitForShareSaveTask(ctx, strings.TrimSpace(token.AccessToken), resp.TaskID, 2*time.Minute)
 		}
 	}
 
 	if panClient == nil {
 		return fmt.Errorf("自动归集CAS失败: 无法获取PanClient")
 	}
+	ctx.Info("CAS自动归集准备提交SHARE_SAVE任务(panClient)",
+		zap.String("fileName", file.Name),
+		zap.String("fileId", fileID),
+		zap.Int64("shareId", shareID),
+		zap.String("targetFolderId", targetFolderID),
+	)
 	taskID, apiErr := panClient.CreateBatchTask(&cloudpan.BatchTaskParam{
 		TypeFlag: cloudpan.BatchTaskTypeShareSave,
 		TaskInfos: cloudpan.BatchTaskInfoList{
@@ -188,6 +214,10 @@ func (h *handler) collectSubscribeShareCAS(ctx context.Context, panClient *cloud
 	if apiErr != nil {
 		return fmt.Errorf("自动归集CAS失败: 提交SHARE_SAVE任务失败: %w", apiErr)
 	}
+	ctx.Info("CAS自动归集提交SHARE_SAVE任务返回(panClient)",
+		zap.String("fileName", file.Name),
+		zap.String("taskId", taskID),
+	)
 	if strings.TrimSpace(taskID) == "" {
 		return fmt.Errorf("自动归集CAS失败: SHARE_SAVE未返回任务ID")
 	}
@@ -202,6 +232,11 @@ func (h *handler) collectSubscribeShareCAS(ctx context.Context, panClient *cloud
 		if result == nil {
 			continue
 		}
+		ctx.Info("CAS自动归集轮询SHARE_SAVE任务(panClient)",
+			zap.String("taskId", taskID),
+			zap.Int("taskStatus", int(result.TaskStatus)),
+			zap.Int("failedCount", result.FailedCount),
+		)
 		lastStatus = result.TaskStatus
 		if result.TaskStatus == cloudpan.BatchTaskStatusOk {
 			return nil
@@ -234,10 +269,20 @@ func (h *handler) tryCollectCASFromVirtualFile(ctx context.Context, file *models
 		return fmt.Errorf("当前自动归集仅先支持保存到个人目录")
 	}
 
+	ctx.Info("CAS自动归集开始获取目标App会话",
+		zap.Int64("tokenId", cfg.CasTargetTokenId),
+		zap.String("fileName", file.Name),
+	)
 	session, err := h.appSessionService.GetByTokenID(ctx, cfg.CasTargetTokenId)
 	if err != nil {
 		return fmt.Errorf("获取CAS目标App会话失败: %w", err)
 	}
+	ctx.Info("CAS自动归集已获取目标App会话",
+		zap.Int64("tokenId", cfg.CasTargetTokenId),
+		zap.Bool("hasSessionKey", strings.TrimSpace(session.Token.SessionKey) != ""),
+		zap.Bool("hasFamilySessionKey", strings.TrimSpace(session.Token.FamilySessionKey) != ""),
+		zap.Bool("hasAccessToken", strings.TrimSpace(session.Token.AccessToken) != ""),
+	)
 	panClient := buildPanClient(session)
 	if panClient == nil {
 		return fmt.Errorf("创建CAS目标PanClient失败")
@@ -253,12 +298,21 @@ func (h *handler) tryCollectCASFromVirtualFile(ctx context.Context, file *models
 		if fullPathErr == nil {
 			relDir := strings.TrimSpace(path.Dir(strings.TrimPrefix(fullPath, "/")))
 			if relDir != "" && relDir != "." {
+				ctx.Info("CAS自动归集准备创建归集目录",
+					zap.String("fullPath", fullPath),
+					zap.String("relativeDir", relDir),
+					zap.String("baseTargetFolderId", targetFolderID),
+				)
 				folder, apiErr := panClient.AppMkdirRecursive(0, targetFolderID, relDir, 0, strings.Split(relDir, "/"))
 				if apiErr != nil {
 					return fmt.Errorf("创建CAS归集目录失败: %w", apiErr)
 				}
 				if folder != nil && folder.FileId != "" {
 					targetFolderID = folder.FileId
+					ctx.Info("CAS自动归集目录创建/复用成功",
+						zap.String("relativeDir", relDir),
+						zap.String("targetFolderId", targetFolderID),
+					)
 				}
 			}
 		}
