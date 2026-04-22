@@ -28,17 +28,7 @@ type UsernameLoginResponse struct {
 func (s *service) UsernameLogin(ctx context.Context, req *UsernameLoginRequest) (resp *UsernameLoginResponse, err error) {
 	loginResult, loginErr := cloudpan.AppLogin(req.Username, req.Password)
 	if loginErr != nil {
-		probeRaw, probeErr := probeAppLogin(req.Username, req.Password)
-		ctx.Error("用户名密码登录失败",
-			zap.Error(loginErr),
-			zap.String("username", req.Username),
-			zap.String("probe_raw", probeRaw),
-			zap.String("probe_error", fmt.Sprint(probeErr)),
-		)
-
-		if probeErr != nil {
-			return nil, errors.Wrap(probeErr, "登录失败")
-		}
+		ctx.Error("用户名密码登录失败", zap.Error(loginErr), zap.String("username", req.Username))
 		return nil, errors.Wrap(loginErr, "登录失败")
 	}
 
