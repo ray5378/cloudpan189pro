@@ -346,6 +346,8 @@ func (h *handler) ScanFile() taskcontext.HandlerFunc {
 						oldFile.Addition = mergedAddition
 					}
 
+					shouldWalkForCAS := shared.SettingAddition.CasTargetEnabled && shared.SettingAddition.CasAutoCollectEnabled
+
 					// 文件存在，检查是否需要更新（通过Rev比较）
 					if oldFile.Rev != newFile.Rev {
 						ctx.Debug("文件存在差异 - rev changed",
@@ -362,7 +364,7 @@ func (h *handler) ScanFile() taskcontext.HandlerFunc {
 							utils.WithField("modify_date", newFile.ModifyDate),
 							utils.WithField("hash", strings.ToLower(newFile.Hash)),
 						)
-					} else if oldFile.IsDir && req.Deep {
+					} else if oldFile.IsDir && (req.Deep || shouldWalkForCAS) {
 						filesToDeep = append(filesToDeep, oldFile)
 					}
 				} else {
@@ -475,7 +477,11 @@ func (h *handler) ScanFile() taskcontext.HandlerFunc {
 			nextWalkFiles = append(createdDirFiles, filesToDeep...)
 
 			if len(nextWalkFiles) > 0 {
-				ctx.Debug("继续执行下次遍历", zap.Int("next_walk_files_len", len(nextWalkFiles)))
+				ctx.Debug("继续执行下次遍历",
+					zap.Int("next_walk_files_len", len(nextWalkFiles)),
+					zap.Bool("deep", req.Deep),
+					zap.Bool("cas_collect_enabled", shared.SettingAddition.CasTargetEnabled && shared.SettingAddition.CasAutoCollectEnabled),
+				)
 			}
 
 			return nextWalkFiles, nil
