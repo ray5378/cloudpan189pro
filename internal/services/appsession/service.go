@@ -99,8 +99,9 @@ func (s *service) getFromCloudToken(ctx context.Context, cloudToken *models.Clou
 		return nil, errors.New("云盘令牌不存在")
 	}
 
-	// 优先使用现有 accessToken 刷出 app session，避免每次都再次用户名密码 AppLogin。
-	if refreshed, err := getSessionByAccessToken(cloudToken.AccessToken); err == nil && refreshed != nil {
+	// 优先使用 app access token 刷出 app session；注意 cloudToken.AccessToken 当前存的是 SSK/open token，不能直接拿来 getSessionForPC。
+	appAccessToken, _ := cloudToken.Addition[models.CloudTokenAdditionAppAccessToken].(string)
+	if refreshed, err := getSessionByAccessToken(appAccessToken); err == nil && refreshed != nil {
 		return &Session{Token: cloudpan.AppLoginToken{
 			SessionKey:          refreshed.SessionKey,
 			SessionSecret:       refreshed.SessionSecret,

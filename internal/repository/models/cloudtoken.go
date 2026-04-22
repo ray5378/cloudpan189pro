@@ -27,6 +27,7 @@ func (c *CloudToken) TableName() string {
 const (
 	CloudTokenAdditionAutoLoginResultKey = "auto_login_result"
 	CloudTokenAdditionAutoLoginTimes     = "auto_login_times"
+	CloudTokenAdditionAppAccessToken     = "app_access_token"
 )
 
 const (

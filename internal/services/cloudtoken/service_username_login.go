@@ -49,6 +49,7 @@ func (s *service) UsernameLogin(ctx context.Context, req *UsernameLoginRequest) 
 		addition := oldToken.Addition
 		addition[models.CloudTokenAdditionAutoLoginResultKey] = fmt.Sprintf("%s, token 刷新成功", time.Now().Format(time.DateTime))
 		addition[models.CloudTokenAdditionAutoLoginTimes] = 0
+		addition[models.CloudTokenAdditionAppAccessToken] = loginResult.AccessToken
 
 		updateMap := map[string]interface{}{
 			"access_token": loginResult.SskAccessToken,
@@ -78,7 +79,9 @@ func (s *service) UsernameLogin(ctx context.Context, req *UsernameLoginRequest) 
 		Username:    req.Username,
 		Password:    req.Password,
 		LoginType:   models.LoginTypePassword,
-		Addition:    map[string]interface{}{},
+		Addition: map[string]interface{}{
+			models.CloudTokenAdditionAppAccessToken: loginResult.AccessToken,
+		},
 	}
 
 	if err = s.getDB(ctx).Create(m).Error; err != nil {
