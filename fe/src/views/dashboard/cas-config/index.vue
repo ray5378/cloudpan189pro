@@ -128,6 +128,7 @@ interface CasSourceForm {
   cloudToken?: number
   sourceType: SourceType
   familyId?: string
+  fixedFamilyId?: string
   parentId: string
   parentName: string
   casAccessPath: string
@@ -176,6 +177,7 @@ const emptySourceForm = (): CasSourceForm => ({
   cloudToken: undefined,
   sourceType: 'person',
   familyId: undefined,
+  fixedFamilyId: undefined,
   parentId: '-11',
   parentName: '根目录',
   casAccessPath: '',
@@ -282,9 +284,24 @@ watch(
     sourceFolderStack.value = []
     sourceForm.parentId = val === 'person' ? '-11' : ''
     sourceForm.parentName = '根目录'
-    sourceForm.familyId = undefined
+    sourceForm.familyId = val === 'family' ? sourceForm.fixedFamilyId : undefined
+    if (val !== 'family') {
+      sourceForm.fixedFamilyId = undefined
+    }
     familyOptions.value = []
     if (val === 'family' && sourceForm.cloudToken) await loadFamilyList()
+  }
+)
+
+watch(
+  () => sourceForm.fixedFamilyId,
+  (val) => {
+    if (sourceForm.sourceType !== 'family') return
+    sourceForm.familyId = val || undefined
+    sourceEntries.value = []
+    sourceFolderStack.value = []
+    sourceForm.parentId = ''
+    sourceForm.parentName = '根目录'
   }
 )
 
@@ -363,6 +380,14 @@ const loadFamilyList = async () => {
       label: `${item.remarkName || item.familyId} (${item.familyId})`,
       value: item.familyId,
     }))
+    if (sourceForm.sourceType === 'family') {
+      if (!sourceForm.fixedFamilyId && familyOptions.value.length > 0) {
+        sourceForm.fixedFamilyId = familyOptions.value[0].value
+      }
+      if (!sourceForm.familyId) {
+        sourceForm.familyId = sourceForm.fixedFamilyId
+      }
+    }
   } finally {
     familyLoading.value = false
   }
@@ -373,8 +398,8 @@ const loadSourceRoot = async () => {
     message.warning('请先选择云盘账号')
     return
   }
-  if (sourceForm.sourceType === 'family' && !sourceForm.familyId) {
-    message.warning('家庭目录模式下请先选择家庭组')
+  if (sourceForm.sourceType === 'family' && !(sourceForm.familyId || sourceForm.fixedFamilyId)) {
+    message.warning('家庭目录模式下请先选择 CAS 指定恢复位置')
     return
   }
   sourceLoading.value = true
@@ -383,7 +408,13 @@ const loadSourceRoot = async () => {
       const res = await getPersonFiles({ pageNum: 1, pageSize: 100, cloudToken: sourceForm.cloudToken, parentId: sourceForm.parentId || '-11' })
       sourceEntries.value = res.data?.data || []
     } else {
-      const res = await getFamilyFiles({ pageNum: 1, pageSize: 100, cloudToken: sourceForm.cloudToken, familyId: sourceForm.familyId!, parentId: sourceForm.parentId || '' })
+      const res = await getFamilyFiles({
+        pageNum: 1,
+        pageSize: 100,
+        cloudToken: sourceForm.cloudToken,
+        familyId: (sourceForm.familyId || sourceForm.fixedFamilyId)!,
+        parentId: sourceForm.parentId || '',
+      })
       sourceEntries.value = res.data?.data || []
     }
   } catch (err: any) {
@@ -437,7 +468,7 @@ const saveSourceConfig = async () => {
     casTargetEnabled: true,
     casTargetTokenId: sourceForm.cloudToken,
     casTargetType: sourceForm.sourceType,
-    casTargetFamilyId: sourceForm.familyId,
+    casTargetFamilyId: sourceForm.fixedFamilyId || sourceForm.familyId,
     casTargetFolderId: savedFolderId,
     casAccessPath: resolvedTargetPath,
     casAutoCollectEnabled: true,
@@ -459,6 +490,7 @@ const loadSourceConfigFromServer = async () => {
   sourceForm.preservePath = addition.casAutoCollectPreservePath !== false
   sourceForm.cloudToken = addition.casTargetTokenId || undefined
   sourceForm.sourceType = (addition.casTargetType as SourceType) || 'person'
+  sourceForm.fixedFamilyId = addition.casTargetFamilyId || undefined
   sourceForm.familyId = addition.casTargetFamilyId || undefined
   sourceForm.parentId = addition.casTargetFolderId || (sourceForm.sourceType === 'person' ? '-11' : '')
   savedSourceFolderId.value = addition.casTargetFolderId || ''

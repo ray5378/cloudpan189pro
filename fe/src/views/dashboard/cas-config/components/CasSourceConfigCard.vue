@@ -7,6 +7,7 @@
   <n-card title="CAS 最终目录" size="small">
     <n-space vertical size="small">
       <n-text depth="3">这里配置的是 CAS 播放恢复时的最终落盘目录。订阅 `.cas` 会自动保存到本地 `/local_cas`，不再需要在这里手工配置本地来源目录。</n-text>
+      <n-text depth="3">当目标类型为家庭云盘目录时，可通过“CAS指定恢复位置”固定家庭空间 ID，避免恢复时在多个家庭间跳来跳去。</n-text>
 
       <n-form :model="sourceForm" label-placement="left" label-width="140px">
         <n-grid :cols="24" :x-gap="16" :y-gap="8">
@@ -48,11 +49,11 @@
           </n-grid-item>
 
           <n-grid-item v-if="sourceForm.sourceType === 'family'" :span="8">
-            <n-form-item label="家庭组">
+            <n-form-item label="CAS指定恢复位置">
               <n-select
-                v-model:value="sourceForm.familyId"
+                v-model:value="sourceForm.fixedFamilyId"
                 :options="familyOptions"
-                placeholder="选择家庭组"
+                placeholder="选择固定家庭空间 ID"
                 :loading="familyLoading"
                 filterable
                 clearable
