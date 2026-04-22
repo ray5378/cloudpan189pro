@@ -33,6 +33,42 @@ func buildPanClient(session *appsession.Session) *cloudpan.PanClient {
 	return cloudpan.NewPanClient(webToken, session.Token)
 }
 
+func (h *handler) getOrCreateCASCollectRuntime(ctx context.Context, tokenID int64) (*casCollectRuntime, error) {
+	cacheKey := fmt.Sprintf("%s:%d", ctx.Trace.ID(), tokenID)
+	if v, ok := h.casCollectRuntimeCache.Load(cacheKey); ok {
+		if runtime, ok := v.(*casCollectRuntime); ok && runtime != nil {
+			return runtime, nil
+		}
+	}
+
+	token, err := h.cloudTokenService.Query(ctx, tokenID)
+	if err != nil {
+		return nil, err
+	}
+	session, err := h.appSessionService.GetByTokenID(ctx, tokenID)
+	if err != nil {
+		return nil, err
+	}
+	runtime := &casCollectRuntime{
+		token:     token,
+		session:   session,
+		panClient: buildPanClient(session),
+	}
+	h.casCollectRuntimeCache.Store(cacheKey, runtime)
+	ctx.Info("CAS自动归集运行时缓存已建立",
+		zap.Int64("tokenId", tokenID),
+		zap.Bool("hasToken", token != nil),
+		zap.Bool("hasSession", session != nil),
+	)
+	return runtime, nil
+}
+
+type casCollectRuntime struct {
+	token     *models.CloudToken
+	session   *appsession.Session
+	panClient *cloudpan.PanClient
+}
+
 type batchTaskCreateResp struct {
 	ResCode    any    `json:"res_code"`
 	ResMessage string `json:"res_message"`
@@ -159,39 +195,37 @@ func (h *handler) collectSubscribeShareCAS(ctx context.Context, panClient *cloud
 		return fmt.Errorf("自动归集CAS失败: 缺少订阅文件ID")
 	}
 
-	// 优先使用 cloud token 的 accessToken 直连 SHARE_SAVE，避免强依赖 AppLogin(username/password)。
-	if shared.SettingAddition.CasTargetTokenId > 0 {
-		if token, err := h.cloudTokenService.Query(ctx, shared.SettingAddition.CasTargetTokenId); err == nil && token != nil && strings.TrimSpace(token.AccessToken) != "" {
-			ctx.Info("CAS自动归集准备提交SHARE_SAVE任务(accessToken直连)",
-				zap.String("fileName", file.Name),
-				zap.String("fileId", fileID),
-				zap.Int64("shareId", shareID),
-				zap.String("targetFolderId", targetFolderID),
-				zap.Int64("tokenId", shared.SettingAddition.CasTargetTokenId),
-			)
-			resp := new(batchTaskCreateResp)
-			if err := doAccessTokenFormJSONRequest(strings.TrimSpace(token.AccessToken), "https://api.cloud.189.cn/open/batch/createBatchTask.action", map[string]string{
-				"type":           "SHARE_SAVE",
-				"taskInfos":      fmt.Sprintf(`[{"fileId":"%s","fileName":"%s","isFolder":0}]`, fileID, strings.ReplaceAll(file.Name, `"`, `\"`)),
-				"targetFolderId": targetFolderID,
-				"shareId":        fmt.Sprintf("%d", shareID),
-			}, 30*time.Second, resp); err != nil {
-				return fmt.Errorf("自动归集CAS失败: 提交SHARE_SAVE任务失败: %w", err)
-			}
-			ctx.Info("CAS自动归集提交SHARE_SAVE任务返回(accessToken直连)",
-				zap.String("fileName", file.Name),
-				zap.Any("resCode", resp.ResCode),
-				zap.String("resMessage", resp.ResMessage),
-				zap.String("taskId", resp.TaskID),
-			)
-			if batchRespError(resp.ResCode) {
-				return fmt.Errorf("自动归集CAS失败: 提交SHARE_SAVE任务失败: %s", resp.ResMessage)
-			}
-			if strings.TrimSpace(resp.TaskID) == "" {
-				return fmt.Errorf("自动归集CAS失败: SHARE_SAVE未返回任务ID")
-			}
-			return waitForShareSaveTask(ctx, strings.TrimSpace(token.AccessToken), resp.TaskID, 2*time.Minute)
+	// 优先使用已复用的 cloud token accessToken 直连 SHARE_SAVE，避免强依赖 AppLogin(username/password)。
+	if runtime, err := h.getOrCreateCASCollectRuntime(ctx, shared.SettingAddition.CasTargetTokenId); err == nil && runtime != nil && runtime.token != nil && strings.TrimSpace(runtime.token.AccessToken) != "" {
+		ctx.Info("CAS自动归集准备提交SHARE_SAVE任务(accessToken直连)",
+			zap.String("fileName", file.Name),
+			zap.String("fileId", fileID),
+			zap.Int64("shareId", shareID),
+			zap.String("targetFolderId", targetFolderID),
+			zap.Int64("tokenId", shared.SettingAddition.CasTargetTokenId),
+		)
+		resp := new(batchTaskCreateResp)
+		if err := doAccessTokenFormJSONRequest(strings.TrimSpace(runtime.token.AccessToken), "https://api.cloud.189.cn/open/batch/createBatchTask.action", map[string]string{
+			"type":           "SHARE_SAVE",
+			"taskInfos":      fmt.Sprintf(`[{"fileId":"%s","fileName":"%s","isFolder":0}]`, fileID, strings.ReplaceAll(file.Name, `"`, `\"`)),
+			"targetFolderId": targetFolderID,
+			"shareId":        fmt.Sprintf("%d", shareID),
+		}, 30*time.Second, resp); err != nil {
+			return fmt.Errorf("自动归集CAS失败: 提交SHARE_SAVE任务失败: %w", err)
 		}
+		ctx.Info("CAS自动归集提交SHARE_SAVE任务返回(accessToken直连)",
+			zap.String("fileName", file.Name),
+			zap.Any("resCode", resp.ResCode),
+			zap.String("resMessage", resp.ResMessage),
+			zap.String("taskId", resp.TaskID),
+		)
+		if batchRespError(resp.ResCode) {
+			return fmt.Errorf("自动归集CAS失败: 提交SHARE_SAVE任务失败: %s", resp.ResMessage)
+		}
+		if strings.TrimSpace(resp.TaskID) == "" {
+			return fmt.Errorf("自动归集CAS失败: SHARE_SAVE未返回任务ID")
+		}
+		return waitForShareSaveTask(ctx, strings.TrimSpace(runtime.token.AccessToken), resp.TaskID, 2*time.Minute)
 	}
 
 	if panClient == nil {
@@ -269,21 +303,24 @@ func (h *handler) tryCollectCASFromVirtualFile(ctx context.Context, file *models
 		return fmt.Errorf("当前自动归集仅先支持保存到个人目录")
 	}
 
-	ctx.Info("CAS自动归集开始获取目标App会话",
+	ctx.Info("CAS自动归集开始获取目标运行时",
 		zap.Int64("tokenId", cfg.CasTargetTokenId),
 		zap.String("fileName", file.Name),
 	)
-	session, err := h.appSessionService.GetByTokenID(ctx, cfg.CasTargetTokenId)
+	runtime, err := h.getOrCreateCASCollectRuntime(ctx, cfg.CasTargetTokenId)
 	if err != nil {
-		return fmt.Errorf("获取CAS目标App会话失败: %w", err)
+		return fmt.Errorf("获取CAS目标运行时失败: %w", err)
 	}
-	ctx.Info("CAS自动归集已获取目标App会话",
+	if runtime.session == nil {
+		return fmt.Errorf("获取CAS目标运行时失败: session为空")
+	}
+	ctx.Info("CAS自动归集已获取目标运行时",
 		zap.Int64("tokenId", cfg.CasTargetTokenId),
-		zap.Bool("hasSessionKey", strings.TrimSpace(session.Token.SessionKey) != ""),
-		zap.Bool("hasFamilySessionKey", strings.TrimSpace(session.Token.FamilySessionKey) != ""),
-		zap.Bool("hasAccessToken", strings.TrimSpace(session.Token.AccessToken) != ""),
+		zap.Bool("hasSessionKey", strings.TrimSpace(runtime.session.Token.SessionKey) != ""),
+		zap.Bool("hasFamilySessionKey", strings.TrimSpace(runtime.session.Token.FamilySessionKey) != ""),
+		zap.Bool("hasAccessToken", strings.TrimSpace(runtime.session.Token.AccessToken) != ""),
 	)
-	panClient := buildPanClient(session)
+	panClient := runtime.panClient
 	if panClient == nil {
 		return fmt.Errorf("创建CAS目标PanClient失败")
 	}

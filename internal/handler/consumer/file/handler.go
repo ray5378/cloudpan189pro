@@ -6,12 +6,14 @@ import (
 	"time"
 
 	"github.com/bytedance/gopkg/util/logger"
+	"github.com/xxcheng123/cloudpan189-share/internal/bootstrap"
 	"github.com/xxcheng123/cloudpan189-share/internal/consts"
 	"github.com/xxcheng123/cloudpan189-share/internal/framework/context"
 	"github.com/xxcheng123/cloudpan189-share/internal/framework/taskcontext"
 	"github.com/xxcheng123/cloudpan189-share/internal/repository/models"
 	"github.com/xxcheng123/cloudpan189-share/internal/shared"
 
+	appsessionSvi "github.com/xxcheng123/cloudpan189-share/internal/services/appsession"
 	cloudbridgeSvi "github.com/xxcheng123/cloudpan189-share/internal/services/cloudbridge"
 	cloudtokenSvi "github.com/xxcheng123/cloudpan189-share/internal/services/cloudtoken"
 	filetasklogSvi "github.com/xxcheng123/cloudpan189-share/internal/services/filetasklog"
@@ -30,17 +32,20 @@ type Handler interface {
 }
 
 type handler struct {
-	logger             *zap.Logger
-	virtualFileService virtualfileSvi.Service
-	cloudBridgeService cloudbridgeSvi.Service
-	cloudTokenService  cloudtokenSvi.Service
-	mountPointService  mountPointSvi.Service
-	fileTaskLogService filetasklogSvi.Service
-	mediaFileService   mediafileSvi.Service
-	verifyService      verifySvi.Service
+	logger                 *zap.Logger
+	virtualFileService     virtualfileSvi.Service
+	cloudBridgeService     cloudbridgeSvi.Service
+	cloudTokenService      cloudtokenSvi.Service
+	mountPointService      mountPointSvi.Service
+	fileTaskLogService     filetasklogSvi.Service
+	mediaFileService       mediafileSvi.Service
+	verifyService          verifySvi.Service
+	appSessionService      appsessionSvi.Service
+	casCollectRuntimeCache sync.Map
 }
 
 func NewHandler(
+	svc bootstrap.ServiceContext,
 	logger *zap.Logger,
 	virtualFileService virtualfileSvi.Service,
 	cloudBridgeService cloudbridgeSvi.Service,
@@ -59,6 +64,7 @@ func NewHandler(
 		fileTaskLogService: fileTaskLogService,
 		mediaFileService:   mediaFileService,
 		verifyService:      verifyService,
+		appSessionService:  appsessionSvi.NewService(svc, cloudTokenService, mountPointService),
 	}
 }
 
@@ -126,8 +132,6 @@ func (h *handler) walkFile(ctx context.Context, rootId int64, walkFunc walkFunc)
 				}
 			}
 		} else {
-			// 使用多线程并发处理，但在启动 goroutine 前先拿信号量，
-			// 避免大目录场景下一次性创建过多 goroutine，降低峰值内存。
 			var wg sync.WaitGroup
 			errorChan := make(chan error, len(nextFiles))
 			semaphore := make(chan struct{}, threadCount)
