@@ -31,6 +31,15 @@ func (f *ShareFileInfo) TransformVirtualFile(tid, pid int64) *models.VirtualFile
 	createDate, _ := time.Parse(time.DateTime, f.CreateDate)
 	modifyDate, _ := time.Parse(time.DateTime, f.LastOpTime)
 
+	addition := datatypes.JSONMap{
+		consts.FileAdditionKeyShareId:  f.ShareId,
+		consts.FileAdditionKeyIsFolder: f.Folder,
+		consts.FileAdditionKeyUpUserId: f.upUserId,
+	}
+	if f.AccessURL != "" {
+		addition[consts.FileAdditionKeyAccessURL] = f.AccessURL
+	}
+
 	return &models.VirtualFile{
 		ParentId:   pid,
 		Name:       utils.SanitizeFileName(f.Name),
@@ -43,12 +52,8 @@ func (f *ShareFileInfo) TransformVirtualFile(tid, pid int64) *models.VirtualFile
 		CreateDate: createDate,
 		ModifyDate: modifyDate,
 		OsType:     models.OsTypeSubscribeShareFolder,
-		Addition: datatypes.JSONMap{
-			consts.FileAdditionKeyShareId:  f.ShareId,
-			consts.FileAdditionKeyIsFolder: f.Folder,
-			consts.FileAdditionKeyUpUserId: f.upUserId,
-		},
-		Rev: f.Rev,
+		Addition:   addition,
+		Rev:        f.Rev,
 	}
 }
 

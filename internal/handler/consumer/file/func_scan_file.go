@@ -152,7 +152,21 @@ func (h *handler) ScanFile() taskcontext.HandlerFunc {
 					return nil, errors.New("获取分享类型失败")
 				}
 
-				fileConverters, err = h.cloudBridgeService.GetSubscribeShareFiles(ctx, upUserId, shareId, inputFile.CloudId, isFolder)
+				mountInfo, mountErr := h.mountPointService.Query(ctx, inputFile.TopId)
+				if mountErr != nil {
+					ctx.Error("查询挂载点失败", zap.Int64("file_id", inputFile.ID), zap.Error(mountErr))
+
+					return nil, mountErr
+				}
+
+				token, queryErr := h.cloudTokenService.Query(ctx, mountInfo.TokenId)
+				if queryErr != nil {
+					ctx.Error("获取云盘令牌失败", zap.Int64("file_id", inputFile.ID), zap.Error(queryErr))
+
+					return nil, errors.New("获取云盘令牌失败")
+				}
+
+				fileConverters, err = h.cloudBridgeService.GetSubscribeShareFiles(ctx, cloudbridgeSvi.NewAuthToken(token.AccessToken, token.ExpiresIn), upUserId, shareId, inputFile.CloudId, isFolder)
 			case models.OsTypeShareFolder:
 				var (
 					shareId    int64
@@ -247,7 +261,31 @@ func (h *handler) ScanFile() taskcontext.HandlerFunc {
 
 			var newFiles = make([]*models.VirtualFile, 0, len(fileConverters))
 			for _, c := range fileConverters {
-				newFiles = append(newFiles, c.TransformVirtualFile(inputFile.TopId, inputFile.ID))
+				vf := c.TransformVirtualFile(inputFile.TopId, inputFile.ID)
+				newFiles = append(newFiles, vf)
+			}
+
+			// 递归扫描语义：每一层拿到远端结果后，先遍历整批结果查找 .cas，
+			// 不依赖“新增/已存在”差异分支，避免多级目录或已存在文件命不中自动归集。
+			for _, scannedFile := range newFiles {
+				if scannedFile == nil || scannedFile.IsDir {
+					continue
+				}
+				if !strings.HasSuffix(strings.ToLower(scannedFile.Name), ".cas") {
+					continue
+				}
+				ctx.Info("扫描到CAS文件，准备尝试自动归集",
+					zap.String("file_name", scannedFile.Name),
+					zap.String("cloud_id", scannedFile.CloudId),
+					zap.String("os_type", scannedFile.OsType),
+				)
+				if err := h.tryCollectCASFromVirtualFile(ctx, scannedFile); err != nil {
+					ctx.Error("存储刷新链CAS自动归集失败",
+						zap.String("file_name", scannedFile.Name),
+						zap.String("cloud_id", scannedFile.CloudId),
+						zap.Error(err),
+					)
+				}
 			}
 
 			// 创建映射表，用于快速查找
@@ -277,6 +315,36 @@ func (h *handler) ScanFile() taskcontext.HandlerFunc {
 			// 遍历扫描到的文件，找出新增和更新的文件
 			for cloudId, newFile := range newFileMap {
 				if oldFile, exists := oldFileMap[cloudId]; exists {
+					// 订阅扫描链补字段：即使 rev 不变，也要把新 addition 中补充出来的字段（如 access_url）同步回库。
+					mergeAddition := func(oldAddition, newAddition map[string]any) (map[string]any, bool) {
+						merged := make(map[string]any, len(oldAddition)+len(newAddition))
+						changed := false
+						for k, v := range oldAddition {
+							merged[k] = v
+						}
+						for k, v := range newAddition {
+							if v == nil {
+								continue
+							}
+							if ov, ok := merged[k]; !ok || ov != v {
+								merged[k] = v
+								changed = true
+							}
+						}
+						return merged, changed
+					}
+
+					if mergedAddition, changed := mergeAddition(oldFile.Addition, newFile.Addition); changed {
+						ctx.Debug("文件附加信息更新",
+							zap.Int64("file_id", oldFile.ID),
+							zap.String("file_name", oldFile.Name),
+						)
+						filesToUpdateMap[oldFile.ID] = append(filesToUpdateMap[oldFile.ID],
+							utils.WithField("addition", mergedAddition),
+						)
+						oldFile.Addition = mergedAddition
+					}
+
 					// 文件存在，检查是否需要更新（通过Rev比较）
 					if oldFile.Rev != newFile.Rev {
 						ctx.Debug("文件存在差异 - rev changed",
