@@ -294,27 +294,42 @@ func (h *handler) tryCollectCASFromVirtualFile(ctx context.Context, file *models
 	}
 
 	if cfg.CasAutoCollectPreservePath {
-		fullPath, fullPathErr := h.virtualFileService.CalFullPath(ctx, file.ID)
-		if fullPathErr == nil {
-			relDir := strings.TrimSpace(path.Dir(strings.TrimPrefix(fullPath, "/")))
-			if relDir != "" && relDir != "." {
-				ctx.Info("CAS自动归集准备创建归集目录",
-					zap.String("fullPath", fullPath),
-					zap.String("relativeDir", relDir),
-					zap.String("baseTargetFolderId", targetFolderID),
-				)
-				folder, apiErr := panClient.AppMkdirRecursive(0, targetFolderID, relDir, 0, strings.Split(relDir, "/"))
-				if apiErr != nil {
-					return fmt.Errorf("创建CAS归集目录失败: %w", apiErr)
-				}
-				if folder != nil && folder.FileId != "" {
-					targetFolderID = folder.FileId
-					ctx.Info("CAS自动归集目录创建/复用成功",
-						zap.String("relativeDir", relDir),
-						zap.String("targetFolderId", targetFolderID),
-					)
-				}
+		var sourceDirPath string
+		if file.ParentId > 0 {
+			if parentFullPath, parentErr := h.virtualFileService.CalFullPath(ctx, file.ParentId); parentErr == nil {
+				sourceDirPath = strings.TrimSpace(parentFullPath)
 			}
+		}
+		if sourceDirPath == "" {
+			fullPath, fullPathErr := h.virtualFileService.CalFullPath(ctx, file.ID)
+			if fullPathErr == nil {
+				sourceDirPath = strings.TrimSpace(path.Dir(fullPath))
+			}
+		}
+		relDir := strings.Trim(strings.TrimPrefix(sourceDirPath, "/"), " ")
+		if relDir != "" && relDir != "." {
+			ctx.Info("CAS自动归集准备创建归集目录",
+				zap.String("sourceDirPath", sourceDirPath),
+				zap.String("relativeDir", relDir),
+				zap.String("baseTargetFolderId", targetFolderID),
+			)
+			folder, apiErr := panClient.AppMkdirRecursive(0, targetFolderID, relDir, 0, strings.Split(relDir, "/"))
+			if apiErr != nil {
+				return fmt.Errorf("创建CAS归集目录失败: %w", apiErr)
+			}
+			if folder != nil && folder.FileId != "" {
+				targetFolderID = folder.FileId
+				ctx.Info("CAS自动归集目录创建/复用成功",
+					zap.String("relativeDir", relDir),
+					zap.String("targetFolderId", targetFolderID),
+				)
+			}
+		} else {
+			ctx.Info("CAS自动归集未生成相对目录，回退保存到基目录",
+				zap.Int64("fileId", file.ID),
+				zap.Int64("parentId", file.ParentId),
+				zap.String("fileName", file.Name),
+			)
 		}
 	}
 
