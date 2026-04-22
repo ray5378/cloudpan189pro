@@ -23,6 +23,7 @@ type Service interface {
 	NeedsRefresh(ctx context.Context, targetTokenID int64, targetFolderID string, ttl time.Duration) (bool, error)
 	IsEmpty(ctx context.Context) (bool, error)
 	ListDistinctDirs(ctx context.Context) ([]*models.CasTargetDirCache, error)
+	ClearAll(ctx context.Context) (int64, error)
 }
 
 type service struct {

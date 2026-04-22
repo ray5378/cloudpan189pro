@@ -11,307 +11,61 @@
 
       <n-grid :cols="24" :x-gap="16" :y-gap="16">
         <n-grid-item :span="24">
-          <n-card title="CAS 来源目录" size="small">
-            <n-space vertical size="small">
-              <n-text depth="3">在这里选中的保存目录，天然等于 CAS访问路径，也等于 CAS归集路径；这里不再区分两套路径。</n-text>
-
-              <n-form :model="sourceForm" label-placement="left" label-width="140px">
-                <n-grid :cols="24" :x-gap="16" :y-gap="8">
-                  <n-grid-item :span="6">
-                    <n-form-item label="启用 CAS 目标目录">
-                      <n-switch v-model:value="sourceForm.enabled" />
-                    </n-form-item>
-                  </n-grid-item>
-                  <n-grid-item :span="6">
-                    <n-form-item label="自动归集订阅 .cas">
-                      <n-switch v-model:value="sourceForm.autoCollectEnabled" />
-                    </n-form-item>
-                  </n-grid-item>
-                  <n-grid-item :span="6">
-                    <n-form-item label="保留订阅路径结构">
-                      <n-switch v-model:value="sourceForm.preservePath" />
-                    </n-form-item>
-                  </n-grid-item>
-                </n-grid>
-
-                <n-grid :cols="24" :x-gap="16" :y-gap="8">
-                  <n-grid-item :span="8">
-                    <n-form-item label="云盘账号">
-                      <n-select
-                        v-model:value="sourceForm.cloudToken"
-                        :options="cloudTokenOptions"
-                        placeholder="选择已添加的云盘账号"
-                        :loading="cloudTokenLoading"
-                        filterable
-                        clearable
-                      />
-                    </n-form-item>
-                  </n-grid-item>
-
-                  <n-grid-item :span="8">
-                    <n-form-item label="目标类型">
-                      <n-select
-                        v-model:value="sourceForm.sourceType"
-                        :options="sourceTypeOptions"
-                        placeholder="选择来源类型"
-                      />
-                    </n-form-item>
-                  </n-grid-item>
-
-                  <n-grid-item v-if="sourceForm.sourceType === 'family'" :span="8">
-                    <n-form-item label="家庭组">
-                      <n-select
-                        v-model:value="sourceForm.familyId"
-                        :options="familyOptions"
-                        placeholder="选择家庭组"
-                        :loading="familyLoading"
-                        filterable
-                        clearable
-                      />
-                    </n-form-item>
-                  </n-grid-item>
-                </n-grid>
-
-                <n-grid :cols="24" :x-gap="16" :y-gap="8">
-                  <n-grid-item :span="12">
-                    <n-form-item label="当前目录">
-                      <n-input :value="sourcePathLabel" readonly />
-                    </n-form-item>
-                  </n-grid-item>
-                  <n-grid-item :span="12">
-                    <n-form-item label="当前目录 ID">
-                      <n-input :value="currentFolderIdLabel" readonly />
-                    </n-form-item>
-                  </n-grid-item>
-                </n-grid>
-
-                <n-grid :cols="24" :x-gap="16" :y-gap="8">
-                  <n-grid-item :span="8">
-                    <n-form-item label="已保存目录 ID">
-                      <n-input :value="savedFolderIdLabel" readonly />
-                    </n-form-item>
-                  </n-grid-item>
-                  <n-grid-item :span="16">
-                    <n-form-item label="已保存 CAS归集路径">
-                      <n-input :value="savedCasPathLabel" readonly />
-                    </n-form-item>
-                  </n-grid-item>
-                </n-grid>
-
-                <n-space justify="space-between">
-                  <n-space>
-                    <n-button @click="loadSourceRoot">加载根目录</n-button>
-                    <n-button @click="goParentFolder" :disabled="sourceFolderStack.length === 0">返回上级</n-button>
-                    <n-button type="primary" @click="saveSourceConfig">保存归集目录</n-button>
-                  </n-space>
-                  <n-text depth="3">当前目录就是 CAS归集路径，也是 CAS访问路径；保存后下方恢复会直接复用这条路径。</n-text>
-                </n-space>
-              </n-form>
-
-              <n-data-table
-                :columns="sourceColumns"
-                :data="sourceEntries"
-                :loading="sourceLoading"
-                :pagination="false"
-                size="small"
-              />
-            </n-space>
-          </n-card>
+          <CasSourceConfigCard
+            :source-form="sourceForm"
+            :cloud-token-options="cloudTokenOptions"
+            :source-type-options="sourceTypeOptions"
+            :family-options="familyOptions"
+            :cloud-token-loading="cloudTokenLoading"
+            :family-loading="familyLoading"
+            :source-loading="sourceLoading"
+            :source-path-label="sourcePathLabel"
+            :current-folder-id-label="currentFolderIdLabel"
+            :saved-folder-id-label="savedFolderIdLabel"
+            :saved-cas-path-label="savedCasPathLabel"
+            :source-folder-stack="sourceFolderStack"
+            :source-columns="sourceColumns"
+            :source-entries="sourceEntries"
+            @load-root="loadSourceRoot"
+            @go-parent="goParentFolder"
+            @save-source="saveSourceConfig"
+          />
         </n-grid-item>
 
         <n-grid-item :span="24">
-          <n-card title="默认恢复配置" size="small">
-            <n-form :model="defaultForm" label-placement="left" label-width="140px">
-              <n-grid :cols="24" :x-gap="16">
-                <n-grid-item :span="8">
-                  <n-form-item label="默认上传路线">
-                    <n-select
-                      v-model:value="defaultForm.uploadRoute"
-                      :options="uploadRouteOptions"
-                      placeholder="选择默认上传路线"
-                    />
-                  </n-form-item>
-                </n-grid-item>
-                <n-grid-item :span="8">
-                  <n-form-item label="默认最终目录类型">
-                    <n-select
-                      v-model:value="defaultForm.destinationType"
-                      :options="defaultDestinationOptions"
-                      placeholder="选择默认目录类型"
-                    />
-                  </n-form-item>
-                </n-grid-item>
-                <n-grid-item :span="8">
-                  <n-form-item label="默认目标目录 ID">
-                    <n-input v-model:value="defaultForm.targetFolderId" placeholder="例如 -11 或目录ID" />
-                  </n-form-item>
-                </n-grid-item>
-              </n-grid>
-
-              <n-grid :cols="24" :x-gap="16">
-                <n-grid-item :span="8">
-                  <n-form-item label="默认输入模式">
-                    <n-select
-                      v-model:value="defaultForm.inputMode"
-                      :options="inputModeOptions"
-                      placeholder="选择默认输入模式"
-                    />
-                  </n-form-item>
-                </n-grid-item>
-              </n-grid>
-
-              <n-space justify="end">
-                <n-button @click="resetDefaults">恢复默认</n-button>
-                <n-button type="primary" @click="saveDefaults">保存默认配置</n-button>
-              </n-space>
-            </n-form>
-          </n-card>
+          <CasDefaultsCard
+            :model="defaultForm"
+            :upload-route-options="uploadRouteOptions"
+            :default-destination-options="defaultDestinationOptions"
+            :input-mode-options="inputModeOptions"
+            @reset="resetDefaults"
+            @save="saveDefaults"
+          />
         </n-grid-item>
 
         <n-grid-item :span="24">
-          <n-card title="CAS 手动恢复" size="small">
-            <n-form :model="restoreForm" label-placement="left" label-width="140px">
-              <n-grid :cols="24" :x-gap="16">
-                <n-grid-item :span="8">
-                  <n-form-item label="输入模式">
-                    <n-select
-                      v-model:value="restoreForm.inputMode"
-                      :options="inputModeOptions"
-                      placeholder="选择输入模式"
-                    />
-                  </n-form-item>
-                </n-grid-item>
-                <n-grid-item :span="8">
-                  <n-form-item label="上传路线">
-                    <n-select
-                      v-model:value="restoreForm.uploadRoute"
-                      :options="uploadRouteOptions"
-                      placeholder="选择上传路线"
-                    />
-                  </n-form-item>
-                </n-grid-item>
-                <n-grid-item :span="8">
-                  <n-form-item label="最终目录类型">
-                    <n-select
-                      v-model:value="restoreForm.destinationType"
-                      :options="destinationTypeOptions"
-                      placeholder="选择最终目录类型"
-                    />
-                  </n-form-item>
-                </n-grid-item>
-              </n-grid>
-
-              <n-grid :cols="24" :x-gap="16">
-                <n-grid-item :span="12">
-                  <n-form-item label="目标目录 ID">
-                    <n-input
-                      v-model:value="restoreForm.targetFolderId"
-                      placeholder="最终目录 ID，例如 -11 或个人目录ID"
-                    />
-                  </n-form-item>
-                </n-grid-item>
-              </n-grid>
-
-              <template v-if="restoreForm.inputMode === 'virtualId'">
-                <n-grid :cols="24" :x-gap="16">
-                  <n-grid-item :span="12">
-                    <n-form-item label="CAS Virtual ID">
-                      <n-input-number
-                        v-model:value="restoreForm.casVirtualId"
-                        clearable
-                        placeholder="例如 1001"
-                        style="width: 100%"
-                      />
-                    </n-form-item>
-                  </n-grid-item>
-                </n-grid>
-              </template>
-
-              <template v-else-if="restoreForm.inputMode === 'path'">
-                <n-grid :cols="24" :x-gap="16">
-                  <n-grid-item :span="16">
-                    <n-form-item label="CAS 路径">
-                      <n-input v-model:value="restoreForm.casPath" placeholder="例如 /电影库/movie.cas" />
-                    </n-form-item>
-                  </n-grid-item>
-                </n-grid>
-              </template>
-
-              <template v-else>
-                <n-grid :cols="24" :x-gap="16">
-                  <n-grid-item :span="8">
-                    <n-form-item label="Storage ID">
-                      <n-input-number v-model:value="restoreForm.storageId" clearable style="width: 100%" />
-                    </n-form-item>
-                  </n-grid-item>
-                  <n-grid-item :span="8">
-                    <n-form-item label="MountPoint ID">
-                      <n-input-number v-model:value="restoreForm.mountPointId" clearable style="width: 100%" />
-                    </n-form-item>
-                  </n-grid-item>
-                  <n-grid-item :span="8">
-                    <n-form-item label="CAS Virtual ID">
-                      <n-input-number v-model:value="restoreForm.casVirtualId" clearable style="width: 100%" />
-                    </n-form-item>
-                  </n-grid-item>
-                </n-grid>
-                <n-grid :cols="24" :x-gap="16">
-                  <n-grid-item :span="8">
-                    <n-form-item label="CAS File ID">
-                      <n-input v-model:value="restoreForm.casFileId" placeholder="云端 CAS file id" />
-                    </n-form-item>
-                  </n-grid-item>
-                  <n-grid-item :span="8">
-                    <n-form-item label="CAS File Name">
-                      <n-input v-model:value="restoreForm.casFileName" placeholder="例如 movie.cas" />
-                    </n-form-item>
-                  </n-grid-item>
-                  <n-grid-item :span="8">
-                    <n-form-item label="CAS 路径（可选）">
-                      <n-input v-model:value="restoreForm.casPath" placeholder="例如 /电影库/movie.cas" />
-                    </n-form-item>
-                  </n-grid-item>
-                </n-grid>
-              </template>
-
-              <n-space justify="end">
-                <n-button @click="applyDefaultsToRestore">恢复默认配置</n-button>
-                <n-button @click="resetRestore">重置本次输入</n-button>
-                <n-button type="primary" :loading="restoring" @click="handleRestore">开始恢复</n-button>
-              </n-space>
-            </n-form>
-          </n-card>
+          <CasManualRestoreCard
+            :model="restoreForm"
+            :input-mode-options="inputModeOptions"
+            :upload-route-options="uploadRouteOptions"
+            :destination-type-options="destinationTypeOptions"
+            :restoring="restoring"
+            @apply-defaults="applyDefaultsToRestore"
+            @reset="resetRestore"
+            @restore="handleRestore"
+          />
         </n-grid-item>
 
         <n-grid-item :span="12">
-          <n-card title="请求预览" size="small">
-            <pre class="result-pre">{{ requestPreview }}</pre>
-          </n-card>
+          <CasRequestPreviewCard :content="requestPreview" />
         </n-grid-item>
 
         <n-grid-item :span="12">
-          <n-card title="链路说明" size="small">
-            <n-space vertical size="small">
-              <n-text>reference-backed 支持组合：</n-text>
-              <n-ul>
-                <n-li>person → person</n-li>
-                <n-li>family → family</n-li>
-                <n-li>family → person</n-li>
-              </n-ul>
-              <n-text>当前不支持：</n-text>
-              <n-ul>
-                <n-li>person → family（暂无可直接照搬的 reference-backed 主链）</n-li>
-              </n-ul>
-              <n-text depth="3">targetFolderId 只表示最终目录 ID，不表示上传路线。</n-text>
-              <n-text depth="3">账号密码继续复用原项目 cloud token，不在本页面单独配置。</n-text>
-            </n-space>
-          </n-card>
+          <CasLinkInfoCard />
         </n-grid-item>
 
         <n-grid-item :span="24" v-if="resultText">
-          <n-card title="恢复结果" size="small">
-            <pre class="result-pre">{{ resultText }}</pre>
-          </n-card>
+          <CasResultCard :content="resultText" />
         </n-grid-item>
       </n-grid>
     </n-space>
@@ -319,32 +73,39 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * CAS 配置页开发规范（必须遵守）
+ *
+ * 这个页面已经按“功能区拆分 + 页面编排层收口”的方式重构完成。
+ * 后续无论是人还是 AI 修改这里，都不要再把它改回单文件大泥坑。
+ *
+ * 一眼看懂的规则：
+ * 1. index.vue 只做页面编排、状态组装、跨卡片联动，不承载臃肿 UI 细节。
+ * 2. 每个功能区都应该是独立组件：来源目录、默认配置、手动恢复、请求预览、链路说明、恢复结果、缓存操作。
+ * 3. 带确认弹窗/异步 loading/消息提示的动作逻辑，优先放 composables 或独立组件，不要继续塞回 index.vue。
+ * 4. 不要为了“快”把按钮、弹窗、接口调用、表单状态再堆回一个超长 SFC。
+ * 5. 如果新增 CAS 功能区：优先新建 components/*Card.vue；如果新增复用动作：优先新建 composables/useXxx.ts。
+ * 6. 只有跨多个卡片共享的业务状态，才放在 index.vue；卡片私有交互应留在子组件内部。
+ * 7. 修改后必须保证：前端 build 通过，且不要留下重复 style/script 片段、脏尾巴、未使用 import/变量。
+ *
+ * 禁止事项：
+ * - 禁止把清空缓存、重建缓存、恢复动作确认逻辑重新塞回单文件页面。
+ * - 禁止把多个功能区的模板/状态/接口调用混写成一个几百上千行的块。
+ * - 禁止在未拆分职责的前提下继续“顺手加几行”式补丁开发。
+ */
 import { computed, h, onMounted, reactive, ref, watch } from 'vue'
-import {
-  NAlert,
-  NButton,
-  NCard,
-  NDataTable,
-  NForm,
-  NFormItem,
-  NGrid,
-  NGridItem,
-  NInput,
-  NInputNumber,
-  NSelect,
-  NSpace,
-  NSwitch,
-  NText,
-  NUl,
-  NLi,
-  useMessage,
-  type DataTableColumns,
-} from 'naive-ui'
-import type { RestoreCasRequest, CasUploadRoute, CasDestinationType } from '@/api/media'
+import { NAlert, NButton, NGrid, NGridItem, NSpace, NText, useMessage, type DataTableColumns } from 'naive-ui'
+import type { RestoreCasRequest, CasDestinationType, CasUploadRoute } from '@/api/media'
 import { restoreCas } from '@/api/media'
 import { getCloudTokenList } from '@/api/cloudtoken'
 import { getSettingAddition, modifySettingAddition } from '@/api/setting'
 import { getFamilyFiles, getFamilyList, getPersonFiles, type FileNode } from '@/api/storage/advance'
+import CasDefaultsCard from './components/CasDefaultsCard.vue'
+import CasLinkInfoCard from './components/CasLinkInfoCard.vue'
+import CasManualRestoreCard from './components/CasManualRestoreCard.vue'
+import CasRequestPreviewCard from './components/CasRequestPreviewCard.vue'
+import CasResultCard from './components/CasResultCard.vue'
+import CasSourceConfigCard from './components/CasSourceConfigCard.vue'
 
 type InputMode = 'virtualId' | 'path' | 'explicit'
 type SourceType = 'person' | 'family'
@@ -442,7 +203,7 @@ const sourcePathLabel = computed(() => {
     }
     return root
   }
-  return root + '/' + sourceFolderStack.value.map((item) => item.name).join('/')
+  return `${root}/${sourceFolderStack.value.map((item) => item.name).join('/')}`
 })
 
 const savedCasPathLabel = computed(() => sourceForm.casAccessPath || '未保存')
@@ -470,39 +231,17 @@ const destinationTypeOptions = computed(() => {
 })
 
 const sourceColumns: DataTableColumns<FileNode> = [
-  {
-    title: '名称',
-    key: 'name',
-  },
-  {
-    title: '类型',
-    key: 'isFolder',
-    render: (row) => (row.isFolder === 1 ? '目录' : '文件'),
-  },
+  { title: '名称', key: 'name' },
+  { title: '类型', key: 'isFolder', render: (row) => (row.isFolder === 1 ? '目录' : '文件') },
   {
     title: '操作',
     key: 'actions',
     render: (row) => {
       if (row.isFolder === 1) {
-        return h(
-          NButton,
-          {
-            size: 'small',
-            onClick: () => enterFolder(row),
-          },
-          { default: () => '进入目录' }
-        )
+        return h(NButton, { size: 'small', onClick: () => enterFolder(row) }, { default: () => '进入目录' })
       }
       if ((row.name || '').toLowerCase().endsWith('.cas')) {
-        return h(
-          NButton,
-          {
-            size: 'small',
-            type: 'primary',
-            onClick: () => useCasFile(row),
-          },
-          { default: () => '使用这个 .cas' }
-        )
+        return h(NButton, { size: 'small', type: 'primary', onClick: () => useCasFile(row) }, { default: () => '使用这个 .cas' })
       }
       return h('span', { style: 'color: var(--n-text-color-3); font-size: 12px;' }, '仅目录或 .cas 可操作')
     },
@@ -512,18 +251,14 @@ const sourceColumns: DataTableColumns<FileNode> = [
 watch(
   () => defaultForm.uploadRoute,
   (val) => {
-    if (val === 'person') {
-      defaultForm.destinationType = 'person'
-    }
+    if (val === 'person') defaultForm.destinationType = 'person'
   }
 )
 
 watch(
   () => restoreForm.uploadRoute,
   (val) => {
-    if (val === 'person') {
-      restoreForm.destinationType = 'person'
-    }
+    if (val === 'person') restoreForm.destinationType = 'person'
   }
 )
 
@@ -536,9 +271,7 @@ watch(
     sourceForm.parentId = defaultParentId.value
     sourceForm.parentName = '根目录'
     if (!val) return
-    if (sourceForm.sourceType === 'family') {
-      await loadFamilyList()
-    }
+    if (sourceForm.sourceType === 'family') await loadFamilyList()
   }
 )
 
@@ -551,9 +284,7 @@ watch(
     sourceForm.parentName = '根目录'
     sourceForm.familyId = undefined
     familyOptions.value = []
-    if (val === 'family' && sourceForm.cloudToken) {
-      await loadFamilyList()
-    }
+    if (val === 'family' && sourceForm.cloudToken) await loadFamilyList()
   }
 )
 
@@ -571,8 +302,7 @@ const loadDefaults = () => {
   try {
     const raw = localStorage.getItem(DEFAULTS_KEY)
     if (!raw) return
-    const parsed = JSON.parse(raw) as Partial<CasDefaults>
-    Object.assign(defaultForm, emptyDefaults(), parsed)
+    Object.assign(defaultForm, emptyDefaults(), JSON.parse(raw) as Partial<CasDefaults>)
   } catch {
     // ignore broken local config
   }
@@ -650,21 +380,10 @@ const loadSourceRoot = async () => {
   sourceLoading.value = true
   try {
     if (sourceForm.sourceType === 'person') {
-      const res = await getPersonFiles({
-        pageNum: 1,
-        pageSize: 100,
-        cloudToken: sourceForm.cloudToken,
-        parentId: sourceForm.parentId || '-11',
-      })
+      const res = await getPersonFiles({ pageNum: 1, pageSize: 100, cloudToken: sourceForm.cloudToken, parentId: sourceForm.parentId || '-11' })
       sourceEntries.value = res.data?.data || []
     } else {
-      const res = await getFamilyFiles({
-        pageNum: 1,
-        pageSize: 100,
-        cloudToken: sourceForm.cloudToken,
-        familyId: sourceForm.familyId!,
-        parentId: sourceForm.parentId || '',
-      })
+      const res = await getFamilyFiles({ pageNum: 1, pageSize: 100, cloudToken: sourceForm.cloudToken, familyId: sourceForm.familyId!, parentId: sourceForm.parentId || '' })
       sourceEntries.value = res.data?.data || []
     }
   } catch (err: any) {
@@ -780,7 +499,6 @@ const validateBeforeSubmit = (): boolean => {
     message.warning('当前仅支持 reference-backed 组合，person → family 暂未实现')
     return false
   }
-
   if (restoreForm.inputMode === 'virtualId' && !restoreForm.casVirtualId) {
     message.warning('最简 ID 模式下请填写 casVirtualId')
     return false
@@ -830,13 +548,5 @@ onMounted(async () => {
 <style scoped>
 .cas-config-page {
   padding: 24px;
-}
-
-.result-pre {
-  margin: 0;
-  white-space: pre-wrap;
-  word-break: break-all;
-  font-size: 12px;
-  line-height: 1.6;
 }
 </style>

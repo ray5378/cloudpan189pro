@@ -74,3 +74,8 @@ func (s *service) ListDistinctDirs(ctx context.Context) ([]*models.CasTargetDirC
 		Find(&list).Error
 	return list, err
 }
+
+func (s *service) ClearAll(ctx context.Context) (int64, error) {
+	tx := s.getDB(ctx).Where("1 = 1").Delete(new(models.CasTargetDirCache))
+	return tx.RowsAffected, tx.Error
+}
