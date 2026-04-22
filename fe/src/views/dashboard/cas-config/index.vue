@@ -11,7 +11,116 @@
 
       <n-grid :cols="24" :x-gap="16" :y-gap="16">
         <n-grid-item :span="24">
-          <n-card title="默认配置" size="small">
+          <n-card title="CAS 来源目录" size="small">
+            <n-space vertical size="small">
+              <n-text depth="3">在这里选中的保存目录，天然等于 CAS访问路径，也等于 CAS归集路径；这里不再区分两套路径。</n-text>
+
+              <n-form :model="sourceForm" label-placement="left" label-width="140px">
+                <n-grid :cols="24" :x-gap="16" :y-gap="8">
+                  <n-grid-item :span="6">
+                    <n-form-item label="启用 CAS 目标目录">
+                      <n-switch v-model:value="sourceForm.enabled" />
+                    </n-form-item>
+                  </n-grid-item>
+                  <n-grid-item :span="6">
+                    <n-form-item label="自动归集订阅 .cas">
+                      <n-switch v-model:value="sourceForm.autoCollectEnabled" />
+                    </n-form-item>
+                  </n-grid-item>
+                  <n-grid-item :span="6">
+                    <n-form-item label="保留订阅路径结构">
+                      <n-switch v-model:value="sourceForm.preservePath" />
+                    </n-form-item>
+                  </n-grid-item>
+                </n-grid>
+
+                <n-grid :cols="24" :x-gap="16" :y-gap="8">
+                  <n-grid-item :span="8">
+                    <n-form-item label="云盘账号">
+                      <n-select
+                        v-model:value="sourceForm.cloudToken"
+                        :options="cloudTokenOptions"
+                        placeholder="选择已添加的云盘账号"
+                        :loading="cloudTokenLoading"
+                        filterable
+                        clearable
+                      />
+                    </n-form-item>
+                  </n-grid-item>
+
+                  <n-grid-item :span="8">
+                    <n-form-item label="目标类型">
+                      <n-select
+                        v-model:value="sourceForm.sourceType"
+                        :options="sourceTypeOptions"
+                        placeholder="选择来源类型"
+                      />
+                    </n-form-item>
+                  </n-grid-item>
+
+                  <n-grid-item v-if="sourceForm.sourceType === 'family'" :span="8">
+                    <n-form-item label="家庭组">
+                      <n-select
+                        v-model:value="sourceForm.familyId"
+                        :options="familyOptions"
+                        placeholder="选择家庭组"
+                        :loading="familyLoading"
+                        filterable
+                        clearable
+                      />
+                    </n-form-item>
+                  </n-grid-item>
+                </n-grid>
+
+                <n-grid :cols="24" :x-gap="16" :y-gap="8">
+                  <n-grid-item :span="12">
+                    <n-form-item label="当前目录">
+                      <n-input :value="sourcePathLabel" readonly />
+                    </n-form-item>
+                  </n-grid-item>
+                  <n-grid-item :span="12">
+                    <n-form-item label="当前目录 ID">
+                      <n-input :value="currentFolderIdLabel" readonly />
+                    </n-form-item>
+                  </n-grid-item>
+                </n-grid>
+
+                <n-grid :cols="24" :x-gap="16" :y-gap="8">
+                  <n-grid-item :span="8">
+                    <n-form-item label="已保存目录 ID">
+                      <n-input :value="savedFolderIdLabel" readonly />
+                    </n-form-item>
+                  </n-grid-item>
+                  <n-grid-item :span="16">
+                    <n-form-item label="已保存 CAS归集路径">
+                      <n-input :value="savedCasPathLabel" readonly />
+                    </n-form-item>
+                  </n-grid-item>
+                </n-grid>
+
+                <n-space justify="space-between">
+                  <n-space>
+                    <n-button @click="loadSourceRoot">加载根目录</n-button>
+                    <n-button @click="goParentFolder" :disabled="sourceFolderStack.length === 0">返回上级</n-button>
+                    <n-button type="primary" @click="saveSourceConfig">保存归集目录</n-button>
+                  </n-space>
+                  <n-text depth="3">当前目录就是 CAS归集路径，也是 CAS访问路径；保存后下方恢复会直接复用这条路径。</n-text>
+                </n-space>
+              </n-form>
+
+              <n-data-table
+                :columns="sourceColumns"
+                :data="sourceEntries"
+                :loading="sourceLoading"
+                :pagination="false"
+                size="small"
+              />
+            </n-space>
+          </n-card>
+        </n-grid-item>
+
+        <n-grid-item :span="24">
+          <n-card title="默认恢复配置" size="small">
             <n-form :model="defaultForm" label-placement="left" label-width="140px">
               <n-grid :cols="24" :x-gap="16">
                 <n-grid-item :span="8">
@@ -210,11 +319,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, h, onMounted, reactive, ref, watch } from 'vue'
 import {
   NAlert,
   NButton,
   NCard,
+  NDataTable,
   NForm,
   NFormItem,
   NGrid,
@@ -223,15 +333,21 @@ import {
   NInputNumber,
   NSelect,
   NSpace,
+  NSwitch,
   NText,
   NUl,
   NLi,
   useMessage,
+  type DataTableColumns,
 } from 'naive-ui'
 import type { RestoreCasRequest, CasUploadRoute, CasDestinationType } from '@/api/media'
 import { restoreCas } from '@/api/media'
+import { getCloudTokenList } from '@/api/cloudtoken'
+import { getSettingAddition, modifySettingAddition } from '@/api/setting'
+import { getFamilyFiles, getFamilyList, getPersonFiles, type FileNode } from '@/api/storage/advance'
 
 type InputMode = 'virtualId' | 'path' | 'explicit'
+type SourceType = 'person' | 'family'
 
 interface CasDefaults {
   uploadRoute: CasUploadRoute
@@ -244,14 +360,39 @@ interface CasRestoreForm extends RestoreCasRequest {
   inputMode: InputMode
 }
 
+interface CasSourceForm {
+  enabled: boolean
+  autoCollectEnabled: boolean
+  preservePath: boolean
+  cloudToken?: number
+  sourceType: SourceType
+  familyId?: string
+  parentId: string
+  parentName: string
+  casAccessPath: string
+}
+
 const DEFAULTS_KEY = 'cas.config.defaults'
 const message = useMessage()
 const restoring = ref(false)
 const resultText = ref('')
+const cloudTokenLoading = ref(false)
+const familyLoading = ref(false)
+const sourceLoading = ref(false)
+const sourceEntries = ref<FileNode[]>([])
+const cloudTokenOptions = ref<{ label: string; value: number }[]>([])
+const familyOptions = ref<{ label: string; value: string }[]>([])
+const sourceFolderStack = ref<Array<{ id: string; name: string }>>([])
+const savedSourceFolderId = ref('')
 
 const uploadRouteOptions = [
   { label: 'family（家庭路线，默认）', value: 'family' },
   { label: 'person（个人路线）', value: 'person' },
+]
+
+const sourceTypeOptions = [
+  { label: '个人云盘目录', value: 'person' },
+  { label: '家庭云盘目录', value: 'family' },
 ]
 
 const inputModeOptions = [
@@ -267,7 +408,20 @@ const emptyDefaults = (): CasDefaults => ({
   inputMode: 'virtualId',
 })
 
+const emptySourceForm = (): CasSourceForm => ({
+  enabled: false,
+  autoCollectEnabled: false,
+  preservePath: true,
+  cloudToken: undefined,
+  sourceType: 'person',
+  familyId: undefined,
+  parentId: '-11',
+  parentName: '根目录',
+  casAccessPath: '',
+})
+
 const defaultForm = reactive<CasDefaults>(emptyDefaults())
+const sourceForm = reactive<CasSourceForm>(emptySourceForm())
 const restoreForm = reactive<CasRestoreForm>({
   ...emptyDefaults(),
   casVirtualId: undefined,
@@ -277,6 +431,23 @@ const restoreForm = reactive<CasRestoreForm>({
   casFileId: '',
   casFileName: '',
 })
+
+const defaultParentId = computed(() => (sourceForm.sourceType === 'person' ? '-11' : ''))
+const sourcePathLabel = computed(() => {
+  const root = sourceForm.sourceType === 'person' ? '/个人云盘' : '/家庭云盘'
+  if (sourceFolderStack.value.length === 0) {
+    const currentId = sourceForm.parentId || defaultParentId.value || ''
+    if (sourceForm.casAccessPath && currentId === savedSourceFolderId.value) {
+      return sourceForm.casAccessPath
+    }
+    return root
+  }
+  return root + '/' + sourceFolderStack.value.map((item) => item.name).join('/')
+})
+
+const savedCasPathLabel = computed(() => sourceForm.casAccessPath || '未保存')
+const currentFolderIdLabel = computed(() => sourceForm.parentId || defaultParentId.value || '')
+const savedFolderIdLabel = computed(() => savedSourceFolderId.value || '未保存')
 
 const defaultDestinationOptions = computed(() => {
   if (defaultForm.uploadRoute === 'person') {
@@ -298,6 +469,46 @@ const destinationTypeOptions = computed(() => {
   ]
 })
 
+const sourceColumns: DataTableColumns<FileNode> = [
+  {
+    title: '名称',
+    key: 'name',
+  },
+  {
+    title: '类型',
+    key: 'isFolder',
+    render: (row) => (row.isFolder === 1 ? '目录' : '文件'),
+  },
+  {
+    title: '操作',
+    key: 'actions',
+    render: (row) => {
+      if (row.isFolder === 1) {
+        return h(
+          NButton,
+          {
+            size: 'small',
+            onClick: () => enterFolder(row),
+          },
+          { default: () => '进入目录' }
+        )
+      }
+      if ((row.name || '').toLowerCase().endsWith('.cas')) {
+        return h(
+          NButton,
+          {
+            size: 'small',
+            type: 'primary',
+            onClick: () => useCasFile(row),
+          },
+          { default: () => '使用这个 .cas' }
+        )
+      }
+      return h('span', { style: 'color: var(--n-text-color-3); font-size: 12px;' }, '仅目录或 .cas 可操作')
+    },
+  },
+]
+
 watch(
   () => defaultForm.uploadRoute,
   (val) => {
@@ -316,6 +527,46 @@ watch(
   }
 )
 
+watch(
+  () => sourceForm.cloudToken,
+  async (val) => {
+    familyOptions.value = []
+    sourceEntries.value = []
+    sourceFolderStack.value = []
+    sourceForm.parentId = defaultParentId.value
+    sourceForm.parentName = '根目录'
+    if (!val) return
+    if (sourceForm.sourceType === 'family') {
+      await loadFamilyList()
+    }
+  }
+)
+
+watch(
+  () => sourceForm.sourceType,
+  async (val) => {
+    sourceEntries.value = []
+    sourceFolderStack.value = []
+    sourceForm.parentId = val === 'person' ? '-11' : ''
+    sourceForm.parentName = '根目录'
+    sourceForm.familyId = undefined
+    familyOptions.value = []
+    if (val === 'family' && sourceForm.cloudToken) {
+      await loadFamilyList()
+    }
+  }
+)
+
+watch(
+  () => sourceForm.familyId,
+  () => {
+    sourceEntries.value = []
+    sourceFolderStack.value = []
+    sourceForm.parentId = ''
+    sourceForm.parentName = '根目录'
+  }
+)
+
 const loadDefaults = () => {
   try {
     const raw = localStorage.getItem(DEFAULTS_KEY)
@@ -329,13 +580,13 @@ const loadDefaults = () => {
 
 const saveDefaults = () => {
   localStorage.setItem(DEFAULTS_KEY, JSON.stringify(defaultForm))
-  message.success('CAS 默认配置已保存')
+  message.success('CAS 默认恢复配置已保存')
 }
 
 const resetDefaults = () => {
   Object.assign(defaultForm, emptyDefaults())
   localStorage.setItem(DEFAULTS_KEY, JSON.stringify(defaultForm))
-  message.success('已恢复默认配置')
+  message.success('已恢复默认恢复配置')
 }
 
 const applyDefaultsToRestore = () => {
@@ -343,20 +594,156 @@ const applyDefaultsToRestore = () => {
   restoreForm.destinationType = defaultForm.destinationType
   restoreForm.targetFolderId = defaultForm.targetFolderId
   restoreForm.inputMode = defaultForm.inputMode
-  message.success('已应用默认配置')
+  message.success('已应用默认恢复配置')
 }
 
 const resetRestore = () => {
   Object.assign(restoreForm, {
     ...defaultForm,
     casVirtualId: undefined,
-    casPath: '',
+    casPath: sourcePathLabel.value || '',
     storageId: undefined,
     mountPointId: undefined,
     casFileId: '',
     casFileName: '',
   })
   resultText.value = ''
+}
+
+const loadCloudTokens = async () => {
+  cloudTokenLoading.value = true
+  try {
+    const res = await getCloudTokenList({ currentPage: 1, pageSize: 100, noPaginate: true })
+    const list = res.data?.data || []
+    cloudTokenOptions.value = list.map((item) => ({
+      label: `${item.name || item.username || `Token ${item.id}`} (#${item.id})`,
+      value: item.id,
+    }))
+  } finally {
+    cloudTokenLoading.value = false
+  }
+}
+
+const loadFamilyList = async () => {
+  if (!sourceForm.cloudToken) return
+  familyLoading.value = true
+  try {
+    const res = await getFamilyList({ cloudToken: sourceForm.cloudToken })
+    familyOptions.value = (res.data?.familyInfoResp || []).map((item) => ({
+      label: `${item.remarkName || item.familyId} (${item.familyId})`,
+      value: item.familyId,
+    }))
+  } finally {
+    familyLoading.value = false
+  }
+}
+
+const loadSourceRoot = async () => {
+  if (!sourceForm.cloudToken) {
+    message.warning('请先选择云盘账号')
+    return
+  }
+  if (sourceForm.sourceType === 'family' && !sourceForm.familyId) {
+    message.warning('家庭目录模式下请先选择家庭组')
+    return
+  }
+  sourceLoading.value = true
+  try {
+    if (sourceForm.sourceType === 'person') {
+      const res = await getPersonFiles({
+        pageNum: 1,
+        pageSize: 100,
+        cloudToken: sourceForm.cloudToken,
+        parentId: sourceForm.parentId || '-11',
+      })
+      sourceEntries.value = res.data?.data || []
+    } else {
+      const res = await getFamilyFiles({
+        pageNum: 1,
+        pageSize: 100,
+        cloudToken: sourceForm.cloudToken,
+        familyId: sourceForm.familyId!,
+        parentId: sourceForm.parentId || '',
+      })
+      sourceEntries.value = res.data?.data || []
+    }
+  } catch (err: any) {
+    message.error(err?.message || '加载 CAS 来源目录失败')
+  } finally {
+    sourceLoading.value = false
+  }
+}
+
+const enterFolder = async (row: FileNode) => {
+  sourceFolderStack.value.push({ id: row.id, name: row.name })
+  sourceForm.parentId = row.id
+  sourceForm.parentName = row.name
+  await loadSourceRoot()
+}
+
+const goParentFolder = async () => {
+  sourceFolderStack.value.pop()
+  const current = sourceFolderStack.value[sourceFolderStack.value.length - 1]
+  sourceForm.parentId = current?.id || defaultParentId.value
+  sourceForm.parentName = current?.name || '根目录'
+  await loadSourceRoot()
+}
+
+const useCasFile = (row: FileNode) => {
+  const fullPath = `${sourcePathLabel.value}/${row.name}`
+  restoreForm.inputMode = 'path'
+  restoreForm.casPath = fullPath
+  restoreForm.casFileId = row.id
+  restoreForm.casFileName = row.name
+  message.success('已把该 .cas 带入恢复表单')
+}
+
+const saveSourceConfig = async () => {
+  if (!sourceForm.cloudToken) {
+    message.warning('请先选择云盘账号')
+    return
+  }
+  if (!sourceForm.parentId && sourceForm.sourceType === 'family') {
+    message.warning('请先选择家庭目录')
+    return
+  }
+
+  const resolvedCasPath = sourcePathLabel.value
+  sourceForm.casAccessPath = resolvedCasPath
+  sourceForm.enabled = true
+  sourceForm.autoCollectEnabled = true
+
+  const savedFolderId = sourceForm.parentId || defaultParentId.value
+  await modifySettingAddition({
+    casTargetEnabled: true,
+    casTargetTokenId: sourceForm.cloudToken,
+    casTargetType: sourceForm.sourceType,
+    casTargetFamilyId: sourceForm.familyId,
+    casTargetFolderId: savedFolderId,
+    casAccessPath: resolvedCasPath,
+    casAutoCollectEnabled: true,
+    casAutoCollectPreservePath: sourceForm.preservePath,
+  })
+
+  savedSourceFolderId.value = savedFolderId
+  restoreForm.inputMode = 'path'
+  restoreForm.casPath = resolvedCasPath
+  message.success(`CAS归集路径已保存：${resolvedCasPath}`)
+}
+
+const loadSourceConfigFromServer = async () => {
+  const res = await getSettingAddition()
+  const addition: Models.SettingAddition = res.data || ({} as Models.SettingAddition)
+  sourceForm.enabled = addition.casTargetEnabled !== false
+  sourceForm.autoCollectEnabled = addition.casAutoCollectEnabled !== false
+  sourceForm.preservePath = addition.casAutoCollectPreservePath !== false
+  sourceForm.cloudToken = addition.casTargetTokenId || undefined
+  sourceForm.sourceType = (addition.casTargetType as SourceType) || 'person'
+  sourceForm.familyId = addition.casTargetFamilyId || undefined
+  sourceForm.parentId = addition.casTargetFolderId || (sourceForm.sourceType === 'person' ? '-11' : '')
+  savedSourceFolderId.value = addition.casTargetFolderId || ''
+  sourceForm.parentName = addition.casAccessPath || '根目录'
+  sourceForm.casAccessPath = addition.casAccessPath || ''
 }
 
 const buildRequestPayload = (): RestoreCasRequest => {
@@ -429,9 +816,14 @@ const handleRestore = () => {
     })
 }
 
-onMounted(() => {
+onMounted(async () => {
   loadDefaults()
+  await loadCloudTokens()
+  await loadSourceConfigFromServer()
   applyDefaultsToRestore()
+  if (sourceForm.cloudToken && sourceForm.sourceType === 'family') {
+    await loadFamilyList()
+  }
 })
 </script>
 

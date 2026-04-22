@@ -275,10 +275,25 @@ func (h *handler) ScanFile() taskcontext.HandlerFunc {
 				if !strings.HasSuffix(strings.ToLower(scannedFile.Name), ".cas") {
 					continue
 				}
+				// 优先把当前扫描上下文里的真实父目录路径带给 CAS 自动归集，避免依赖库里偶发错误的父链。
+				// 这里必须使用 CtxKeyFileFullPath（当前递归节点的真实路径），不能用入口级别的 CtxKeyFullPath。
+				// 注意：这里扫描到的 scannedFile 是“当前节点 inputFile 的子文件”，
+				// 所以应直接使用当前节点路径本身；如果这里再 path.Dir 一次，就会把 Season 2 削成上一级目录。
+				sourceDirPath := ""
+				if currentFilePath, ok := ctx.GetString(consts.CtxKeyFileFullPath); ok && strings.TrimSpace(currentFilePath) != "" {
+					sourceDirPath = strings.TrimSpace(currentFilePath)
+				}
+				if sourceDirPath != "" {
+					if scannedFile.Addition == nil {
+						scannedFile.Addition = datatypes.JSONMap{}
+					}
+					scannedFile.Addition[consts.FileAdditionKeySourceDirPath] = sourceDirPath
+				}
 				ctx.Info("扫描到CAS文件，准备尝试自动归集",
 					zap.String("file_name", scannedFile.Name),
 					zap.String("cloud_id", scannedFile.CloudId),
 					zap.String("os_type", scannedFile.OsType),
+					zap.String("source_dir_path", sourceDirPath),
 				)
 				if err := h.tryCollectCASFromVirtualFile(ctx, scannedFile); err != nil {
 					ctx.Error("存储刷新链CAS自动归集失败",

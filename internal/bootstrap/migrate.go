@@ -22,6 +22,7 @@ func migrateDB(db *gorm.DB) (err error) {
 		new(models.LoginLog),
 		new(models.MediaConfig),
 		new(models.CasMediaRecord),
+		new(models.CasTargetDirCache),
 	)
 }
 

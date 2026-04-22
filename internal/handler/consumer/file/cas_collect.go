@@ -33,6 +33,47 @@ func buildPanClient(session *appsession.Session) *cloudpan.PanClient {
 	return cloudpan.NewPanClient(webToken, session.Token)
 }
 
+// refreshCASDirCacheIfNeeded 按需从目标云盘目录拉取文件名并刷新本地缓存。
+//
+// 重要原则（不要随意改）：
+// 1. 这里缓存的数据源必须来自目标云盘目录本身，不能改成本地成功记录推断。
+// 2. 这里的缓存只应该服务于“开启自动刷新的存储”的自动转存去重。
+// 3. 不要为了图省事，把所有存储/所有手动转存都接到这条缓存刷新链上。
+// 4. 真相永远在云盘，本地缓存只是镜像；缓存过期/失真时，应以重新拉取云盘目录为准。
+func (h *handler) refreshCASDirCacheIfNeeded(ctx context.Context, targetTokenID int64, targetFolderID string, runtime *casCollectRuntime) error {
+	if h.casTargetCacheService == nil || runtime == nil || runtime.panClient == nil {
+		return nil
+	}
+	needRefresh, err := h.casTargetCacheService.NeedsRefresh(ctx, targetTokenID, targetFolderID, 24*time.Hour)
+	if err != nil || !needRefresh {
+		return err
+	}
+	param := cloudpan.NewAppFileListParam()
+	param.FileId = targetFolderID
+	param.PageSize = 200
+	result, apiErr := runtime.panClient.AppGetAllFileList(param)
+	if apiErr != nil {
+		return fmt.Errorf("刷新CAS目标目录缓存失败: %w", apiErr)
+	}
+	items := make([]*models.CasTargetDirCache, 0)
+	now := time.Now()
+	if result != nil {
+		for _, fi := range result.FileList {
+			if fi == nil {
+				continue
+			}
+			items = append(items, &models.CasTargetDirCache{
+				TargetTokenID:  targetTokenID,
+				TargetFolderID: targetFolderID,
+				FileName:       strings.TrimSpace(fi.FileName),
+				IsDir:          fi.IsFolder,
+				RefreshedAt:    now,
+			})
+		}
+	}
+	return h.casTargetCacheService.RefreshDir(ctx, targetTokenID, targetFolderID, items)
+}
+
 func (h *handler) getOrCreateCASCollectRuntime(ctx context.Context, tokenID int64) (*casCollectRuntime, error) {
 	cacheKey := fmt.Sprintf("%s:%d", ctx.Trace.ID(), tokenID)
 	if v, ok := h.casCollectRuntimeCache.Load(cacheKey); ok {
@@ -191,6 +232,20 @@ func (h *handler) collectSubscribeShareCAS(ctx context.Context, runtime *casColl
 	if runtime == nil || runtime.session == nil {
 		return fmt.Errorf("自动归集CAS失败: 无法获取目标运行时会话")
 	}
+	// 注意：这里的“目录缓存去重”只允许对“开启了自动刷新的源存储”生效，不能扩成全局逻辑。
+	if topFile, topErr := h.virtualFileService.QueryTop(ctx, file.ID); topErr == nil && topFile != nil {
+		if mountPoint, mpErr := h.mountPointService.Query(ctx, topFile.ID); mpErr == nil && mountPoint != nil && mountPoint.EnableAutoRefresh {
+			if err := h.refreshCASDirCacheIfNeeded(ctx, shared.SettingAddition.CasTargetTokenId, targetFolderID, runtime); err != nil {
+				ctx.Warn("刷新CAS目标目录缓存失败，继续尝试转存", zap.Error(err), zap.String("targetFolderId", targetFolderID))
+			} else if exists, err := h.casTargetCacheService.Exists(ctx, shared.SettingAddition.CasTargetTokenId, targetFolderID, file.Name); err == nil && exists {
+				ctx.Info("CAS自动归集命中本地目录缓存，跳过已存在文件",
+					zap.String("fileName", file.Name),
+					zap.String("targetFolderId", targetFolderID),
+				)
+				return nil
+			}
+		}
+	}
 	accessToken := strings.TrimSpace(runtime.session.Token.AccessToken)
 	if accessToken == "" {
 		return fmt.Errorf("自动归集CAS失败: 目标运行时缺少AccessToken")
@@ -222,7 +277,23 @@ func (h *handler) collectSubscribeShareCAS(ctx context.Context, runtime *casColl
 	if strings.TrimSpace(resp.TaskID) == "" {
 		return fmt.Errorf("自动归集CAS失败: SHARE_SAVE未返回任务ID")
 	}
-	return waitForShareSaveTask(ctx, accessToken, resp.TaskID, 2*time.Minute)
+	if err := waitForShareSaveTask(ctx, accessToken, resp.TaskID, 2*time.Minute); err != nil {
+		return err
+	}
+	if h.casTargetCacheService != nil {
+		if topFile, topErr := h.virtualFileService.QueryTop(ctx, file.ID); topErr == nil && topFile != nil {
+			if mountPoint, mpErr := h.mountPointService.Query(ctx, topFile.ID); mpErr == nil && mountPoint != nil && mountPoint.EnableAutoRefresh {
+				_ = h.casTargetCacheService.Upsert(ctx, &models.CasTargetDirCache{
+					TargetTokenID:  shared.SettingAddition.CasTargetTokenId,
+					TargetFolderID: targetFolderID,
+					FileName:       file.Name,
+					IsDir:          false,
+					RefreshedAt:    time.Now(),
+				})
+			}
+		}
+	}
+	return nil
 }
 
 func (h *handler) tryCollectCASFromVirtualFile(ctx context.Context, file *models.VirtualFile) error {
@@ -275,7 +346,10 @@ func (h *handler) tryCollectCASFromVirtualFile(ctx context.Context, file *models
 
 	if cfg.CasAutoCollectPreservePath {
 		var sourceDirPath string
-		if file.ParentId > 0 {
+		if runtimePath, ok := file.Addition.String(consts.FileAdditionKeySourceDirPath); ok && strings.TrimSpace(runtimePath) != "" {
+			sourceDirPath = strings.TrimSpace(runtimePath)
+		}
+		if sourceDirPath == "" && file.ParentId > 0 {
 			if parentFullPath, parentErr := h.virtualFileService.CalFullPath(ctx, file.ParentId); parentErr == nil {
 				sourceDirPath = strings.TrimSpace(parentFullPath)
 			}
@@ -297,13 +371,21 @@ func (h *handler) tryCollectCASFromVirtualFile(ctx context.Context, file *models
 			if apiErr != nil {
 				return fmt.Errorf("创建CAS归集目录失败: %w", apiErr)
 			}
-			if folder != nil && folder.FileId != "" {
-				targetFolderID = folder.FileId
-				ctx.Info("CAS自动归集目录创建/复用成功",
-					zap.String("relativeDir", relDir),
-					zap.String("targetFolderId", targetFolderID),
-				)
+			// 关键约束：只要要求保留路径，就必须先拿到最终目标目录 ID。
+			// 不能在目录未确认成功时继续提交文件转存，否则文件会落到上一级甚至根目录。
+			if folder == nil || strings.TrimSpace(folder.FileId) == "" {
+				return fmt.Errorf("创建CAS归集目录失败: 未返回最终目标目录ID relativeDir=%s", relDir)
 			}
+			targetFolderID = strings.TrimSpace(folder.FileId)
+			ctx.Info("CAS自动归集目录创建/复用成功",
+				zap.String("relativeDir", relDir),
+				zap.String("targetFolderId", targetFolderID),
+			)
+			ctx.Info("CAS自动归集确认最终目标目录",
+				zap.String("fileName", file.Name),
+				zap.String("finalTargetFolderId", targetFolderID),
+				zap.String("relativeDir", relDir),
+			)
 		} else {
 			ctx.Info("CAS自动归集未生成相对目录，回退保存到基目录",
 				zap.Int64("fileId", file.ID),

@@ -14,6 +14,8 @@ const (
 	FileAdditionKeyShareCode = "share_code"
 	// FileAdditionKeyAccessURL 订阅/分享访问链接
 	FileAdditionKeyAccessURL = "access_url"
+	// FileAdditionKeySourceDirPath 扫描时解析出的源目录路径（临时/运行时使用）
+	FileAdditionKeySourceDirPath = "source_dir_path"
 	// FileAdditionKeyFamilyId 家庭ID
 	FileAdditionKeyFamilyId = "family_id"
 )

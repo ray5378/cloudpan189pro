@@ -135,6 +135,15 @@ declare namespace Models {
 
     autoDeleteInvalidStorageEnabled?: boolean
     autoDeleteInvalidStorageKeywords?: string
+
+    casTargetEnabled?: boolean
+    casTargetTokenId?: number
+    casTargetType?: string
+    casTargetFamilyId?: string
+    casTargetFolderId?: string
+    casAccessPath?: string
+    casAutoCollectEnabled?: boolean
+    casAutoCollectPreservePath?: boolean
   }
 
   // 任务引擎统计信息（对应后端 TaskStats）

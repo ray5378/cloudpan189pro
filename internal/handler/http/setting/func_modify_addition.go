@@ -29,6 +29,15 @@ type modifyAdditionRequest struct {
 
 	AutoDeleteInvalidStorageEnabled  *bool   `json:"autoDeleteInvalidStorageEnabled"`
 	AutoDeleteInvalidStorageKeywords *string `json:"autoDeleteInvalidStorageKeywords"`
+
+	CasTargetEnabled           *bool   `json:"casTargetEnabled"`
+	CasTargetTokenId           *int64  `json:"casTargetTokenId"`
+	CasTargetType              *string `json:"casTargetType"`
+	CasTargetFamilyId          *string `json:"casTargetFamilyId"`
+	CasTargetFolderId          *string `json:"casTargetFolderId"`
+	CasAccessPath              *string `json:"casAccessPath"`
+	CasAutoCollectEnabled      *bool   `json:"casAutoCollectEnabled"`
+	CasAutoCollectPreservePath *bool   `json:"casAutoCollectPreservePath"`
 }
 
 // ModifyAddition 修改系统附加设置（可选字段更新）
@@ -118,6 +127,30 @@ func (h *handler) ModifyAddition() httpcontext.HandlerFunc {
 		}
 		if req.AutoDeleteInvalidStorageKeywords != nil {
 			merged.AutoDeleteInvalidStorageKeywords = *req.AutoDeleteInvalidStorageKeywords
+		}
+		if req.CasTargetEnabled != nil {
+			merged.CasTargetEnabled = *req.CasTargetEnabled
+		}
+		if req.CasTargetTokenId != nil {
+			merged.CasTargetTokenId = *req.CasTargetTokenId
+		}
+		if req.CasTargetType != nil {
+			merged.CasTargetType = *req.CasTargetType
+		}
+		if req.CasTargetFamilyId != nil {
+			merged.CasTargetFamilyId = *req.CasTargetFamilyId
+		}
+		if req.CasTargetFolderId != nil {
+			merged.CasTargetFolderId = *req.CasTargetFolderId
+		}
+		if req.CasAccessPath != nil {
+			merged.CasAccessPath = *req.CasAccessPath
+		}
+		if req.CasAutoCollectEnabled != nil {
+			merged.CasAutoCollectEnabled = *req.CasAutoCollectEnabled
+		}
+		if req.CasAutoCollectPreservePath != nil {
+			merged.CasAutoCollectPreservePath = *req.CasAutoCollectPreservePath
 		}
 
 		// 更新数据库

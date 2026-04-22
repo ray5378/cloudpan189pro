@@ -14,6 +14,7 @@ import (
 	"github.com/xxcheng123/cloudpan189-share/internal/shared"
 
 	appsessionSvi "github.com/xxcheng123/cloudpan189-share/internal/services/appsession"
+	castargetcacheSvi "github.com/xxcheng123/cloudpan189-share/internal/services/castargetcache"
 	cloudbridgeSvi "github.com/xxcheng123/cloudpan189-share/internal/services/cloudbridge"
 	cloudtokenSvi "github.com/xxcheng123/cloudpan189-share/internal/services/cloudtoken"
 	filetasklogSvi "github.com/xxcheng123/cloudpan189-share/internal/services/filetasklog"
@@ -41,6 +42,7 @@ type handler struct {
 	mediaFileService       mediafileSvi.Service
 	verifyService          verifySvi.Service
 	appSessionService      appsessionSvi.Service
+	casTargetCacheService  castargetcacheSvi.Service
 	casCollectRuntimeCache sync.Map
 }
 
@@ -56,15 +58,16 @@ func NewHandler(
 	verifyService verifySvi.Service,
 ) Handler {
 	return &handler{
-		logger:             logger,
-		virtualFileService: virtualFileService,
-		cloudBridgeService: cloudBridgeService,
-		cloudTokenService:  cloudTokenService,
-		mountPointService:  mountPointService,
-		fileTaskLogService: fileTaskLogService,
-		mediaFileService:   mediaFileService,
-		verifyService:      verifyService,
-		appSessionService:  appsessionSvi.NewService(svc, cloudTokenService, mountPointService),
+		logger:                logger,
+		virtualFileService:    virtualFileService,
+		cloudBridgeService:    cloudBridgeService,
+		cloudTokenService:     cloudTokenService,
+		mountPointService:     mountPointService,
+		fileTaskLogService:    fileTaskLogService,
+		mediaFileService:      mediaFileService,
+		verifyService:         verifyService,
+		appSessionService:     appsessionSvi.NewService(svc, cloudTokenService, mountPointService),
+		casTargetCacheService: castargetcacheSvi.NewService(svc),
 	}
 }
 

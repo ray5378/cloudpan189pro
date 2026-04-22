@@ -9,10 +9,14 @@ import (
 	"time"
 
 	"github.com/bytedance/gopkg/util/gopool"
+	"github.com/tickstep/cloudpan189-api/cloudpan"
 	"github.com/xxcheng123/cloudpan189-share/internal/consts"
 	"github.com/xxcheng123/cloudpan189-share/internal/framework/context"
 	"github.com/xxcheng123/cloudpan189-share/internal/pkgs/taskengine"
 	"github.com/xxcheng123/cloudpan189-share/internal/repository/models"
+	appsessionSvi "github.com/xxcheng123/cloudpan189-share/internal/services/appsession"
+	castargetcacheSvi "github.com/xxcheng123/cloudpan189-share/internal/services/castargetcache"
+	cloudtokenSvi "github.com/xxcheng123/cloudpan189-share/internal/services/cloudtoken"
 	filetasklogSvi "github.com/xxcheng123/cloudpan189-share/internal/services/filetasklog"
 	"github.com/xxcheng123/cloudpan189-share/internal/services/mountpoint"
 	"github.com/xxcheng123/cloudpan189-share/internal/services/virtualfile"
@@ -20,6 +24,17 @@ import (
 	"github.com/xxcheng123/cloudpan189-share/internal/types/topic"
 	"go.uber.org/zap"
 )
+
+func buildSchedulerPanClient(session *appsessionSvi.Session) *cloudpan.PanClient {
+	if session == nil {
+		return nil
+	}
+	webToken := cloudpan.WebLoginToken{}
+	if cookie := cloudpan.RefreshCookieToken(session.Token.SessionKey); cookie != "" {
+		webToken.CookieLoginUser = cookie
+	}
+	return cloudpan.NewPanClient(webToken, session.Token)
+}
 
 type autoDeleteConfirmationState struct {
 	RoundsTriggered   int
@@ -29,14 +44,18 @@ type autoDeleteConfirmationState struct {
 }
 
 type RefreshFileScheduler struct {
-	running            bool
-	mu                 sync.Mutex
-	ctx                context.Context
-	cancel             context.CancelFunc
-	mountPointService  mountpoint.Service
-	fileTaskLogService filetasklogSvi.Service
-	virtualFileService virtualfile.Service
-	taskEngine         taskengine.TaskEngine
+	running                bool
+	mu                     sync.Mutex
+	ctx                    context.Context
+	cancel                 context.CancelFunc
+	mountPointService      mountpoint.Service
+	fileTaskLogService     filetasklogSvi.Service
+	virtualFileService     virtualfile.Service
+	taskEngine             taskengine.TaskEngine
+	cloudTokenService      cloudtokenSvi.Service
+	appSessionService      appsessionSvi.Service
+	casTargetCacheService  castargetcacheSvi.Service
+	lastCasCacheRefreshKey string
 
 	// 进程内去重：记录每个挂载点最近已触发的 refresh slot，
 	// 避免 scheduler 抖动或 doJob 耗时导致同一槽位重复触发。
@@ -46,11 +65,14 @@ type RefreshFileScheduler struct {
 	autoDeleteConfirmations map[int64]*autoDeleteConfirmationState
 }
 
-func NewRefreshFileScheduler(mountPointService mountpoint.Service, fileTaskLogService filetasklogSvi.Service, virtualFileService virtualfile.Service, taskEngine taskengine.TaskEngine) Scheduler {
+func NewRefreshFileScheduler(mountPointService mountpoint.Service, fileTaskLogService filetasklogSvi.Service, virtualFileService virtualfile.Service, cloudTokenService cloudtokenSvi.Service, appSessionService appsessionSvi.Service, casTargetCacheService castargetcacheSvi.Service, taskEngine taskengine.TaskEngine) Scheduler {
 	return &RefreshFileScheduler{
 		mountPointService:       mountPointService,
 		fileTaskLogService:      fileTaskLogService,
 		virtualFileService:      virtualFileService,
+		cloudTokenService:       cloudTokenService,
+		appSessionService:       appSessionService,
+		casTargetCacheService:   casTargetCacheService,
 		taskEngine:              taskEngine,
 		running:                 false,
 		lastTriggeredSlot:       make(map[int64]int64),
@@ -71,6 +93,11 @@ func (s *RefreshFileScheduler) Start(ctx context.Context) error {
 	s.ctx, s.cancel = context.WithCancel(ctx)
 
 	s.running = true
+
+	// 启动时如果缓存表为空，立刻针对“开启自动刷新的存储”初始化一次目标目录缓存。
+	gopool.Go(func() {
+		s.initCasTargetDirCacheIfEmpty(ctx)
+	})
 
 	gopool.Go(func() {
 		for s.doJob() {
@@ -113,6 +140,7 @@ func (s *RefreshFileScheduler) doJob() bool {
 			ctx.Info("文件刷新执行器停止")
 			return false
 		case <-ticker.C:
+			s.refreshCasTargetDirCacheDaily(ctx, time.Now())
 			mountPoints, err := s.mountPointService.GetAutoRefreshList(ctx, &mountpoint.GetAutoRefreshListRequest{})
 			if err != nil {
 				ctx.Error("查询挂载点失败", zap.Error(err))
@@ -123,16 +151,22 @@ func (s *RefreshFileScheduler) doJob() bool {
 			activeFileIDs := make(map[int64]struct{}, len(mountPoints))
 			activeMountIDs := make(map[int64]struct{}, len(mountPoints))
 			for _, mp := range mountPoints {
-				if mp == nil { continue }
+				if mp == nil {
+					continue
+				}
 				activeFileIDs[mp.FileId] = struct{}{}
 				activeMountIDs[mp.ID] = struct{}{}
 			}
 			s.mu.Lock()
 			for id := range s.lastTriggeredSlot {
-				if _, ok := activeMountIDs[id]; !ok { delete(s.lastTriggeredSlot, id) }
+				if _, ok := activeMountIDs[id]; !ok {
+					delete(s.lastTriggeredSlot, id)
+				}
 			}
 			for fid := range s.autoDeleteConfirmations {
-				if _, ok := activeFileIDs[fid]; !ok { delete(s.autoDeleteConfirmations, fid) }
+				if _, ok := activeFileIDs[fid]; !ok {
+					delete(s.autoDeleteConfirmations, fid)
+				}
 			}
 			s.mu.Unlock()
 
@@ -520,4 +554,110 @@ func parseClockHM(value string) (hour, minute int, ok bool) {
 		return 0, 0, false
 	}
 	return hour, minute, true
+}
+
+func (s *RefreshFileScheduler) initCasTargetDirCacheIfEmpty(ctx context.Context) {
+	if s.casTargetCacheService == nil {
+		return
+	}
+	empty, err := s.casTargetCacheService.IsEmpty(ctx)
+	if err != nil {
+		ctx.Warn("检查CAS目标目录缓存表是否为空失败", zap.Error(err))
+		return
+	}
+	if !empty {
+		return
+	}
+	// 重要：启动初始化绝不能为了刷新缓存去 mkdir 造目录。
+	// 表为空时，只初始化 CAS 根目录本身的缓存；后续子目录缓存依赖真实转存成功后即时补写，再由每日刷新只读更新。
+	if err := s.refreshExistingCasTargetDirCache(ctx, "启动初始化", true); err != nil {
+		ctx.Warn("初始化CAS目标目录缓存失败", zap.Error(err))
+	}
+}
+
+func (s *RefreshFileScheduler) refreshCasTargetDirCacheDaily(ctx context.Context, now time.Time) {
+	if s.casTargetCacheService == nil {
+		return
+	}
+	refreshKey := now.Format("2006-01-02")
+	s.mu.Lock()
+	if s.lastCasCacheRefreshKey == refreshKey {
+		s.mu.Unlock()
+		return
+	}
+	s.lastCasCacheRefreshKey = refreshKey
+	s.mu.Unlock()
+	if err := s.refreshExistingCasTargetDirCache(ctx, "每日刷新", false); err != nil {
+		ctx.Warn("每日刷新CAS目标目录缓存失败", zap.Error(err))
+	}
+}
+
+func (s *RefreshFileScheduler) refreshExistingCasTargetDirCache(ctx context.Context, reason string, bootstrapRootOnly bool) error {
+	if s.casTargetCacheService == nil {
+		return nil
+	}
+	tokenID := shared.SettingAddition.CasTargetTokenId
+	if tokenID <= 0 {
+		return nil
+	}
+	session, err := s.appSessionService.GetByTokenID(ctx, tokenID)
+	if err != nil {
+		return err
+	}
+	panClient := buildSchedulerPanClient(session)
+	if panClient == nil {
+		return nil
+	}
+	baseTargetFolderID := strings.TrimSpace(shared.SettingAddition.CasTargetFolderId)
+	if baseTargetFolderID == "0" || baseTargetFolderID == "" {
+		return nil
+	}
+
+	targetDirs := make([]*models.CasTargetDirCache, 0)
+	if bootstrapRootOnly {
+		targetDirs = append(targetDirs, &models.CasTargetDirCache{TargetTokenID: tokenID, TargetFolderID: baseTargetFolderID})
+	} else {
+		list, err := s.casTargetCacheService.ListDistinctDirs(ctx)
+		if err != nil {
+			return err
+		}
+		for _, item := range list {
+			if item == nil || item.TargetTokenID != tokenID || strings.TrimSpace(item.TargetFolderID) == "" {
+				continue
+			}
+			targetDirs = append(targetDirs, item)
+		}
+	}
+
+	for _, item := range targetDirs {
+		param := cloudpan.NewAppFileListParam()
+		param.FileId = item.TargetFolderID
+		param.PageSize = 200
+		result, apiErr := panClient.AppGetAllFileList(param)
+		if apiErr != nil {
+			ctx.Warn("刷新已存在CAS目标目录缓存失败", zap.Error(apiErr), zap.String("targetFolderId", item.TargetFolderID), zap.String("reason", reason))
+			continue
+		}
+		now := time.Now()
+		items := make([]*models.CasTargetDirCache, 0)
+		if result != nil {
+			for _, fi := range result.FileList {
+				if fi == nil {
+					continue
+				}
+				items = append(items, &models.CasTargetDirCache{
+					TargetTokenID:  tokenID,
+					TargetFolderID: item.TargetFolderID,
+					FileName:       strings.TrimSpace(fi.FileName),
+					IsDir:          fi.IsFolder,
+					RefreshedAt:    now,
+				})
+			}
+		}
+		if err := s.casTargetCacheService.RefreshDir(ctx, tokenID, item.TargetFolderID, items); err != nil {
+			ctx.Warn("写入CAS目标目录缓存失败", zap.Error(err), zap.String("targetFolderId", item.TargetFolderID), zap.String("reason", reason))
+		}
+	}
+	ctx.Info("CAS目标目录缓存刷新完成", zap.String("reason", reason), zap.Int("dir_count", len(targetDirs)))
+	return nil
 }

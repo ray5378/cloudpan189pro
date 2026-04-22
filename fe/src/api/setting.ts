@@ -78,6 +78,15 @@ export interface ModifySettingAdditionRequest {
 
   autoDeleteInvalidStorageEnabled?: boolean
   autoDeleteInvalidStorageKeywords?: string
+
+  casTargetEnabled?: boolean
+  casTargetTokenId?: number
+  casTargetType?: string
+  casTargetFamilyId?: string
+  casTargetFolderId?: string
+  casAccessPath?: string
+  casAutoCollectEnabled?: boolean
+  casAutoCollectPreservePath?: boolean
 }
 
 export const modifySettingAddition = (data: ModifySettingAdditionRequest): Promise<ApiResponse> => {

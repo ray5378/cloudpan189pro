@@ -47,7 +47,7 @@ func Start(svc bootstrap.ServiceContext) error {
 	)
 
 	var (
-		fileHandler       = file.NewHandler(logger, virtualFileService, cloudBridgeService, cloudTokenService, mountPointService, fileTaskLogService, mediaFileService, verifyService)
+		fileHandler       = file.NewHandler(svc, logger, virtualFileService, cloudBridgeService, cloudTokenService, mountPointService, fileTaskLogService, mediaFileService, verifyService)
 		autoIngestHandler = autoingest.NewHandler(svc, taskEngine, cloudBridgeService, autoIngestPlanService, authIngestLogService, storageFacadeService, virtualFileService, cloudTokenService, mountPointService)
 		mediaHandler      = media.NewHandler(mediaFileService, mountPointService, virtualFileService, verifyService)
 		externalHandler   = externalconsumer.NewHandler(storageFacadeService, fileTaskLogService, taskEngine)
