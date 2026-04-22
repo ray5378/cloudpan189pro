@@ -105,7 +105,7 @@ func TestGetSubscribeShareFiles(t *testing.T) {
 
 	ctx := context.NewContext(stdContext.Background())
 
-	list, err := NewService(mockSvc).GetSubscribeShareFiles(ctx, subUserId, subShareId, subShareFileId, subShareIsFolder)
+	list, err := NewService(mockSvc).GetSubscribeShareFiles(ctx, NewAuthToken(accessToken, 4102444800000), subUserId, subShareId, subShareFileId, subShareIsFolder)
 	if err != nil {
 		t.Error(err)
 

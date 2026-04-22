@@ -83,6 +83,12 @@ func (a *familyRestoreAdapter) TryRestore(
 	if fileName == "" {
 		fileName = info.Name
 	}
+	if destinationType == DestinationTypePerson {
+		fileName = "0" + strings.ToLower(strings.TrimSpace(info.MD5)) + ".transfer"
+		if fileName == "0.transfer" {
+			fileName = "0cas.transfer"
+		}
+	}
 
 	familyFolderID := ""
 	if destinationType == DestinationTypeFamily {
@@ -108,10 +114,10 @@ func (a *familyRestoreAdapter) TryRestore(
 	}
 
 	if err := a.copyFamilyFileToPersonal(session, familyID, familyFileID, targetFolderID, fileName); err != nil {
-		_ = a.safeDeleteFamilyFile(session, familyID, familyFileID, fileName)
+		// 调试期先不删家庭中转文件，确认是否存在“删除过早影响COPY”的可能。
 		return nil, err
 	}
-	_ = a.safeDeleteFamilyFile(session, familyID, familyFileID, fileName)
+	// 调试期先不删家庭中转文件，待确认COPY链路稳定后再恢复清理。
 	return result, nil
 }
 
@@ -188,11 +194,11 @@ func (a *familyRestoreAdapter) familyRapidUpload(session *appsession.Session, fa
 		return "", fmt.Errorf("家庭秒传commit失败")
 	}
 
-	familyFileID := firstNonEmpty(
-		uploadRespDataString(commitRes, "file", "userFileId"),
-		uploadRespDataString(commitRes, "file", "id"),
-		uploadRespDataString(commitRes, "data", "fileId"),
-	)
+	userFileID := uploadRespDataString(commitRes, "file", "userFileId")
+	fileID := uploadRespDataString(commitRes, "file", "id")
+	dataFileID := uploadRespDataString(commitRes, "data", "fileId")
+	familyFileID := firstNonEmpty(userFileID, fileID, dataFileID)
+	fmt.Printf("[casrestore] family commit ids userFileId=%s file.id=%s data.fileId=%s selected=%s\\n", userFileID, fileID, dataFileID, familyFileID)
 	if familyFileID == "" {
 		b, _ := json.Marshal(commitRes)
 		return "", fmt.Errorf("家庭秒传commit响应缺少文件ID: %s", string(b))
@@ -297,6 +303,7 @@ func (a *familyRestoreAdapter) copyFamilyFileToPersonal(session *appsession.Sess
 		"shareId":        "null",
 	}
 	resp := new(batchTaskCreateResp)
+	fmt.Printf("[casrestore] copyFamilyFileToPersonal params familyID=%d familyFileID=%s personalFolderID=%s fileName=%s taskInfos=%s [debug-empty-filename]\n", familyID, familyFileID, personalFolderID, fileName, params["taskInfos"])
 	if err := doAccessTokenFormJSONRequest(accessToken, familyBatchAPIBase+"/open/batch/createBatchTask.action", params, 30*time.Second, resp); err != nil {
 		return errors.Wrap(err, "家庭中转COPY失败")
 	}
@@ -329,7 +336,11 @@ func (a *familyRestoreAdapter) waitForBatchTask(accessToken, taskType, taskID st
 			return fmt.Errorf("批量任务查询失败: %s", resp.ResMessage)
 		}
 		lastStatus = resp.TaskStatus
+		fmt.Printf("[casrestore] waitForBatchTask type=%s taskId=%s status=%d successed=%d failed=%d skip=%d\n", taskType, taskID, resp.TaskStatus, resp.SuccessedCount, resp.FailedCount, resp.SkipCount)
 		if lastStatus == 4 {
+			if resp.FailedCount > 0 && resp.SuccessedCount == 0 {
+				return fmt.Errorf("家庭中转批量任务失败 taskStatus=%d failed=%d successed=%d skip=%d", resp.TaskStatus, resp.FailedCount, resp.SuccessedCount, resp.SkipCount)
+			}
 			return nil
 		}
 	}

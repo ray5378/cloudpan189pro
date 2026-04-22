@@ -8,7 +8,6 @@ import (
 	"github.com/xxcheng123/cloudpan189-share/internal/pkgs/taskengine"
 
 	appsessionSvi "github.com/xxcheng123/cloudpan189-share/internal/services/appsession"
-	castargetcacheSvi "github.com/xxcheng123/cloudpan189-share/internal/services/castargetcache"
 	cloudtokenSvi "github.com/xxcheng123/cloudpan189-share/internal/services/cloudtoken"
 	filetasklogSvi "github.com/xxcheng123/cloudpan189-share/internal/services/filetasklog"
 	mountpointSvi "github.com/xxcheng123/cloudpan189-share/internal/services/mountpoint"
@@ -26,8 +25,6 @@ type Handler interface {
 	ModifyAddition() httpcontext.HandlerFunc
 	Addition() httpcontext.HandlerFunc
 	RunAutoDeleteInvalidStorageOnce() httpcontext.HandlerFunc
-	ClearCasTargetCache() httpcontext.HandlerFunc
-	RebuildCasTargetCache() httpcontext.HandlerFunc
 }
 
 var bi = httpcontext.NewBusinessGenerator(consts.BusCodeSettingStartCode)
@@ -43,29 +40,27 @@ var (
 )
 
 type handler struct {
-	userService           userSvi.Service
-	settingService        settingSvi.Service
-	mountPointService     mountpointSvi.Service
-	fileTaskLogService    filetasklogSvi.Service
-	virtualFileService    virtualfileSvi.Service
-	cloudTokenService     cloudtokenSvi.Service
-	appSessionService     appsessionSvi.Service
-	casTargetCacheService castargetcacheSvi.Service
-	taskEngine            taskengine.TaskEngine
-	initTime              time.Time
+	userService        userSvi.Service
+	settingService     settingSvi.Service
+	mountPointService  mountpointSvi.Service
+	fileTaskLogService filetasklogSvi.Service
+	virtualFileService virtualfileSvi.Service
+	cloudTokenService  cloudtokenSvi.Service
+	appSessionService  appsessionSvi.Service
+	taskEngine         taskengine.TaskEngine
+	initTime           time.Time
 }
 
-func NewHandler(userService userSvi.Service, settingService settingSvi.Service, mountPointService mountpointSvi.Service, fileTaskLogService filetasklogSvi.Service, virtualFileService virtualfileSvi.Service, cloudTokenService cloudtokenSvi.Service, appSessionService appsessionSvi.Service, casTargetCacheService castargetcacheSvi.Service, taskEngine taskengine.TaskEngine) Handler {
+func NewHandler(userService userSvi.Service, settingService settingSvi.Service, mountPointService mountpointSvi.Service, fileTaskLogService filetasklogSvi.Service, virtualFileService virtualfileSvi.Service, cloudTokenService cloudtokenSvi.Service, appSessionService appsessionSvi.Service, taskEngine taskengine.TaskEngine) Handler {
 	return &handler{
-		userService:           userService,
-		settingService:        settingService,
-		mountPointService:     mountPointService,
-		fileTaskLogService:    fileTaskLogService,
-		virtualFileService:    virtualFileService,
-		cloudTokenService:     cloudTokenService,
-		appSessionService:     appSessionService,
-		casTargetCacheService: casTargetCacheService,
-		taskEngine:            taskEngine,
-		initTime:              time.Now(),
+		userService:        userService,
+		settingService:     settingService,
+		mountPointService:  mountPointService,
+		fileTaskLogService: fileTaskLogService,
+		virtualFileService: virtualFileService,
+		cloudTokenService:  cloudTokenService,
+		appSessionService:  appSessionService,
+		taskEngine:         taskEngine,
+		initTime:           time.Now(),
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/xxcheng123/cloudpan189-share/internal/consts"
 	"github.com/xxcheng123/cloudpan189-share/internal/framework/context"
 	"github.com/xxcheng123/cloudpan189-share/internal/framework/taskcontext"
+	"github.com/xxcheng123/cloudpan189-share/internal/pkgs/taskengine"
 	"github.com/xxcheng123/cloudpan189-share/internal/repository/models"
 	"github.com/xxcheng123/cloudpan189-share/internal/shared"
 
@@ -18,6 +19,7 @@ import (
 	cloudbridgeSvi "github.com/xxcheng123/cloudpan189-share/internal/services/cloudbridge"
 	cloudtokenSvi "github.com/xxcheng123/cloudpan189-share/internal/services/cloudtoken"
 	filetasklogSvi "github.com/xxcheng123/cloudpan189-share/internal/services/filetasklog"
+	localcas "github.com/xxcheng123/cloudpan189-share/internal/services/localcas"
 	mediafileSvi "github.com/xxcheng123/cloudpan189-share/internal/services/mediafile"
 	mountPointSvi "github.com/xxcheng123/cloudpan189-share/internal/services/mountpoint"
 	verifySvi "github.com/xxcheng123/cloudpan189-share/internal/services/verify"
@@ -30,6 +32,7 @@ type Handler interface {
 	ScanFile() taskcontext.HandlerFunc
 	ClearFile() taskcontext.HandlerFunc
 	HandleBatchDelete() taskcontext.HandlerFunc
+	RetryCasCollect() taskcontext.HandlerFunc
 }
 
 type handler struct {
@@ -44,6 +47,8 @@ type handler struct {
 	appSessionService      appsessionSvi.Service
 	casTargetCacheService  castargetcacheSvi.Service
 	casCollectRuntimeCache sync.Map
+	taskEngine             taskengine.TaskEngine
+	localCASService        localcas.Service
 }
 
 func NewHandler(
@@ -68,6 +73,8 @@ func NewHandler(
 		verifyService:         verifyService,
 		appSessionService:     appsessionSvi.NewService(svc, cloudTokenService, mountPointService),
 		casTargetCacheService: castargetcacheSvi.NewService(svc),
+		taskEngine:            svc.GetTaskEngine(),
+		localCASService:       localcas.NewService(svc),
 	}
 }
 
@@ -84,7 +91,6 @@ func (h *handler) walkFile(ctx context.Context, rootId int64, walkFunc walkFunc)
 		}
 	}
 
-	// 计算当前文件的路径
 	{
 		if prevPath, ok := ctx.GetString(consts.CtxKeyFileFullPath); ok {
 			ctx = ctx.WithValue(consts.CtxKeyFileFullPath, path.Join(prevPath, file.Name))
@@ -92,41 +98,28 @@ func (h *handler) walkFile(ctx context.Context, rootId int64, walkFunc walkFunc)
 			beginPath, err := h.virtualFileService.CalFullPath(ctx, file.ID)
 			if err != nil {
 				logger.Error("获取文件路径失败", zap.Int64("file_id", file.ID), zap.Error(err))
-
 				return err
 			}
-
 			ctx = ctx.WithValue(consts.CtxKeyFileFullPath, beginPath)
 		}
 	}
 
 	children := make([]*models.VirtualFile, 0)
-
-	// 如果是文件夹类型，递归处理
 	if file.IsDir {
-		if children, err = h.virtualFileService.List(ctx, &virtualfileSvi.ListRequest{
-			ParentId: &file.ID,
-		}); err != nil {
+		if children, err = h.virtualFileService.List(ctx, &virtualfileSvi.ListRequest{ParentId: &file.ID}); err != nil {
 			return err
 		}
 	}
 	time.Sleep(5 * time.Millisecond)
-	ctx.Debug(
-		"开始处理文件",
-		zap.Int64("file_id", file.ID),
-		zap.String("file_name", file.Name),
-	)
+	ctx.Debug("开始处理文件", zap.Int64("file_id", file.ID), zap.String("file_name", file.Name))
 
 	if nextFiles, walkErr := walkFunc(ctx, file, children); walkErr != nil {
 		return walkErr
 	} else if len(nextFiles) > 0 {
-		// 获取线程数配置
 		threadCount := shared.SettingAddition.TaskThreadCount
 		if threadCount <= 0 {
 			threadCount = 1
 		}
-
-		// 如果只有一个线程或者文件数量很少，使用串行处理
 		if threadCount == 1 || len(nextFiles) <= 1 {
 			for _, nextFile := range nextFiles {
 				time.Sleep(2 * time.Millisecond)
@@ -138,28 +131,23 @@ func (h *handler) walkFile(ctx context.Context, rootId int64, walkFunc walkFunc)
 			var wg sync.WaitGroup
 			errorChan := make(chan error, len(nextFiles))
 			semaphore := make(chan struct{}, threadCount)
-
 			for _, nextFile := range nextFiles {
 				semaphore <- struct{}{}
 				wg.Add(1)
-
 				go func(file *models.VirtualFile) {
 					defer wg.Done()
 					defer func() {
 						<-semaphore
 						time.Sleep(10 * time.Millisecond)
 					}()
-
 					childCtx := ctx.WithValue(consts.CtxKeyFileFullPath, "")
 					if walkErr := h.walkFile(childCtx, file.ID, walkFunc); walkErr != nil {
 						errorChan <- walkErr
 					}
 				}(nextFile)
 			}
-
 			wg.Wait()
 			close(errorChan)
-
 			for walkErr := range errorChan {
 				if walkErr != nil {
 					return walkErr

@@ -47,11 +47,11 @@ func (r MediaRebuildStrmFileRequest) Topic() taskengine.Topic {
 
 // ExternalCreateStorageRequest 外部接口创建挂载任务
 type ExternalCreateStorageRequest struct {
-	DelayTime  int    `json:"delayTime"`
-	TokenId    *int64 `json:"tokenId"`
-	ShareText  string `json:"shareText"`
-	TargetDir  string `json:"targetDir"`
-	TraceId    string `json:"traceId"`
+	DelayTime int    `json:"delayTime"`
+	TokenId   *int64 `json:"tokenId"`
+	ShareText string `json:"shareText"`
+	TargetDir string `json:"targetDir"`
+	TraceId   string `json:"traceId"`
 }
 
 func (r ExternalCreateStorageRequest) Topic() taskengine.Topic {
@@ -66,6 +66,15 @@ type FileBatchDeleteRequest struct {
 // 3. 实现接口
 func (r FileBatchDeleteRequest) Topic() taskengine.Topic {
 	return taskengine.Topic(KeyFileBatchDelete)
+}
+
+type FileRetryCasCollectRequest struct {
+	FileId     int64 `json:"fileId"`
+	RetryCount int   `json:"retryCount"`
+}
+
+func (r FileRetryCasCollectRequest) Topic() taskengine.Topic {
+	return taskengine.Topic(KeyFileRetryCasCollect)
 }
 
 // 批量解析文本请求 (仅用于 API，不用于 Task)

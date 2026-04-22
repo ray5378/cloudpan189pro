@@ -71,6 +71,11 @@ func Start(svc bootstrap.ServiceContext) error {
 			return err
 		}
 
+		if err := taskEngine.RegisterProcessor(new(topic.FileRetryCasCollectRequest).Topic(), wrap(fileHandler.RetryCasCollect())); err != nil {
+			logger.Error("注册CAS延迟重试处理器失败")
+			return err
+		}
+
 		// 注册 external 异步创建挂载处理器
 		if err := taskEngine.RegisterProcessor(new(topic.ExternalCreateStorageRequest).Topic(), wrap(externalHandler.CreateStorage())); err != nil {
 			logger.Error("注册外部创建挂载处理器失败")

@@ -1,17 +1,17 @@
 <template>
   <!--
-    CAS 来源目录卡片
-    规则：这里只负责来源目录相关 UI 展示与输入，不吸纳“恢复流程”“缓存管理逻辑实现”“跨卡片默认值同步”等职责。
+    CAS 最终目录卡片
+    规则：这里只负责最终目录相关 UI 展示与输入，不吸纳“恢复流程”“缓存管理逻辑实现”“跨卡片默认值同步”等职责。
     如果这里继续长胖，请优先拆更小的局部组件，而不是把逻辑堆回 index.vue。
   -->
-  <n-card title="CAS 来源目录" size="small">
+  <n-card title="CAS 最终目录" size="small">
     <n-space vertical size="small">
-      <n-text depth="3">在这里选中的保存目录，天然等于 CAS访问路径，也等于 CAS归集路径；这里不再区分两套路径。</n-text>
+      <n-text depth="3">这里配置的是 CAS 播放恢复时的最终落盘目录。订阅 `.cas` 会自动保存到本地 `/local_cas`，不再需要在这里手工配置本地来源目录。</n-text>
 
       <n-form :model="sourceForm" label-placement="left" label-width="140px">
         <n-grid :cols="24" :x-gap="16" :y-gap="8">
           <n-grid-item :span="6">
-            <n-form-item label="启用 CAS 目标目录">
+            <n-form-item label="启用 CAS 最终目录">
               <n-switch v-model:value="sourceForm.enabled" />
             </n-form-item>
           </n-grid-item>
@@ -43,7 +43,7 @@
 
           <n-grid-item :span="8">
             <n-form-item label="目标类型">
-              <n-select v-model:value="sourceForm.sourceType" :options="sourceTypeOptions" placeholder="选择来源类型" />
+              <n-select v-model:value="sourceForm.sourceType" :options="sourceTypeOptions" placeholder="选择目标类型" />
             </n-form-item>
           </n-grid-item>
 
@@ -63,12 +63,12 @@
 
         <n-grid :cols="24" :x-gap="16" :y-gap="8">
           <n-grid-item :span="12">
-            <n-form-item label="当前目录">
+            <n-form-item label="当前最终目录">
               <n-input :value="sourcePathLabel" readonly />
             </n-form-item>
           </n-grid-item>
           <n-grid-item :span="12">
-            <n-form-item label="当前目录 ID">
+            <n-form-item label="当前最终目录 ID">
               <n-input :value="currentFolderIdLabel" readonly />
             </n-form-item>
           </n-grid-item>
@@ -76,12 +76,12 @@
 
         <n-grid :cols="24" :x-gap="16" :y-gap="8">
           <n-grid-item :span="8">
-            <n-form-item label="已保存目录 ID">
+            <n-form-item label="已保存最终目录 ID">
               <n-input :value="savedFolderIdLabel" readonly />
             </n-form-item>
           </n-grid-item>
           <n-grid-item :span="16">
-            <n-form-item label="已保存 CAS归集路径">
+            <n-form-item label="已保存最终目录路径">
               <n-input :value="savedCasPathLabel" readonly />
             </n-form-item>
           </n-grid-item>
@@ -91,10 +91,9 @@
           <n-space>
             <n-button @click="$emit('load-root')">加载根目录</n-button>
             <n-button @click="$emit('go-parent')" :disabled="sourceFolderStack.length === 0">返回上级</n-button>
-            <n-button type="primary" @click="$emit('save-source')">保存归集目录</n-button>
-            <CasCacheActions />
+            <n-button type="primary" @click="$emit('save-source')">保存 CAS 最终目录</n-button>
           </n-space>
-          <n-text depth="3">当前目录就是 CAS归集路径，也是 CAS访问路径；保存后下方恢复会直接复用这条路径。</n-text>
+          <n-text depth="3">当前目录决定 `.strm` 播放时 CAS 恢复后的最终云盘落点；恢复仍优先使用本地 `/local_cas` 中的 `.cas` 文件。</n-text>
         </n-space>
       </n-form>
 
@@ -118,7 +117,6 @@ import {
   NSwitch,
   NText,
 } from 'naive-ui'
-import CasCacheActions from './CasCacheActions.vue'
 
 defineProps<{
   sourceForm: any

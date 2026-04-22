@@ -28,8 +28,8 @@ import (
 	appsessionSvi "github.com/xxcheng123/cloudpan189-share/internal/services/appsession"
 	autoingestlogSvi "github.com/xxcheng123/cloudpan189-share/internal/services/autoingestlog"
 	autoingestplanSvi "github.com/xxcheng123/cloudpan189-share/internal/services/autoingestplan"
+	casrecordSvi "github.com/xxcheng123/cloudpan189-share/internal/services/casrecord"
 	casrestoreSvi "github.com/xxcheng123/cloudpan189-share/internal/services/casrestore"
-	castargetcacheSvi "github.com/xxcheng123/cloudpan189-share/internal/services/castargetcache"
 	cloudbridgeSvi "github.com/xxcheng123/cloudpan189-share/internal/services/cloudbridge"
 	cloudtokenSvi "github.com/xxcheng123/cloudpan189-share/internal/services/cloudtoken"
 	filetasklogSvi "github.com/xxcheng123/cloudpan189-share/internal/services/filetasklog"
@@ -80,12 +80,12 @@ func Start(svc bootstrap.ServiceContext) {
 		mediaConfigService    = mediaconfigSvi.NewService(svc)
 		mediaFileService      = mediafileSvi.NewService(svc)
 		casRestoreService     = casrestoreSvi.NewService(svc)
-		casTargetCacheService = castargetcacheSvi.NewService(svc)
+		casRecordService      = casrecordSvi.NewService(svc)
 	)
 
 	var (
 		userHandler           = user.NewHandler(userService, userGroupService, loginLogService)
-		settingHandler        = setting.NewHandler(userService, settingService, mountPointService, fileTaskLogService, virtualFileService, cloudTokenService, appSessionService, casTargetCacheService, taskEngine)
+		settingHandler        = setting.NewHandler(userService, settingService, mountPointService, fileTaskLogService, virtualFileService, cloudTokenService, appSessionService, taskEngine)
 		userGroupHandler      = usergroup.NewHandler(userGroupService, group2FileService, userService)
 		storageHandler        = storage.NewHandler(taskEngine, virtualFileService, cloudBridgeService, cloudTokenService, mountPointService, fileTaskLogService, storageFacadeService)
 		storageAdvanceHandler = advance.NewHandler(cloudBridgeService, cloudTokenService)
@@ -95,7 +95,7 @@ func Start(svc bootstrap.ServiceContext) {
 		taskStateHandler  = taskstate.NewHandler(taskEngine, fileTaskLogService)
 		autoIngestHandler = autoingest.NewHandler(taskEngine, autoIngestPlanService, autoIngestLogService, cloudBridgeService)
 		loginLogHandler   = loginlogHandler.NewHandler(loginLogService)
-		mediaHandler      = media.NewHandler(mediaConfigService, mediaFileService, mountPointService, virtualFileService, verifyService, casRestoreService, taskEngine)
+		mediaHandler      = media.NewHandler(mediaConfigService, mediaFileService, mountPointService, virtualFileService, verifyService, casRestoreService, casRecordService, cloudTokenService, cloudBridgeService, appSessionService, settingService, taskEngine)
 		externalHandler   = external.NewHandler(cloudBridgeService, storageFacadeService, settingService, fileTaskLogService, taskEngine)
 	)
 
@@ -231,8 +231,6 @@ func Start(svc bootstrap.ServiceContext) {
 			settingAdminRouter.POST("/modify_base_url", wrap(settingHandler.ModifyBaseURL()))
 			settingAdminRouter.POST("/toggle_enable_auth", wrap(settingHandler.ToggleEnableAuth()))
 			settingAdminRouter.POST("/modify_addition", wrap(settingHandler.ModifyAddition()))
-			settingAdminRouter.POST("/clear_cas_target_cache", wrap(settingHandler.ClearCasTargetCache()))
-			settingAdminRouter.POST("/rebuild_cas_target_cache", wrap(settingHandler.RebuildCasTargetCache()))
 			settingAdminRouter.POST("/run_auto_delete_invalid_storage_once", wrap(settingHandler.RunAutoDeleteInvalidStorageOnce()))
 		}
 	}
@@ -270,6 +268,7 @@ func Start(svc bootstrap.ServiceContext) {
 			mediaRouter.POST("/rebuild_strm_file", wrap(mediaHandler.RebuildStrmFile()))
 			mediaRouter.POST("/restore_cas", wrap(mediaHandler.RestoreCas()))
 		}
+		openapiRouter.GET("/cas/play/:recordId", wrap(mediaHandler.PlayCas()))
 	}
 
 	{

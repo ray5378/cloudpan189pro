@@ -289,14 +289,14 @@ func (h *handler) ScanFile() taskcontext.HandlerFunc {
 					}
 					scannedFile.Addition[consts.FileAdditionKeySourceDirPath] = sourceDirPath
 				}
-				ctx.Info("扫描到CAS文件，准备尝试自动归集",
+				ctx.Info("扫描到CAS文件，准备下载到本地CAS目录",
 					zap.String("file_name", scannedFile.Name),
 					zap.String("cloud_id", scannedFile.CloudId),
 					zap.String("os_type", scannedFile.OsType),
 					zap.String("source_dir_path", sourceDirPath),
 				)
-				if err := h.tryCollectCASFromVirtualFile(ctx, scannedFile); err != nil {
-					ctx.Error("存储刷新链CAS自动归集失败",
+				if err := h.downloadCASFileToLocal(ctx, scannedFile); err != nil {
+					ctx.Error("存储刷新链CAS本地下载失败",
 						zap.String("file_name", scannedFile.Name),
 						zap.String("cloud_id", scannedFile.CloudId),
 						zap.Error(err),

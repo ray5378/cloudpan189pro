@@ -1,9 +1,10 @@
 package topic
 
 const (
-	KeyFileScanFile    = "topic::file::scan::file"
-	KeyFileClearFile   = "topic::file::clear::file"
-	KeyFileBatchDelete = "topic::file::batch_delete::file"
+	KeyFileScanFile        = "topic::file::scan::file"
+	KeyFileClearFile       = "topic::file::clear::file"
+	KeyFileBatchDelete     = "topic::file::batch_delete::file"
+	KeyFileRetryCasCollect = "topic::file::retry::cas_collect"
 
 	KeyAutoIngestRefreshSubscribe = "topic::autoingest::refresh::subscribe"
 

@@ -92,12 +92,12 @@ func (s *service) GetSubscribeUserFiles(ctx context.Context, userId string) ([]c
 
 // GetSubscribeShareFiles
 // 获取订阅分享的文件
-func (s *service) GetSubscribeShareFiles(ctx context.Context, upUserId string, shareId int64, fileId string, isFolder bool) ([]converter.VirtualFileConverter, error) {
+func (s *service) GetSubscribeShareFiles(ctx context.Context, token client.AuthToken, upUserId string, shareId int64, fileId string, isFolder bool) ([]converter.VirtualFileConverter, error) {
 	pageSize := int64(200)
 
 	return s.doFetch(ctx, func(ctx context.Context) ([]converter.VirtualFileConverter, error) {
 		return s.simplyFetch(ctx, func(ctx context.Context, pageNum int64) ([]converter.VirtualFileConverter, bool, error) {
-			resp, err := s.getClient(ctx).ListShareDir(ctx, shareId, client.String(fileId), func(req *client.ListShareFileRequest) {
+			resp, err := client.New().WithClient(ctx.HTTPClient()).WithToken(token).WithForceWithToken(true).ListResourceShareDir(ctx, upUserId, shareId, client.String(fileId), func(req *client.ListResourceShareFileRequest) {
 				req.IsFolder = isFolder
 				req.IconOption = 5
 				req.OrderBy = "lastOpTime"

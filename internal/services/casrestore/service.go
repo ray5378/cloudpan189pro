@@ -44,11 +44,13 @@ const (
 // 注意：产品语义可以表达四种组合，但真正允许进入执行层的组合仍必须有 reference-backed 主链支撑。
 // 当前 person -> family 仍无可直接照搬的参考链，因此应视为 unsupported，而不是拿 SDK 等价路径兜底。
 type RestoreRequest struct {
-	StorageID    int64
-	MountPointID int64
-	CasFileID    string
-	CasFileName  string
-	CasVirtualID int64
+	StorageID     int64
+	MountPointID  int64
+	TargetTokenID int64
+	CasFileID     string
+	CasFileName   string
+	CasVirtualID  int64
+	LocalCasPath  string
 
 	// UploadRoute 决定秒传/上传时优先走哪条链路；默认 family。
 	UploadRoute UploadRoute
@@ -71,6 +73,7 @@ type RestoreResult struct {
 
 type Service interface {
 	EnsureRestored(ctx appctx.Context, req RestoreRequest) (*RestoreResult, error)
+	EnsureRestoredFromLocalCAS(ctx appctx.Context, req RestoreRequest) (*RestoreResult, error)
 }
 
 type service struct {

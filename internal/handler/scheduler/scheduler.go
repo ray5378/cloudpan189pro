@@ -8,10 +8,8 @@ import (
 	"github.com/xxcheng123/cloudpan189-share/internal/bootstrap"
 	"github.com/xxcheng123/cloudpan189-share/internal/framework/context"
 
-	appsessionSvi "github.com/xxcheng123/cloudpan189-share/internal/services/appsession"
 	autoingestlogSvi "github.com/xxcheng123/cloudpan189-share/internal/services/autoingestlog"
 	autoingestplanSvi "github.com/xxcheng123/cloudpan189-share/internal/services/autoingestplan"
-	castargetcacheSvi "github.com/xxcheng123/cloudpan189-share/internal/services/castargetcache"
 	cloudbridgeSvi "github.com/xxcheng123/cloudpan189-share/internal/services/cloudbridge"
 	cloudtokenSvi "github.com/xxcheng123/cloudpan189-share/internal/services/cloudtoken"
 	filetasklogSvi "github.com/xxcheng123/cloudpan189-share/internal/services/filetasklog"
@@ -53,8 +51,6 @@ func Start(svc bootstrap.ServiceContext) (func(), error) {
 		autoIngestLogService  = autoingestlogSvi.NewService(svc)
 		virtualFileService    = virtualfileSvi.NewService(svc)
 		loginLogService       = loginlogSvi.NewService(svc)
-		appSessionService     = appsessionSvi.NewService(svc, cloudTokenService, mountPointService)
-		casTargetCacheService = castargetcacheSvi.NewService(svc)
 
 		taskEngine = svc.GetTaskEngine()
 	)
@@ -64,7 +60,7 @@ func Start(svc bootstrap.ServiceContext) (func(), error) {
 		errs = append(errs, err)
 	}
 
-	refreshFileScheduler := NewRefreshFileScheduler(mountPointService, fileTaskLogService, virtualFileService, cloudTokenService, appSessionService, casTargetCacheService, taskEngine)
+	refreshFileScheduler := NewRefreshFileScheduler(mountPointService, fileTaskLogService, virtualFileService, cloudTokenService, taskEngine)
 	if err := refreshFileScheduler.Start(ctx); err != nil {
 		errs = append(errs, err)
 	}

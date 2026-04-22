@@ -81,7 +81,7 @@
  *
  * 一眼看懂的规则：
  * 1. index.vue 只做页面编排、状态组装、跨卡片联动，不承载臃肿 UI 细节。
- * 2. 每个功能区都应该是独立组件：来源目录、默认配置、手动恢复、请求预览、链路说明、恢复结果、缓存操作。
+ * 2. 每个功能区都应该是独立组件：来源目录、默认配置、手动恢复、请求预览、链路说明、恢复结果。
  * 3. 带确认弹窗/异步 loading/消息提示的动作逻辑，优先放 composables 或独立组件，不要继续塞回 index.vue。
  * 4. 不要为了“快”把按钮、弹窗、接口调用、表单状态再堆回一个超长 SFC。
  * 5. 如果新增 CAS 功能区：优先新建 components/*Card.vue；如果新增复用动作：优先新建 composables/useXxx.ts。
@@ -427,8 +427,8 @@ const saveSourceConfig = async () => {
     return
   }
 
-  const resolvedCasPath = sourcePathLabel.value
-  sourceForm.casAccessPath = resolvedCasPath
+  const resolvedTargetPath = sourcePathLabel.value
+  sourceForm.casAccessPath = resolvedTargetPath
   sourceForm.enabled = true
   sourceForm.autoCollectEnabled = true
 
@@ -439,15 +439,16 @@ const saveSourceConfig = async () => {
     casTargetType: sourceForm.sourceType,
     casTargetFamilyId: sourceForm.familyId,
     casTargetFolderId: savedFolderId,
-    casAccessPath: resolvedCasPath,
+    casAccessPath: resolvedTargetPath,
     casAutoCollectEnabled: true,
     casAutoCollectPreservePath: sourceForm.preservePath,
   })
 
   savedSourceFolderId.value = savedFolderId
+  restoreForm.targetFolderId = savedFolderId
   restoreForm.inputMode = 'path'
-  restoreForm.casPath = resolvedCasPath
-  message.success(`CAS归集路径已保存：${resolvedCasPath}`)
+  restoreForm.casPath = resolvedTargetPath
+  message.success(`CAS最终目录已保存：${resolvedTargetPath}`)
 }
 
 const loadSourceConfigFromServer = async () => {
@@ -463,6 +464,12 @@ const loadSourceConfigFromServer = async () => {
   savedSourceFolderId.value = addition.casTargetFolderId || ''
   sourceForm.parentName = addition.casAccessPath || '根目录'
   sourceForm.casAccessPath = addition.casAccessPath || ''
+  if (!defaultForm.targetFolderId) {
+    defaultForm.targetFolderId = addition.casTargetFolderId || ''
+  }
+  if (!restoreForm.targetFolderId) {
+    restoreForm.targetFolderId = addition.casTargetFolderId || ''
+  }
 }
 
 const buildRequestPayload = (): RestoreCasRequest => {
