@@ -150,7 +150,12 @@ func (s *service) ensureRestoredOnce(ctx appctx.Context, req RestoreRequest) (re
 		TargetFolderID:  req.TargetFolderID,
 		UploadRoute:     req.UploadRoute,
 		DestinationType: req.DestinationType,
+		FamilyID:        req.FamilyID,
 		CasInfo:         casInfo,
+	}
+	if req.FamilyID > 0 {
+		familyIDSessionHint[session] = req.FamilyID
+		defer delete(familyIDSessionHint, session)
 	}
 
 	switch req.UploadRoute {
@@ -161,9 +166,13 @@ func (s *service) ensureRestoredOnce(ctx appctx.Context, req RestoreRequest) (re
 		}
 		result.RestoredFileID = personResult.RestoredFileID
 		result.RestoredFileName = personResult.RestoredFileName
-		familyID, pickErr := (&familyRestoreAdapter{}).pickFamilyID(panClient)
-		if pickErr == nil {
-			result.FamilyID = familyID
+		if req.FamilyID > 0 {
+			result.FamilyID = req.FamilyID
+		} else {
+			familyID, pickErr := (&familyRestoreAdapter{}).pickFamilyID(panClient)
+			if pickErr == nil {
+				result.FamilyID = familyID
+			}
 		}
 	case UploadRouteFamily:
 		familyResult, familyErr := (&familyRestoreAdapter{}).TryRestore(session, panClient, req.DestinationType, req.TargetFolderID, restoreName, casInfo)
