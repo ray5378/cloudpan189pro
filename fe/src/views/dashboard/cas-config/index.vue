@@ -197,7 +197,7 @@ const restoreForm = reactive<CasRestoreForm>({
   casFileName: '',
 })
 
-const defaultParentId = computed(() => (sourceForm.sourceType === 'person' ? '-11' : ''))
+const defaultParentId = computed(() => '-11')
 const sourcePathLabel = computed(() => {
   const root = sourceForm.sourceType === 'person' ? '/个人云盘' : '/家庭云盘'
   if (sourceFolderStack.value.length === 0) {
@@ -284,7 +284,7 @@ watch(
   async (val) => {
     sourceEntries.value = []
     sourceFolderStack.value = []
-    sourceForm.parentId = val === 'person' ? '-11' : ''
+    sourceForm.parentId = '-11'
     sourceForm.parentName = '根目录'
     sourceForm.familyId = val === 'family' ? sourceForm.fixedFamilyId : undefined
     if (val !== 'family') {
@@ -302,7 +302,7 @@ watch(
     sourceForm.familyId = val || undefined
     sourceEntries.value = []
     sourceFolderStack.value = []
-    sourceForm.parentId = ''
+    sourceForm.parentId = '-11'
     sourceForm.parentName = '根目录'
   }
 )
@@ -312,7 +312,7 @@ watch(
   () => {
     sourceEntries.value = []
     sourceFolderStack.value = []
-    sourceForm.parentId = ''
+    sourceForm.parentId = '-11'
     sourceForm.parentName = '根目录'
   }
 )

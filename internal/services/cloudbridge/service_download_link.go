@@ -2,6 +2,7 @@ package cloudbridge
 
 import (
 	"fmt"
+	"html"
 	"net/http"
 	"time"
 
@@ -75,6 +76,7 @@ var (
 
 // fetchRealDownloadLink 获取真实的下载地址 自带的跳转域名有泄露 token 风险
 func (s *service) fetchRealDownloadLink(ctx context.Context, link string) (string, error) {
+	link = html.UnescapeString(link)
 	resp, err := noFollowRedirectHttpClient.Get(link)
 	if err != nil {
 		ctx.Error("请求云盘下载链接失败",
@@ -97,8 +99,11 @@ func (s *service) fetchRealDownloadLink(ctx context.Context, link string) (strin
 
 		return location, nil
 	}
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		return link, nil
+	}
 
-	return "", errors.Wrap(err, "获取重定向地址失败")
+	return "", errors.Errorf("获取重定向地址失败: status=%d", resp.StatusCode)
 }
 
 func (s *service) loadOrFetch(ctx context.Context, cacheKey string, fn func() (string, error)) (string, error) {
@@ -120,7 +125,7 @@ func (s *service) loadOrFetch(ctx context.Context, cacheKey string, fn func() (s
 
 	shared.ShareCache.Set(cacheKey, realLink, time.Minute*2)
 
-	ctx.Debug("真实获取个人文件下载地址", zap.String("file_id", cacheKey), zap.String("download_link", realLink))
+	ctx.Debug("真实获取下载地址", zap.String("file_id", cacheKey), zap.String("download_link", realLink))
 
 	return realLink, nil
 }
