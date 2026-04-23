@@ -15,6 +15,7 @@ type Service interface {
 	QueryByStorageAndCasFileID(ctx context.Context, storageID int64, casFileID string) (*models.CasMediaRecord, error)
 	ListDueRecycle(ctx context.Context, now time.Time, limit int) ([]*models.CasMediaRecord, error)
 	Update(ctx context.Context, id int64, updates map[string]any) error
+	DeleteByCasFilePath(ctx context.Context, casFilePath string) error
 }
 
 type service struct {
