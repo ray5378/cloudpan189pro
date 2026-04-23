@@ -78,8 +78,16 @@ services:
     volumes:
       - ./data:/app/data
       - ./media_dir:/app/media_dir
+      - ./local_cas:/local_cas
+      - ./cas_strm:/cas_strm
     restart: always
 ```
+
+### 目录挂载说明
+- `./data` → `/app/data`：程序数据库与运行数据
+- `./media_dir` → `/app/media_dir`：媒体映射目录
+- `./local_cas` → `/local_cas`：本地 `.cas` 文件目录
+- `./cas_strm` → `/cas_strm`：CAS 自动生成的 `.strm` 目录
 
 ### 访问地址
 - Web：`http://<ip>:12395`
