@@ -24,11 +24,18 @@ services:
     volumes:
       - ./data:/app/data
       - ./media_dir:/app/media_dir
+      # 本地 CAS 原文件目录（.cas）
+      - ./local_cas:/local_cas
+      # CAS 自动生成的 STRM 目录（.strm）
+      - ./cas_strm:/cas_strm
     # 如需自定义配置文件，解除下一行注释并提供 etc/config.yaml
     # - ./etc/config.yaml:/app/etc/config.yaml:ro
 
 # 备注：
 # - Web 界面: http://localhost:12395
 # - WebDAV:   http://localhost:12395/dav
+# - 本地 CAS 目录: ./local_cas -> /local_cas
+# - 本地 STRM 目录: ./cas_strm -> /cas_strm
+# - 媒体目录: ./media_dir -> /app/media_dir
 # - 任务日志手动清理: POST /api/task_state/file_log/cleanup
 # - 登录日志手动清理: POST /api/login_log/cleanup
