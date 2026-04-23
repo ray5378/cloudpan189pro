@@ -57,6 +57,10 @@ func (a *familyRestoreAdapter) TryRestore(
 	if info == nil {
 		return nil, errors.New("CAS信息不能为空")
 	}
+	if destinationType != DestinationTypeFamily {
+		return nil, fmt.Errorf("familyRestoreAdapter 不再承担 family -> person，当前仅支持 refsdk 主链")
+	}
+
 	familyID := reqFamilyIDFromContext(session)
 	var err error
 	if familyID <= 0 {
@@ -67,10 +71,6 @@ func (a *familyRestoreAdapter) TryRestore(
 	}
 	if fileName == "" {
 		fileName = info.Name
-	}
-
-	if destinationType != DestinationTypeFamily {
-		return nil, fmt.Errorf("familyRestoreAdapter 不再承担 family -> person，当前仅支持 refsdk 主链")
 	}
 
 	familyFolderID := normalizeFamilyFolderID(targetFolderID)
@@ -254,14 +254,6 @@ func normalizeFamilyFolderID(folderID string) string {
 		return ""
 	}
 	return folderID
-}
-
-func escapeJSONString(s string) string {
-	b, _ := json.Marshal(s)
-	if len(b) >= 2 {
-		return string(b[1 : len(b)-1])
-	}
-	return s
 }
 
 func firstNonEmpty(values ...string) string {
