@@ -2,12 +2,16 @@ package casrestore
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	appctx "github.com/xxcheng123/cloudpan189-share/internal/framework/context"
 	"github.com/xxcheng123/cloudpan189-share/internal/repository/models"
 	"github.com/xxcheng123/cloudpan189-share/internal/services/appsession"
 	"github.com/xxcheng123/cloudpan189-share/internal/services/casparser"
+	cloudtokenSvi "github.com/xxcheng123/cloudpan189-share/internal/services/cloudtoken"
+	mountpointSvi "github.com/xxcheng123/cloudpan189-share/internal/services/mountpoint"
 	"go.uber.org/zap"
 )
 
@@ -28,15 +32,47 @@ func (s *service) EnsureRestoredFromLocalCAS(ctx appctx.Context, req RestoreRequ
 	})
 }
 
-func buildFamilyTransferTempName(info *casparser.CasInfo) string {
-	if info == nil {
-		return "0cas.transfer"
+func (s *service) inferTargetTokenID(ctx appctx.Context, mountPointID int64) (int64, error) {
+	if mountPointID <= 0 {
+		return 0, nil
 	}
-	md5 := strings.ToLower(strings.TrimSpace(info.MD5))
-	if md5 == "" {
-		md5 = "cas"
+	cloudTokenSvc := cloudtokenSvi.NewService(s.svc)
+	mountPointSvc := mountpointSvi.NewService(s.svc, cloudTokenSvc, s.cloudBridgeService)
+	mp, err := mountPointSvc.Query(ctx, mountPointID)
+	if err != nil {
+		return 0, err
 	}
-	return "0" + md5 + ".transfer"
+	return mp.TokenId, nil
+}
+
+func (s *service) tryResolveRecordedLocalCAS(ctx appctx.Context, record *models.CasMediaRecord) string {
+	if record == nil {
+		return ""
+	}
+	candidates := make([]string, 0, 3)
+	if p := strings.TrimSpace(record.CasFilePath); p != "" {
+		candidates = append(candidates, filepath.Join("/local_cas", filepath.FromSlash(p)))
+	}
+	if p := strings.TrimSpace(record.StrmRelativePath); p != "" {
+		casRel := strings.TrimSuffix(p, ".strm") + ".cas"
+		candidates = append(candidates, filepath.Join("/local_cas", filepath.FromSlash(casRel)))
+	}
+	if name := strings.TrimSpace(record.CasFileName); name != "" && strings.TrimSpace(record.CasFilePath) == "" {
+		candidates = append(candidates, filepath.Join("/local_cas", filepath.FromSlash(name)))
+	}
+	for _, candidate := range candidates {
+		if strings.TrimSpace(candidate) == "" {
+			continue
+		}
+		if st, err := os.Stat(candidate); err == nil && !st.IsDir() {
+			return candidate
+		}
+	}
+	ctx.Logger.Debug("CAS恢复未命中本地CAS",
+		zap.Int64("record_id", record.ID),
+		zap.Strings("candidates", candidates),
+	)
+	return ""
 }
 
 func (s *service) ensureRestoredOnce(ctx appctx.Context, req RestoreRequest) (result *RestoreResult, err error) {
@@ -94,6 +130,16 @@ func (s *service) ensureRestoredOnce(ctx appctx.Context, req RestoreRequest) (re
 	if err != nil {
 		return nil, err
 	}
+	if !isLocal {
+		if localPath := s.tryResolveRecordedLocalCAS(ctx, record); strings.TrimSpace(localPath) != "" {
+			req.LocalCasPath = localPath
+			isLocal = true
+			ctx.Logger.Info("CAS恢复命中本地CAS，跳过远端.cas下载",
+				zap.Int64("record_id", record.ID),
+				zap.String("local_cas_path", localPath),
+			)
+		}
+	}
 	defer func() {
 		if err != nil {
 			_ = s.markRestoreFailed(ctx, record.ID, err)
@@ -114,6 +160,12 @@ func (s *service) ensureRestoredOnce(ctx appctx.Context, req RestoreRequest) (re
 			return nil, fmt.Errorf("当前文件类型不支持恢复: %s", vf.OsType)
 		}
 	} else {
+		if req.CasFileID == "" {
+			req.CasFileID = req.LocalCasPath
+		}
+		if req.CasFileName == "" {
+			req.CasFileName = filepath.Base(req.LocalCasPath)
+		}
 		casInfo, _, err = resolveLocalCAS(req.LocalCasPath)
 		if err != nil {
 			return nil, err
@@ -124,16 +176,13 @@ func (s *service) ensureRestoredOnce(ctx appctx.Context, req RestoreRequest) (re
 	if !isLocal && vf != nil {
 		restoreName = casparser.GetOriginalFileName(vf.Name, casInfo)
 	}
-	if req.UploadRoute == UploadRouteFamily && req.DestinationType == DestinationTypePerson {
-		restoreName = buildFamilyTransferTempName(casInfo)
-	}
 
 	if err = s.markRestoring(ctx, record.ID, restoreName, casInfo.Size, casInfo.MD5, casInfo.SliceMD5); err != nil {
 		return nil, err
 	}
 
 	var session *appsession.Session
-	if !isLocal {
+	if req.MountPointID > 0 {
 		session, err = s.appSessionService.GetByMountPointID(ctx, req.MountPointID)
 	} else {
 		session, err = s.appSessionService.GetByTokenID(ctx, req.TargetTokenID)
@@ -170,7 +219,16 @@ func (s *service) ensureRestoredOnce(ctx appctx.Context, req RestoreRequest) (re
 			result.FamilyID = req.FamilyID
 		}
 	case UploadRouteFamily:
-		familyResult, familyErr := (&familyRestoreAdapter{}).TryRestore(session, panClient, req.DestinationType, req.TargetFolderID, restoreName, casInfo)
+		var familyResult *familyRestoreResult
+		var familyErr error
+		if req.DestinationType == DestinationTypePerson {
+			familyResult, familyErr = s.tryRestoreFamilyToPersonByRefSDK(ctx, req, session, panClient, restoreName, casInfo)
+			if familyResult == nil && familyErr == nil {
+				return nil, fmt.Errorf("家庭路线恢复失败: family -> person 仅支持 refsdk 主链")
+			}
+		} else {
+			familyResult, familyErr = (&familyRestoreAdapter{}).TryRestore(session, panClient, req.DestinationType, req.TargetFolderID, restoreName, casInfo)
+		}
 		if familyErr != nil {
 			return nil, fmt.Errorf("家庭路线恢复失败: %w", familyErr)
 		}

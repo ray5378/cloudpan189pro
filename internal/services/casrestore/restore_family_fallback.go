@@ -21,6 +21,8 @@ import (
 )
 
 const familyBatchAPIBase = "https://api.cloud.189.cn"
+const cloudWebBaseURL = "https://cloud.189.cn"
+const cloudWebOpenAppKey = "600100422"
 
 type familyRestoreAdapter struct{}
 
@@ -48,18 +50,18 @@ type batchTaskCheckResp struct {
 }
 
 // familyRestoreAdapter 负责“家庭路线”的秒传恢复。
-// 严格按参照代码：
+// 当前它只承担 family -> family 这条链：
 // 1. upload.cloud.189.cn 家庭秒传（init/check/commit）
-// 2. 如目标是个人目录，则走 AccessToken 签名的 batch COPY
-// 3. 成功后清理家庭中转文件
+// 2. 结果直接落到家庭目录
 //
 // 下面这些属于已对齐项，不能随意改动：
 // - familyId 选择优先 userRole=1
 // - family root 通过 listFiles/path 解析，不再硬编码 -11
 // - init 不传 md5，且 lazyCheck=1
 // - commit 必须保留 403 retry + 清 RSA cache
-// - family -> person 必须保留 COPY -> checkBatchTask -> DELETE cleanup 这条参考链
 // - familyFileId 提取顺序必须保持参考顺序
+//
+// 注意：family -> person 已收口到 refsdk 主链，不再由这里承担。
 func (a *familyRestoreAdapter) TryRestore(
 	session *appsession.Session,
 	panClient *cloudpan.PanClient,
@@ -80,16 +82,13 @@ func (a *familyRestoreAdapter) TryRestore(
 	familyID := reqFamilyIDFromContext(session)
 	var err error
 	if familyID <= 0 {
-		return nil, fmt.Errorf("未配置CAS指定恢复位置(casTargetFamilyId)")
+		familyID, err = a.pickFamilyID(panClient)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if fileName == "" {
 		fileName = info.Name
-	}
-	if destinationType == DestinationTypePerson {
-		fileName = "0" + strings.ToLower(strings.TrimSpace(info.MD5)) + ".transfer"
-		if fileName == "0.transfer" {
-			fileName = "0cas.transfer"
-		}
 	}
 
 	familyFolderID := ""
@@ -111,15 +110,8 @@ func (a *familyRestoreAdapter) TryRestore(
 		RestoredFileID:   familyFileID,
 		RestoredFileName: fileName,
 	}
-	if destinationType == DestinationTypeFamily {
-		return result, nil
-	}
-
-	if err := a.copyFamilyFileToPersonal(session, familyID, familyFileID, targetFolderID, fileName); err != nil {
-		return nil, err
-	}
-	if err := a.safeDeleteFamilyFile(session, familyID, familyFileID, fileName); err != nil {
-		return nil, errors.Wrap(err, "家庭中转COPY成功，但清理家庭中转文件失败")
+	if destinationType != DestinationTypeFamily {
+		return nil, fmt.Errorf("familyRestoreAdapter 不再承担 family -> person，当前仅支持 refsdk 主链")
 	}
 	return result, nil
 }
@@ -396,6 +388,53 @@ func (a *familyRestoreAdapter) safeDeleteFamilyFile(session *appsession.Session,
 	return nil
 }
 
+type ssKeyAccessTokenResp struct {
+	AccessToken string `json:"accessToken"`
+}
+
+func getAccessTokenBySsKey(session *appsession.Session) (string, error) {
+	if session == nil {
+		return "", fmt.Errorf("AppSession不能为空")
+	}
+	sessionKey := strings.TrimSpace(session.Token.SessionKey)
+	if sessionKey == "" {
+		return "", fmt.Errorf("sessionKey为空")
+	}
+	targetURL := familyBatchAPIBase + "/open/oauth2/getAccessTokenBySsKey.action?sessionKey=" + url.QueryEscape(sessionKey)
+	timestamp, signature := buildWebOpenSignature(targetURL, nil)
+	req, err := http.NewRequest(http.MethodGet, targetURL, nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Sign-Type", "1")
+	req.Header.Set("Signature", signature)
+	req.Header.Set("Timestamp", timestamp)
+	req.Header.Set("AppKey", cloudWebOpenAppKey)
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36")
+	req.Header.Set("Referer", cloudWebBaseURL+"/web/main/")
+	resp, err := (&http.Client{Timeout: 15 * time.Second}).Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	if resp.StatusCode >= 400 {
+		return "", fmt.Errorf("http %d: %s", resp.StatusCode, string(body))
+	}
+	out := new(ssKeyAccessTokenResp)
+	if err := json.Unmarshal(body, out); err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(out.AccessToken) == "" {
+		return "", fmt.Errorf("响应缺少accessToken")
+	}
+	return strings.TrimSpace(out.AccessToken), nil
+}
+
 func doAccessTokenFormJSONRequest(accessToken string, targetURL string, params map[string]string, timeout time.Duration, out any) error {
 	timestamp, signature := buildAccessTokenSignature(strings.TrimSpace(accessToken), params)
 	req, err := http.NewRequest(http.MethodPost, targetURL, strings.NewReader(formURLEncode(params)))
@@ -406,8 +445,9 @@ func doAccessTokenFormJSONRequest(accessToken string, targetURL string, params m
 	req.Header.Set("Sign-Type", "1")
 	req.Header.Set("Signature", signature)
 	req.Header.Set("Timestamp", timestamp)
-	req.Header.Set("AccessToken", strings.TrimSpace(accessToken))
+	req.Header.Set("Accesstoken", strings.TrimSpace(accessToken))
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36")
+	req.Header.Set("Referer", cloudWebBaseURL+"/web/main/")
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	client := &http.Client{Timeout: timeout}
@@ -429,21 +469,49 @@ func doAccessTokenFormJSONRequest(accessToken string, targetURL string, params m
 	return nil
 }
 
-// buildAccessTokenSignature 严格参照 JS：
-// AccessToken=xxx&Timestamp=xxx&key1=val1&key2=val2...（按 key 字典序） -> md5 hex lower。
+// buildAccessTokenSignature 严格参照 cloud189-auto-save/cloud189-sdk：
+// 把 AccessToken / Timestamp / 全部业务参数放进同一个 map，整体按 key 字典序排序，再做 md5 hex lower。
 func buildAccessTokenSignature(accessToken string, params map[string]string) (string, string) {
 	timestamp := strconv.FormatInt(time.Now().UnixMilli(), 10)
-	keys := make([]string, 0, len(params))
-	for k := range params {
+	payload := make(map[string]string, len(params)+2)
+	for k, v := range params {
+		payload[k] = v
+	}
+	payload["AccessToken"] = accessToken
+	payload["Timestamp"] = timestamp
+	return timestamp, buildSortedMD5Signature(payload)
+}
+
+func buildWebOpenSignature(targetURL string, params map[string]string) (string, string) {
+	timestamp := strconv.FormatInt(time.Now().UnixMilli(), 10)
+	payload := make(map[string]string, 4)
+	if parsed, err := url.Parse(targetURL); err == nil {
+		for key, values := range parsed.Query() {
+			if len(values) > 0 {
+				payload[key] = values[0]
+			}
+		}
+	}
+	for k, v := range params {
+		payload[k] = v
+	}
+	payload["Timestamp"] = timestamp
+	payload["AppKey"] = cloudWebOpenAppKey
+	return timestamp, buildSortedMD5Signature(payload)
+}
+
+func buildSortedMD5Signature(payload map[string]string) string {
+	keys := make([]string, 0, len(payload))
+	for k := range payload {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
-	parts := []string{"AccessToken=" + accessToken, "Timestamp=" + timestamp}
+	parts := make([]string, 0, len(keys))
 	for _, k := range keys {
-		parts = append(parts, k+"="+params[k])
+		parts = append(parts, k+"="+payload[k])
 	}
 	sum := md5.Sum([]byte(strings.Join(parts, "&")))
-	return timestamp, hex.EncodeToString(sum[:])
+	return hex.EncodeToString(sum[:])
 }
 
 func formURLEncode(params map[string]string) string {

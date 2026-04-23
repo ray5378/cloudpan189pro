@@ -2,7 +2,9 @@ package media
 
 import (
 	"fmt"
+	"path"
 	"strconv"
+	"strings"
 
 	"github.com/xxcheng123/cloudpan189-share/internal/framework/httpcontext"
 	casrestoreSvi "github.com/xxcheng123/cloudpan189-share/internal/services/casrestore"
@@ -25,23 +27,9 @@ type restoreCasRequest struct {
 	CasPath         string                        `json:"casPath" binding:"omitempty" example:"/电影库/movie.cas"`
 	UploadRoute     casrestoreSvi.UploadRoute     `json:"uploadRoute" binding:"omitempty,oneof=family person" example:"family"`
 	DestinationType casrestoreSvi.DestinationType `json:"destinationType" binding:"required,oneof=family person" example:"family"`
-	TargetFolderID  string                        `json:"targetFolderId" binding:"required" example:"-11"`
+	TargetFolderID  string                        `json:"targetFolderId" binding:"omitempty" example:"-11"`
 }
 
-// RestoreCas 手动触发单个 CAS 恢复。
-// @Summary 手动恢复CAS文件
-// @Description 根据 .cas 元数据立刻执行一次恢复。uploadRoute 表示上传路线，destinationType 表示最终目录归属。
-// @Tags 媒体操作
-// @Accept json
-// @Produce json
-// @Param Authorization header string true "Bearer token"
-// @Param request body restoreCasRequest true "恢复请求"
-// @Success 200 {object} httpcontext.Response{data=casrestore.RestoreResult} "恢复成功"
-// @Failure 400 {object} httpcontext.Response "参数验证失败，code=99998"
-// @Failure 400 {object} httpcontext.Response "恢复失败"
-// @Failure 401 {object} httpcontext.Response "未授权访问"
-// @Failure 403 {object} httpcontext.Response "权限不足"
-// @Router /api/media/restore_cas [post]
 func (h *handler) RestoreCas() httpcontext.HandlerFunc {
 	return func(ctx *httpcontext.Context) {
 		req := new(restoreCasRequest)
@@ -53,7 +41,6 @@ func (h *handler) RestoreCas() httpcontext.HandlerFunc {
 			ctx.AbortWithInvalidParams(fmt.Errorf("casVirtualId 和 casPath 至少传一个"))
 			return
 		}
-		// 已对齐参考实现的组合必须在接口层显式收口，避免外部误以为所有产品语义组合都已具备 reference-backed 主链。
 		if req.UploadRoute == casrestoreSvi.UploadRoutePerson && req.DestinationType == casrestoreSvi.DestinationTypeFamily {
 			ctx.AbortWithInvalidParams(fmt.Errorf("不支持的操作: 当前仅支持 reference-backed 的 restore 组合，person -> family 暂未实现"))
 			return
@@ -127,18 +114,19 @@ func (h *handler) buildRestoreRequest(ctx *httpcontext.Context, req *restoreCasR
 		restoreReq.MountPointID = mp.ID
 	}
 	if restoreReq.StorageID == 0 {
-		// 这里沿用 storage/list 的 ID 语义：storageId 对应 mount point root file_id。
 		restoreReq.StorageID = mp.FileId
 	}
+
+	if h.settingService == nil {
+		return casrestoreSvi.RestoreRequest{}, fmt.Errorf("缺少系统设置服务，无法读取CAS指定恢复位置")
+	}
+	latest, qerr := h.settingService.Query(ctx.GetContext())
+	if qerr != nil || latest == nil {
+		return casrestoreSvi.RestoreRequest{}, fmt.Errorf("读取CAS指定恢复位置失败")
+	}
+	addition := latest.Addition
+
 	if restoreReq.DestinationType == casrestoreSvi.DestinationTypeFamily {
-		if h.settingService == nil {
-			return casrestoreSvi.RestoreRequest{}, fmt.Errorf("缺少系统设置服务，无法读取CAS指定恢复位置")
-		}
-		latest, qerr := h.settingService.Query(ctx.GetContext())
-		if qerr != nil || latest == nil {
-			return casrestoreSvi.RestoreRequest{}, fmt.Errorf("读取CAS指定恢复位置失败")
-		}
-		addition := latest.Addition
 		if addition.CasTargetType != string(casrestoreSvi.DestinationTypeFamily) || addition.CasTargetFamilyId == "" {
 			return casrestoreSvi.RestoreRequest{}, fmt.Errorf("未配置CAS指定恢复位置(casTargetFamilyId)")
 		}
@@ -147,9 +135,55 @@ func (h *handler) buildRestoreRequest(ctx *httpcontext.Context, req *restoreCasR
 			return casrestoreSvi.RestoreRequest{}, fmt.Errorf("CAS指定恢复位置无效: %s", addition.CasTargetFamilyId)
 		}
 		restoreReq.FamilyID = parsed
+	} else if restoreReq.TargetFolderID == "" {
+		targetFolderID, terr := h.resolveDefaultPersonRestoreTargetFolder(ctx, vf.ID, addition.CasTargetTokenId, addition.CasTargetFolderId, addition.CasAutoCollectPreservePath)
+		if terr != nil {
+			return casrestoreSvi.RestoreRequest{}, terr
+		}
+		restoreReq.TargetFolderID = targetFolderID
+		if restoreReq.TargetTokenID == 0 {
+			restoreReq.TargetTokenID = addition.CasTargetTokenId
+		}
 	}
 
 	return restoreReq, nil
+}
+
+func (h *handler) resolveDefaultPersonRestoreTargetFolder(ctx *httpcontext.Context, casVirtualID int64, targetTokenID int64, baseTargetFolderID string, preservePath bool) (string, error) {
+	folderID := strings.TrimSpace(baseTargetFolderID)
+	if folderID == "" {
+		folderID = "-11"
+	}
+	if !preservePath {
+		return folderID, nil
+	}
+	if targetTokenID <= 0 {
+		return "", fmt.Errorf("未配置CAS指定恢复位置(casTargetTokenId)")
+	}
+	fullPath, err := h.virtualfileService.CalFullPath(ctx.GetContext(), casVirtualID)
+	if err != nil {
+		return "", err
+	}
+	relDir := strings.Trim(strings.TrimPrefix(path.Dir(fullPath), "/"), " ")
+	if relDir == "" || relDir == "." {
+		return folderID, nil
+	}
+	session, err := h.appSessionService.GetByTokenID(ctx.GetContext(), targetTokenID)
+	if err != nil {
+		return "", err
+	}
+	panClient := buildPanClient(session)
+	if panClient == nil {
+		return "", fmt.Errorf("创建PanClient失败")
+	}
+	folder, apiErr := panClient.AppMkdirRecursive(0, folderID, relDir, 0, strings.Split(relDir, "/"))
+	if apiErr != nil {
+		return "", fmt.Errorf("创建个人恢复目标目录失败: %w", apiErr)
+	}
+	if folder == nil || strings.TrimSpace(folder.FileId) == "" {
+		return "", fmt.Errorf("创建个人恢复目标目录失败: 未返回最终目标目录ID relativeDir=%s", relDir)
+	}
+	return strings.TrimSpace(folder.FileId), nil
 }
 
 func (h *handler) queryCASVirtualFile(ctx *httpcontext.Context, req *restoreCasRequest) (*struct {
