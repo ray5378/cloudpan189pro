@@ -86,6 +86,8 @@ export interface ModifySettingAdditionRequest {
   casTargetFolderId?: string
   casAccessPath?: string
   casRestoreRetentionHours?: number
+  localCasAutoScanEnabled?: boolean
+  localCasAutoScanIntervalMin?: number
   casAutoCollectEnabled?: boolean
   casAutoCollectPreservePath?: boolean
 }

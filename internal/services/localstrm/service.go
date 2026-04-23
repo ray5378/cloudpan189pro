@@ -19,6 +19,7 @@ import (
 
 type Service interface {
 	EnsureForLocalCAS(ctx appctx.Context, file *models.VirtualFile, localCASPath string) (string, int64, error)
+	ScanAndEnsureAll(ctx appctx.Context) (*ScanResult, error)
 }
 
 type service struct {

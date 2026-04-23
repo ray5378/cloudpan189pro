@@ -15,6 +15,7 @@ import (
 	cloudtokenSvi "github.com/xxcheng123/cloudpan189-share/internal/services/cloudtoken"
 	filetasklogSvi "github.com/xxcheng123/cloudpan189-share/internal/services/filetasklog"
 	loginlogSvi "github.com/xxcheng123/cloudpan189-share/internal/services/loginlog"
+	localstrmSvi "github.com/xxcheng123/cloudpan189-share/internal/services/localstrm"
 	mountpointSvi "github.com/xxcheng123/cloudpan189-share/internal/services/mountpoint"
 	virtualfileSvi "github.com/xxcheng123/cloudpan189-share/internal/services/virtualfile"
 )
@@ -72,6 +73,9 @@ func Start(svc bootstrap.ServiceContext) (func(), error) {
 
 	cleanupLoginLogScheduler := NewCleanupLoginLogScheduler(loginLogService)
 	if e := cleanupLoginLogScheduler.Start(ctx); e != nil { err = append(err, e) }
+
+	localCASSTRMScanScheduler := NewLocalCASSTRMScanScheduler(localstrmSvi.NewService(svc))
+	if e := localCASSTRMScanScheduler.Start(ctx); e != nil { err = append(err, e) }
 
 	recycleRestoredCASScheduler := NewRecycleRestoredCASScheduler(casRecordService, appSessionService, mountPointService, cloudTokenService)
 	if e := recycleRestoredCASScheduler.Start(ctx); e != nil { err = append(err, e) }

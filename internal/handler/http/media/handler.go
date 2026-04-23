@@ -9,6 +9,7 @@ import (
 	casrestoreSvi "github.com/xxcheng123/cloudpan189-share/internal/services/casrestore"
 	cloudbridgeSvi "github.com/xxcheng123/cloudpan189-share/internal/services/cloudbridge"
 	cloudtokenSvi "github.com/xxcheng123/cloudpan189-share/internal/services/cloudtoken"
+	localstrmSvi "github.com/xxcheng123/cloudpan189-share/internal/services/localstrm"
 	mediaconfigSvi "github.com/xxcheng123/cloudpan189-share/internal/services/mediaconfig"
 	mediafileSvi "github.com/xxcheng123/cloudpan189-share/internal/services/mediafile"
 	mountpointSvi "github.com/xxcheng123/cloudpan189-share/internal/services/mountpoint"
@@ -17,7 +18,6 @@ import (
 	virtualfileSvi "github.com/xxcheng123/cloudpan189-share/internal/services/virtualfile"
 )
 
-// Handler 定义 media 相关的 HTTP 处理器接口
 type Handler interface {
 	ConfigInit() httpcontext.HandlerFunc
 	ConfigInfo() httpcontext.HandlerFunc
@@ -25,6 +25,7 @@ type Handler interface {
 	ConfigToggle() httpcontext.HandlerFunc
 	Clear() httpcontext.HandlerFunc
 	RebuildStrmFile() httpcontext.HandlerFunc
+	RebuildLocalCASSTRM() httpcontext.HandlerFunc
 	RestoreCas() httpcontext.HandlerFunc
 	PlayCas() httpcontext.HandlerFunc
 }
@@ -55,6 +56,7 @@ type handler struct {
 	cloudBridgeService cloudbridgeSvi.Service
 	appSessionService  appsessionSvi.Service
 	settingService     settingSvi.Service
+	localSTRMService   localstrmSvi.Service
 	taskEngine         taskengine.TaskEngine
 }
 
@@ -70,6 +72,7 @@ func NewHandler(
 	cloudBridgeService cloudbridgeSvi.Service,
 	appSessionService appsessionSvi.Service,
 	settingService settingSvi.Service,
+	localSTRMService localstrmSvi.Service,
 	taskEngine taskengine.TaskEngine,
 ) Handler {
 	return &handler{
@@ -84,6 +87,7 @@ func NewHandler(
 		cloudBridgeService: cloudBridgeService,
 		appSessionService:  appSessionService,
 		settingService:     settingService,
+		localSTRMService:   localSTRMService,
 		taskEngine:         taskEngine,
 	}
 }

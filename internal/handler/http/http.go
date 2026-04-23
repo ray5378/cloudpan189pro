@@ -37,6 +37,7 @@ import (
 	loginlogSvi "github.com/xxcheng123/cloudpan189-share/internal/services/loginlog"
 	mediaconfigSvi "github.com/xxcheng123/cloudpan189-share/internal/services/mediaconfig"
 	mediafileSvi "github.com/xxcheng123/cloudpan189-share/internal/services/mediafile"
+	localstrmSvi "github.com/xxcheng123/cloudpan189-share/internal/services/localstrm"
 	mountPointSvi "github.com/xxcheng123/cloudpan189-share/internal/services/mountpoint"
 	settingSvi "github.com/xxcheng123/cloudpan189-share/internal/services/setting"
 	storagefacadeSvi "github.com/xxcheng123/cloudpan189-share/internal/services/storagefacade"
@@ -95,7 +96,7 @@ func Start(svc bootstrap.ServiceContext) {
 		taskStateHandler  = taskstate.NewHandler(taskEngine, fileTaskLogService)
 		autoIngestHandler = autoingest.NewHandler(taskEngine, autoIngestPlanService, autoIngestLogService, cloudBridgeService)
 		loginLogHandler   = loginlogHandler.NewHandler(loginLogService)
-		mediaHandler      = media.NewHandler(mediaConfigService, mediaFileService, mountPointService, virtualFileService, verifyService, casRestoreService, casRecordService, cloudTokenService, cloudBridgeService, appSessionService, settingService, taskEngine)
+		mediaHandler      = media.NewHandler(mediaConfigService, mediaFileService, mountPointService, virtualFileService, verifyService, casRestoreService, casRecordService, cloudTokenService, cloudBridgeService, appSessionService, settingService, localstrmSvi.NewService(svc), taskEngine)
 		externalHandler   = external.NewHandler(cloudBridgeService, storageFacadeService, settingService, fileTaskLogService, taskEngine)
 	)
 
@@ -266,6 +267,7 @@ func Start(svc bootstrap.ServiceContext) {
 			mediaRouter.POST("/config/toggle", wrap(mediaHandler.ConfigToggle()))
 			mediaRouter.POST("/clear", wrap(mediaHandler.Clear()))
 			mediaRouter.POST("/rebuild_strm_file", wrap(mediaHandler.RebuildStrmFile()))
+			mediaRouter.POST("/rebuild_local_cas_strm", wrap(mediaHandler.RebuildLocalCASSTRM()))
 			mediaRouter.POST("/restore_cas", wrap(mediaHandler.RestoreCas()))
 		}
 		openapiRouter.GET("/cas/play/:recordId", wrap(mediaHandler.PlayCas()))

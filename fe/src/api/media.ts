@@ -91,6 +91,19 @@ export const rebuildStrmFiles = (): Promise<ApiResponse> => {
   return api.post('/media/rebuild_strm_file').then((res) => res.data)
 }
 
+
+// 重建 local_cas 下手动放入的 CAS 对应的 strm 文件
+export interface RebuildLocalCASSTRMResult {
+  scanned: number
+  created: number
+  skipped: number
+  failed: number
+}
+
+export const rebuildLocalCASSTRM = (): Promise<ApiResponse<RebuildLocalCASSTRMResult>> => {
+  return api.post('/media/rebuild_local_cas_strm').then((res) => res.data)
+}
+
 // 手动触发一次 CAS 恢复。
 // 注意：这里只暴露当前 reference-backed 的组合：
 // - person -> person

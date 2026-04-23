@@ -25,6 +25,14 @@
             @save-source="saveSourceConfig"
           />
         </n-grid-item>
+        <n-grid-item :span="24">
+          <CasLocalStrmCard
+            :source-form="sourceForm"
+            :manual-scanning="manualLocalStrmScanning"
+            @save-settings="saveLocalStrmSettings"
+            @manual-scan="handleManualLocalStrmScan"
+          />
+        </n-grid-item>
       </n-grid>
     </n-space>
   </div>
@@ -54,7 +62,7 @@
 import { computed, h, onMounted, reactive, ref, watch } from 'vue'
 import { NAlert, NButton, NGrid, NGridItem, NSpace, NText, useMessage, type DataTableColumns } from 'naive-ui'
 import type { RestoreCasRequest, CasDestinationType, CasUploadRoute } from '@/api/media'
-import { restoreCas } from '@/api/media'
+import { rebuildLocalCASSTRM, restoreCas } from '@/api/media'
 import { getCloudTokenList } from '@/api/cloudtoken'
 import { getSettingAddition, modifySettingAddition } from '@/api/setting'
 import { getFamilyFiles, getFamilyList, getPersonFiles, type FileNode } from '@/api/storage/advance'
@@ -63,6 +71,7 @@ import CasLinkInfoCard from './components/CasLinkInfoCard.vue'
 import CasManualRestoreCard from './components/CasManualRestoreCard.vue'
 import CasRequestPreviewCard from './components/CasRequestPreviewCard.vue'
 import CasResultCard from './components/CasResultCard.vue'
+import CasLocalStrmCard from './components/CasLocalStrmCard.vue'
 import CasSourceConfigCard from './components/CasSourceConfigCard.vue'
 
 void [NAlert, NText, CasDefaultsCard, CasLinkInfoCard, CasManualRestoreCard, CasRequestPreviewCard, CasResultCard]
@@ -90,6 +99,8 @@ interface CasSourceForm {
   parentName: string
   casAccessPath: string
   retentionHours?: number
+  localCasAutoScanEnabled: boolean
+  localCasAutoScanIntervalMin: number
 }
 
 const DEFAULTS_KEY = 'cas.config.defaults'
@@ -99,6 +110,7 @@ const resultText = ref('')
 const cloudTokenLoading = ref(false)
 const familyLoading = ref(false)
 const sourceLoading = ref(false)
+const manualLocalStrmScanning = ref(false)
 const sourceEntries = ref<FileNode[]>([])
 const cloudTokenOptions = ref<{ label: string; value: number }[]>([])
 const familyOptions = ref<{ label: string; value: string }[]>([])
@@ -147,6 +159,8 @@ const emptySourceForm = (): CasSourceForm => ({
   parentName: '根目录',
   casAccessPath: '',
   retentionHours: undefined,
+  localCasAutoScanEnabled: false,
+  localCasAutoScanIntervalMin: 10,
 })
 
 const defaultForm = reactive<CasDefaults>(emptyDefaults())
@@ -446,6 +460,8 @@ const saveSourceConfig = async () => {
     casTargetFolderId: savedFolderId,
     casAccessPath: resolvedTargetPath,
     casRestoreRetentionHours: sourceForm.retentionHours,
+    localCasAutoScanEnabled: sourceForm.localCasAutoScanEnabled,
+    localCasAutoScanIntervalMin: sourceForm.localCasAutoScanIntervalMin,
   })
 
   savedSourceFolderId.value = savedFolderId
@@ -469,11 +485,34 @@ const loadSourceConfigFromServer = async () => {
   sourceForm.parentName = addition.casAccessPath || '根目录'
   sourceForm.casAccessPath = addition.casAccessPath || ''
   sourceForm.retentionHours = addition.casRestoreRetentionHours || undefined
+  sourceForm.localCasAutoScanEnabled = !!addition.localCasAutoScanEnabled
+  sourceForm.localCasAutoScanIntervalMin = addition.localCasAutoScanIntervalMin || 10
   if (!defaultForm.targetFolderId) {
     defaultForm.targetFolderId = addition.casTargetFolderId || ''
   }
   if (!restoreForm.targetFolderId) {
     restoreForm.targetFolderId = addition.casTargetFolderId || ''
+  }
+}
+
+const saveLocalStrmSettings = async () => {
+  await modifySettingAddition({
+    localCasAutoScanEnabled: sourceForm.localCasAutoScanEnabled,
+    localCasAutoScanIntervalMin: sourceForm.localCasAutoScanIntervalMin,
+  })
+  message.success('CAS本地STRM设置已保存')
+}
+
+const handleManualLocalStrmScan = async () => {
+  manualLocalStrmScanning.value = true
+  try {
+    const res = await rebuildLocalCASSTRM()
+    const data = res.data
+    message.success(`本地CAS扫描完成：扫描 ${data?.scanned ?? 0}，新建 ${data?.created ?? 0}，跳过 ${data?.skipped ?? 0}，失败 ${data?.failed ?? 0}`)
+  } catch (err: any) {
+    message.error(err?.message || '本地CAS扫描失败')
+  } finally {
+    manualLocalStrmScanning.value = false
   }
 }
 

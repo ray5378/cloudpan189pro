@@ -35,10 +35,12 @@ type modifyAdditionRequest struct {
 	CasTargetType              *string `json:"casTargetType"`
 	CasTargetFamilyId          *string `json:"casTargetFamilyId"`
 	CasTargetFolderId          *string `json:"casTargetFolderId"`
-	CasAccessPath              *string `json:"casAccessPath"`
-	CasRestoreRetentionHours   *int    `json:"casRestoreRetentionHours"`
-	CasAutoCollectEnabled      *bool   `json:"casAutoCollectEnabled"`
-	CasAutoCollectPreservePath *bool   `json:"casAutoCollectPreservePath"`
+	CasAccessPath                *string `json:"casAccessPath"`
+	CasRestoreRetentionHours     *int    `json:"casRestoreRetentionHours"`
+	LocalCASAutoScanEnabled      *bool   `json:"localCasAutoScanEnabled"`
+	LocalCASAutoScanIntervalMin  *int    `json:"localCasAutoScanIntervalMin" binding:"omitempty,min=1,max=1440"`
+	CasAutoCollectEnabled        *bool   `json:"casAutoCollectEnabled"`
+	CasAutoCollectPreservePath   *bool   `json:"casAutoCollectPreservePath"`
 }
 
 // ModifyAddition 修改系统附加设置（可选字段更新）
@@ -149,6 +151,12 @@ func (h *handler) ModifyAddition() httpcontext.HandlerFunc {
 		}
 		if req.CasRestoreRetentionHours != nil {
 			merged.CasRestoreRetentionHours = *req.CasRestoreRetentionHours
+		}
+		if req.LocalCASAutoScanEnabled != nil {
+			merged.LocalCASAutoScanEnabled = *req.LocalCASAutoScanEnabled
+		}
+		if req.LocalCASAutoScanIntervalMin != nil {
+			merged.LocalCASAutoScanIntervalMin = *req.LocalCASAutoScanIntervalMin
 		}
 		if req.CasAutoCollectEnabled != nil {
 			merged.CasAutoCollectEnabled = *req.CasAutoCollectEnabled

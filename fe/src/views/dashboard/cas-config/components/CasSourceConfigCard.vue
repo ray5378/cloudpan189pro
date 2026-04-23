@@ -67,7 +67,7 @@
         <n-grid v-if="sourceForm.sourceType === 'family'" :cols="24" :x-gap="16" :y-gap="8">
           <n-grid-item :span="12">
             <n-form-item label="家庭组对应目录 ID">
-              <n-input :value="sourceForm.fixedFamilyId || sourceForm.familyId || ''" readonly placeholder="选择家庭组后自动填入()里的数字" />
+              <n-input :value="familyGroupFolderIdLabel" readonly placeholder="根据已选家庭组自动回显" />
             </n-form-item>
           </n-grid-item>
         </n-grid>

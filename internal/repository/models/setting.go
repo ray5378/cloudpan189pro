@@ -50,15 +50,17 @@ type SettingAddition struct {
 	AutoDeleteInvalidStorageEnabled  bool   `json:"autoDeleteInvalidStorageEnabled"`
 	AutoDeleteInvalidStorageKeywords string `json:"autoDeleteInvalidStorageKeywords"`
 
-	CasTargetEnabled           bool   `json:"casTargetEnabled"`
-	CasTargetTokenId           int64  `json:"casTargetTokenId"`
-	CasTargetType              string `json:"casTargetType"`
-	CasTargetFamilyId          string `json:"casTargetFamilyId"`
-	CasTargetFolderId          string `json:"casTargetFolderId"`
-	CasAccessPath              string `json:"casAccessPath"`
-	CasRestoreRetentionHours   int    `json:"casRestoreRetentionHours"`
-	CasAutoCollectEnabled      bool   `json:"casAutoCollectEnabled"`
-	CasAutoCollectPreservePath bool   `json:"casAutoCollectPreservePath"`
+	CasTargetEnabled             bool   `json:"casTargetEnabled"`
+	CasTargetTokenId             int64  `json:"casTargetTokenId"`
+	CasTargetType                string `json:"casTargetType"`
+	CasTargetFamilyId            string `json:"casTargetFamilyId"`
+	CasTargetFolderId            string `json:"casTargetFolderId"`
+	CasAccessPath                string `json:"casAccessPath"`
+	CasRestoreRetentionHours     int    `json:"casRestoreRetentionHours"`
+	LocalCASAutoScanEnabled      bool   `json:"localCasAutoScanEnabled"`
+	LocalCASAutoScanIntervalMin  int    `json:"localCasAutoScanIntervalMin"`
+	CasAutoCollectEnabled        bool   `json:"casAutoCollectEnabled"`
+	CasAutoCollectPreservePath   bool   `json:"casAutoCollectPreservePath"`
 }
 
 func (sa *SettingAddition) applyDefaults() {
@@ -94,6 +96,9 @@ func (sa *SettingAddition) applyDefaults() {
 	}
 	if sa.CasTargetFolderId == "" {
 		sa.CasTargetFolderId = "-11"
+	}
+	if sa.LocalCASAutoScanIntervalMin <= 0 {
+		sa.LocalCASAutoScanIntervalMin = 10
 	}
 	if !sa.CasAutoCollectPreservePath {
 		sa.CasAutoCollectPreservePath = true
