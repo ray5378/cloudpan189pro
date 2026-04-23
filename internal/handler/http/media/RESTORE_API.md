@@ -120,6 +120,16 @@ Content-Type: application/json
 - `uploadRoute=family`, `destinationType=family`
 - `uploadRoute=family`, `destinationType=person`
 
+其中 `uploadRoute=family`, `destinationType=person` 当前实现为：
+
+1. 家庭秒传中转
+2. `/open/batch/createBatchTask.action` 提交 `type=COPY`, `copyType=2`
+3. `/open/batch/checkBatchTask.action` 轮询至完成
+4. 成功后提交家庭侧 `DELETE`
+5. 轮询 `DELETE` 完成
+6. 提交 `CLEAR_RECYCLE`
+7. 轮询 `CLEAR_RECYCLE` 完成
+
 当前 **不支持**：
 
 - `uploadRoute=person`, `destinationType=family`

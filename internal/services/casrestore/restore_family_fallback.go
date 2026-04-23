@@ -355,18 +355,43 @@ func (a *familyRestoreAdapter) safeDeleteFamilyFile(session *appsession.Session,
 	if accessToken == "" {
 		return fmt.Errorf("家庭中转清理失败: 无法获取AccessToken")
 	}
-	params := map[string]string{
+
+	deleteResp := new(batchTaskCreateResp)
+	if err := doAccessTokenFormJSONRequest(accessToken, familyBatchAPIBase+"/open/batch/createBatchTask.action", map[string]string{
 		"type":           "DELETE",
 		"taskInfos":      fmt.Sprintf(`[{"fileId":"%s","fileName":"%s","isFolder":0}]`, fileID, escapeJSONString(fileName)),
 		"targetFolderId": "",
 		"familyId":       strconv.FormatInt(familyID, 10),
+	}, 30*time.Second, deleteResp); err != nil {
+		return errors.Wrap(err, "提交DELETE任务失败")
 	}
-	resp := new(batchTaskCreateResp)
-	if err := doAccessTokenFormJSONRequest(accessToken, familyBatchAPIBase+"/open/batch/createBatchTask.action", params, 30*time.Second, resp); err != nil {
+	if batchRespError(deleteResp.ResCode, deleteResp.ResMessage) {
+		return fmt.Errorf("提交DELETE任务失败: %s", deleteResp.ResMessage)
+	}
+	if deleteResp.TaskID == "" {
+		return fmt.Errorf("提交DELETE任务失败: 缺少taskId")
+	}
+	if err := a.waitForBatchTask(accessToken, "DELETE", deleteResp.TaskID, 2*time.Minute); err != nil {
 		return err
 	}
-	if batchRespError(resp.ResCode, resp.ResMessage) {
-		return fmt.Errorf("家庭中转清理失败: %s", resp.ResMessage)
+
+	clearResp := new(batchTaskCreateResp)
+	if err := doAccessTokenFormJSONRequest(accessToken, familyBatchAPIBase+"/open/batch/createBatchTask.action", map[string]string{
+		"type":           "CLEAR_RECYCLE",
+		"taskInfos":      "[]",
+		"targetFolderId": "",
+		"familyId":       strconv.FormatInt(familyID, 10),
+	}, 30*time.Second, clearResp); err != nil {
+		return errors.Wrap(err, "提交CLEAR_RECYCLE任务失败")
+	}
+	if batchRespError(clearResp.ResCode, clearResp.ResMessage) {
+		return fmt.Errorf("提交CLEAR_RECYCLE任务失败: %s", clearResp.ResMessage)
+	}
+	if clearResp.TaskID == "" {
+		return fmt.Errorf("提交CLEAR_RECYCLE任务失败: 缺少taskId")
+	}
+	if err := a.waitForBatchTask(accessToken, "CLEAR_RECYCLE", clearResp.TaskID, 2*time.Minute); err != nil {
+		return err
 	}
 	return nil
 }
