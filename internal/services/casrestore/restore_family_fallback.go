@@ -1,14 +1,11 @@
 package casrestore
 
 import (
-	"crypto/md5"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -21,8 +18,6 @@ import (
 )
 
 const familyBatchAPIBase = "https://api.cloud.189.cn"
-const cloudWebBaseURL = "https://cloud.189.cn"
-const cloudWebOpenAppKey = "600100422"
 
 type familyRestoreAdapter struct{}
 
@@ -30,23 +25,6 @@ type familyRestoreResult struct {
 	FamilyID         int64
 	RestoredFileID   string
 	RestoredFileName string
-}
-
-type batchTaskCreateResp struct {
-	ResCode    any    `json:"res_code"`
-	ResMessage string `json:"res_message"`
-	TaskID     string `json:"taskId"`
-}
-
-type batchTaskCheckResp struct {
-	ResCode        any    `json:"res_code"`
-	ResMessage     string `json:"res_message"`
-	TaskStatus     int    `json:"taskStatus"`
-	TaskID         string `json:"taskId"`
-	FailedCount    int    `json:"failedCount"`
-	SuccessedCount int    `json:"successedCount"`
-	SkipCount      int    `json:"skipCount"`
-	ErrorCode      string `json:"errorCode"`
 }
 
 // familyRestoreAdapter 负责“家庭路线”的秒传恢复。
@@ -91,29 +69,20 @@ func (a *familyRestoreAdapter) TryRestore(
 		fileName = info.Name
 	}
 
-	familyFolderID := ""
-	if destinationType == DestinationTypeFamily {
-		familyFolderID = normalizeFamilyFolderID(targetFolderID)
-	} else {
-		familyFolderID, err = a.getFamilyRootFolderID(session, familyID)
-		if err != nil {
-			return nil, err
-		}
+	if destinationType != DestinationTypeFamily {
+		return nil, fmt.Errorf("familyRestoreAdapter 不再承担 family -> person，当前仅支持 refsdk 主链")
 	}
 
+	familyFolderID := normalizeFamilyFolderID(targetFolderID)
 	familyFileID, err := a.familyRapidUpload(session, familyID, familyFolderID, info, fileName)
 	if err != nil {
 		return nil, err
 	}
-	result := &familyRestoreResult{
+	return &familyRestoreResult{
 		FamilyID:         familyID,
 		RestoredFileID:   familyFileID,
 		RestoredFileName: fileName,
-	}
-	if destinationType != DestinationTypeFamily {
-		return nil, fmt.Errorf("familyRestoreAdapter 不再承担 family -> person，当前仅支持 refsdk 主链")
-	}
-	return result, nil
+	}, nil
 }
 
 func (a *familyRestoreAdapter) familyRapidUpload(session *appsession.Session, familyID int64, familyFolderID string, info *casparser.CasInfo, fileName string) (string, error) {
@@ -280,275 +249,10 @@ func (a *familyRestoreAdapter) getFamilyRootFolderID(session *appsession.Session
 	return "", nil
 }
 
-// copyFamilyFileToPersonal 严格参照 cloud189-auto-save 的 _copyFamilyFileToPersonal：
-// 使用 AccessToken + Timestamp + 参数字典序拼接后的 MD5 小写签名，请求 /open/batch/createBatchTask.action(type=COPY, copyType=2)。
-func (a *familyRestoreAdapter) copyFamilyFileToPersonal(session *appsession.Session, familyID int64, familyFileID, personalFolderID, fileName string) error {
-	accessToken := strings.TrimSpace(session.Token.AccessToken)
-	if accessToken == "" {
-		return fmt.Errorf("家庭中转COPY失败: 无法获取AccessToken")
-	}
-	params := map[string]string{
-		"type":           "COPY",
-		"taskInfos":      fmt.Sprintf(`[{"fileId":"%s","fileName":"%s","isFolder":0}]`, familyFileID, escapeJSONString(fileName)),
-		"targetFolderId": normalizePersonFolderID(targetFolderIDOrEmpty(personalFolderID)),
-		"familyId":       strconv.FormatInt(familyID, 10),
-		"groupId":        "null",
-		"copyType":       "2",
-		"shareId":        "null",
-	}
-	resp := new(batchTaskCreateResp)
-	if err := doAccessTokenFormJSONRequest(accessToken, familyBatchAPIBase+"/open/batch/createBatchTask.action", params, 30*time.Second, resp); err != nil {
-		return errors.Wrap(err, "家庭中转COPY失败")
-	}
-	if batchRespError(resp.ResCode, resp.ResMessage) {
-		return fmt.Errorf("家庭中转COPY失败: %s", resp.ResMessage)
-	}
-	if resp.TaskID == "" {
-		return fmt.Errorf("家庭中转COPY失败: 缺少taskId")
-	}
-	return a.waitForBatchTask(accessToken, "COPY", resp.TaskID, 30*time.Second)
-}
-
-// waitForBatchTask 严格参照 _waitForBatchTask：1s 轮询 /open/batch/checkBatchTask.action，taskStatus=4 视为成功。
-func (a *familyRestoreAdapter) waitForBatchTask(accessToken, taskType, taskID string, maxWait time.Duration) error {
-	if strings.TrimSpace(accessToken) == "" {
-		return fmt.Errorf("批量任务查询失败: 无法获取AccessToken")
-	}
-	deadline := time.Now().Add(maxWait)
-	lastStatus := 0
-	for time.Now().Before(deadline) {
-		time.Sleep(1 * time.Second)
-		resp := new(batchTaskCheckResp)
-		if err := doAccessTokenFormJSONRequest(accessToken, familyBatchAPIBase+"/open/batch/checkBatchTask.action", map[string]string{
-			"type":   taskType,
-			"taskId": taskID,
-		}, 15*time.Second, resp); err != nil {
-			return errors.Wrap(err, "批量任务查询失败")
-		}
-		if batchRespError(resp.ResCode, resp.ResMessage) {
-			return fmt.Errorf("批量任务查询失败: %s", resp.ResMessage)
-		}
-		lastStatus = resp.TaskStatus
-		if lastStatus == 4 {
-			if resp.FailedCount > 0 && resp.SuccessedCount == 0 {
-				if strings.TrimSpace(resp.ErrorCode) != "" {
-					return fmt.Errorf("家庭中转批量任务失败 taskStatus=%d failed=%d successed=%d skip=%d errorCode=%s", resp.TaskStatus, resp.FailedCount, resp.SuccessedCount, resp.SkipCount, resp.ErrorCode)
-				}
-				return fmt.Errorf("家庭中转批量任务失败 taskStatus=%d failed=%d successed=%d skip=%d", resp.TaskStatus, resp.FailedCount, resp.SuccessedCount, resp.SkipCount)
-			}
-			return nil
-		}
-	}
-	return fmt.Errorf("家庭中转批量任务超时 taskStatus=%d", lastStatus)
-}
-
-func (a *familyRestoreAdapter) safeDeleteFamilyFile(session *appsession.Session, familyID int64, fileID, fileName string) error {
-	accessToken := strings.TrimSpace(session.Token.AccessToken)
-	if accessToken == "" {
-		return fmt.Errorf("家庭中转清理失败: 无法获取AccessToken")
-	}
-
-	deleteResp := new(batchTaskCreateResp)
-	if err := doAccessTokenFormJSONRequest(accessToken, familyBatchAPIBase+"/open/batch/createBatchTask.action", map[string]string{
-		"type":           "DELETE",
-		"taskInfos":      fmt.Sprintf(`[{"fileId":"%s","fileName":"%s","isFolder":0}]`, fileID, escapeJSONString(fileName)),
-		"targetFolderId": "",
-		"familyId":       strconv.FormatInt(familyID, 10),
-	}, 30*time.Second, deleteResp); err != nil {
-		return errors.Wrap(err, "提交DELETE任务失败")
-	}
-	if batchRespError(deleteResp.ResCode, deleteResp.ResMessage) {
-		return fmt.Errorf("提交DELETE任务失败: %s", deleteResp.ResMessage)
-	}
-	if deleteResp.TaskID == "" {
-		return fmt.Errorf("提交DELETE任务失败: 缺少taskId")
-	}
-	if err := a.waitForBatchTask(accessToken, "DELETE", deleteResp.TaskID, 2*time.Minute); err != nil {
-		return err
-	}
-
-	clearResp := new(batchTaskCreateResp)
-	if err := doAccessTokenFormJSONRequest(accessToken, familyBatchAPIBase+"/open/batch/createBatchTask.action", map[string]string{
-		"type":           "CLEAR_RECYCLE",
-		"taskInfos":      "[]",
-		"targetFolderId": "",
-		"familyId":       strconv.FormatInt(familyID, 10),
-	}, 30*time.Second, clearResp); err != nil {
-		return errors.Wrap(err, "提交CLEAR_RECYCLE任务失败")
-	}
-	if batchRespError(clearResp.ResCode, clearResp.ResMessage) {
-		return fmt.Errorf("提交CLEAR_RECYCLE任务失败: %s", clearResp.ResMessage)
-	}
-	if clearResp.TaskID == "" {
-		return fmt.Errorf("提交CLEAR_RECYCLE任务失败: 缺少taskId")
-	}
-	if err := a.waitForBatchTask(accessToken, "CLEAR_RECYCLE", clearResp.TaskID, 2*time.Minute); err != nil {
-		return err
-	}
-	return nil
-}
-
-type ssKeyAccessTokenResp struct {
-	AccessToken string `json:"accessToken"`
-}
-
-func getAccessTokenBySsKey(session *appsession.Session) (string, error) {
-	if session == nil {
-		return "", fmt.Errorf("AppSession不能为空")
-	}
-	sessionKey := strings.TrimSpace(session.Token.SessionKey)
-	if sessionKey == "" {
-		return "", fmt.Errorf("sessionKey为空")
-	}
-	targetURL := familyBatchAPIBase + "/open/oauth2/getAccessTokenBySsKey.action?sessionKey=" + url.QueryEscape(sessionKey)
-	timestamp, signature := buildWebOpenSignature(targetURL, nil)
-	req, err := http.NewRequest(http.MethodGet, targetURL, nil)
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Sign-Type", "1")
-	req.Header.Set("Signature", signature)
-	req.Header.Set("Timestamp", timestamp)
-	req.Header.Set("AppKey", cloudWebOpenAppKey)
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36")
-	req.Header.Set("Referer", cloudWebBaseURL+"/web/main/")
-	resp, err := (&http.Client{Timeout: 15 * time.Second}).Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer func() { _ = resp.Body.Close() }()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
-	}
-	if resp.StatusCode >= 400 {
-		return "", fmt.Errorf("http %d: %s", resp.StatusCode, string(body))
-	}
-	out := new(ssKeyAccessTokenResp)
-	if err := json.Unmarshal(body, out); err != nil {
-		return "", err
-	}
-	if strings.TrimSpace(out.AccessToken) == "" {
-		return "", fmt.Errorf("响应缺少accessToken")
-	}
-	return strings.TrimSpace(out.AccessToken), nil
-}
-
-func doAccessTokenFormJSONRequest(accessToken string, targetURL string, params map[string]string, timeout time.Duration, out any) error {
-	timestamp, signature := buildAccessTokenSignature(strings.TrimSpace(accessToken), params)
-	req, err := http.NewRequest(http.MethodPost, targetURL, strings.NewReader(formURLEncode(params)))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Accept", "application/json;charset=UTF-8")
-	req.Header.Set("Sign-Type", "1")
-	req.Header.Set("Signature", signature)
-	req.Header.Set("Timestamp", timestamp)
-	req.Header.Set("Accesstoken", strings.TrimSpace(accessToken))
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36")
-	req.Header.Set("Referer", cloudWebBaseURL+"/web/main/")
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	client := &http.Client{Timeout: timeout}
-	resp, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = resp.Body.Close() }()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-	if resp.StatusCode >= 400 {
-		return fmt.Errorf("http %d: %s", resp.StatusCode, string(body))
-	}
-	if out != nil {
-		return json.Unmarshal(body, out)
-	}
-	return nil
-}
-
-// buildAccessTokenSignature 严格参照 cloud189-auto-save/cloud189-sdk：
-// 把 AccessToken / Timestamp / 全部业务参数放进同一个 map，整体按 key 字典序排序，再做 md5 hex lower。
-func buildAccessTokenSignature(accessToken string, params map[string]string) (string, string) {
-	timestamp := strconv.FormatInt(time.Now().UnixMilli(), 10)
-	payload := make(map[string]string, len(params)+2)
-	for k, v := range params {
-		payload[k] = v
-	}
-	payload["AccessToken"] = accessToken
-	payload["Timestamp"] = timestamp
-	return timestamp, buildSortedMD5Signature(payload)
-}
-
-func buildWebOpenSignature(targetURL string, params map[string]string) (string, string) {
-	timestamp := strconv.FormatInt(time.Now().UnixMilli(), 10)
-	payload := make(map[string]string, 4)
-	if parsed, err := url.Parse(targetURL); err == nil {
-		for key, values := range parsed.Query() {
-			if len(values) > 0 {
-				payload[key] = values[0]
-			}
-		}
-	}
-	for k, v := range params {
-		payload[k] = v
-	}
-	payload["Timestamp"] = timestamp
-	payload["AppKey"] = cloudWebOpenAppKey
-	return timestamp, buildSortedMD5Signature(payload)
-}
-
-func buildSortedMD5Signature(payload map[string]string) string {
-	keys := make([]string, 0, len(payload))
-	for k := range payload {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	parts := make([]string, 0, len(keys))
-	for _, k := range keys {
-		parts = append(parts, k+"="+payload[k])
-	}
-	sum := md5.Sum([]byte(strings.Join(parts, "&")))
-	return hex.EncodeToString(sum[:])
-}
-
-func formURLEncode(params map[string]string) string {
-	vals := url.Values{}
-	for k, v := range params {
-		vals.Set(k, v)
-	}
-	return vals.Encode()
-}
-
-func batchRespError(code any, _ string) bool {
-	switch v := code.(type) {
-	case nil:
-		return false
-	case float64:
-		return int(v) != 0
-	case int:
-		return v != 0
-	case string:
-		return v != "" && v != "0"
-	default:
-		return false
-	}
-}
-
 func normalizeFamilyFolderID(folderID string) string {
 	if folderID == "-11" {
 		return ""
 	}
-	return folderID
-}
-
-func normalizePersonFolderID(folderID string) string {
-	return folderID
-}
-
-func targetFolderIDOrEmpty(folderID string) string {
 	return folderID
 }
 
