@@ -85,6 +85,7 @@ export interface ModifySettingAdditionRequest {
   casTargetFamilyId?: string
   casTargetFolderId?: string
   casAccessPath?: string
+  casRestoreRetentionHours?: number
   casAutoCollectEnabled?: boolean
   casAutoCollectPreservePath?: boolean
 }

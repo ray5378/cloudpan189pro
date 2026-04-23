@@ -56,6 +56,7 @@ type SettingAddition struct {
 	CasTargetFamilyId          string `json:"casTargetFamilyId"`
 	CasTargetFolderId          string `json:"casTargetFolderId"`
 	CasAccessPath              string `json:"casAccessPath"`
+	CasRestoreRetentionHours   int    `json:"casRestoreRetentionHours"`
 	CasAutoCollectEnabled      bool   `json:"casAutoCollectEnabled"`
 	CasAutoCollectPreservePath bool   `json:"casAutoCollectPreservePath"`
 }

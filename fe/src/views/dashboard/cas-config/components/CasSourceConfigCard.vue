@@ -1,33 +1,10 @@
 <template>
-  <!--
-    CAS 最终目录卡片
-    规则：这里只负责最终目录相关 UI 展示与输入，不吸纳“恢复流程”“缓存管理逻辑实现”“跨卡片默认值同步”等职责。
-    如果这里继续长胖，请优先拆更小的局部组件，而不是把逻辑堆回 index.vue。
-  -->
   <n-card title="CAS 最终目录" size="small">
     <n-space vertical size="small">
-      <n-text depth="3">这里配置的是 CAS 播放恢复时的最终落盘目录。订阅 `.cas` 会自动保存到本地 `/local_cas`，不再需要在这里手工配置本地来源目录。</n-text>
-      <n-text depth="3">当目标类型为家庭云盘目录时，可通过“CAS指定恢复位置”固定家庭空间 ID，避免恢复时在多个家庭间跳来跳去。</n-text>
+      <n-text depth="3">这里配置的是 CAS 播放恢复时的最终落盘目录。</n-text>
+      <n-text depth="3">当前链路仅支持 family → family。</n-text>
 
       <n-form :model="sourceForm" label-placement="left" label-width="140px">
-        <n-grid :cols="24" :x-gap="16" :y-gap="8">
-          <n-grid-item :span="6">
-            <n-form-item label="启用 CAS 最终目录">
-              <n-switch v-model:value="sourceForm.enabled" />
-            </n-form-item>
-          </n-grid-item>
-          <n-grid-item :span="6">
-            <n-form-item label="自动归集订阅 .cas">
-              <n-switch v-model:value="sourceForm.autoCollectEnabled" />
-            </n-form-item>
-          </n-grid-item>
-          <n-grid-item :span="6">
-            <n-form-item label="保留订阅路径结构">
-              <n-switch v-model:value="sourceForm.preservePath" />
-            </n-form-item>
-          </n-grid-item>
-        </n-grid>
-
         <n-grid :cols="24" :x-gap="16" :y-gap="8">
           <n-grid-item :span="8">
             <n-form-item label="云盘账号">
@@ -63,6 +40,18 @@
         </n-grid>
 
         <n-grid :cols="24" :x-gap="16" :y-gap="8">
+          <n-grid-item :span="8">
+            <n-form-item label="恢复后文件留存时间">
+              <n-select
+                v-model:value="sourceForm.retentionHours"
+                :options="retentionOptions"
+                placeholder="选择留存时间"
+              />
+            </n-form-item>
+          </n-grid-item>
+        </n-grid>
+
+        <n-grid :cols="24" :x-gap="16" :y-gap="8">
           <n-grid-item :span="12">
             <n-form-item label="当前最终目录">
               <n-input :value="sourcePathLabel" readonly />
@@ -71,6 +60,14 @@
           <n-grid-item :span="12">
             <n-form-item label="当前最终目录 ID">
               <n-input :value="currentFolderIdLabel" readonly />
+            </n-form-item>
+          </n-grid-item>
+        </n-grid>
+
+        <n-grid v-if="sourceForm.sourceType === 'family'" :cols="24" :x-gap="16" :y-gap="8">
+          <n-grid-item :span="12">
+            <n-form-item label="家庭组对应目录 ID">
+              <n-input :value="sourceForm.fixedFamilyId || sourceForm.familyId || ''" readonly placeholder="选择家庭组后自动填入()里的数字" />
             </n-form-item>
           </n-grid-item>
         </n-grid>
@@ -115,7 +112,6 @@ import {
   NInput,
   NSelect,
   NSpace,
-  NSwitch,
   NText,
 } from 'naive-ui'
 
@@ -124,11 +120,13 @@ defineProps<{
   cloudTokenOptions: Array<{ label: string; value: number }>
   sourceTypeOptions: Array<{ label: string; value: string }>
   familyOptions: Array<{ label: string; value: string }>
+  retentionOptions: Array<{ label: string; value: number }>
   cloudTokenLoading: boolean
   familyLoading: boolean
   sourceLoading: boolean
   sourcePathLabel: string
   currentFolderIdLabel: string
+  familyGroupFolderIdLabel: string
   savedFolderIdLabel: string
   savedCasPathLabel: string
   sourceFolderStack: Array<{ id: string; name: string }>

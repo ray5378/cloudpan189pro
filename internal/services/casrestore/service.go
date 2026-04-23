@@ -58,6 +58,8 @@ type RestoreRequest struct {
 	DestinationType DestinationType
 	// TargetFolderID 是最终目录 ID；它只表达目录，不表达路线。
 	TargetFolderID string
+	// FamilyID 在 family 路线/目标下可选传入，用于避免重复获取家庭列表。
+	FamilyID int64
 }
 
 // RestoreResult 是恢复完成后的结果。
@@ -89,6 +91,15 @@ type restoreCall struct {
 	wg     sync.WaitGroup
 	result *RestoreResult
 	terr   error
+}
+
+var familyIDSessionHint = map[*appsession.Session]int64{}
+
+func reqFamilyIDFromContext(session *appsession.Session) int64 {
+	if session == nil {
+		return 0
+	}
+	return familyIDSessionHint[session]
 }
 
 func NewService(svc bootstrap.ServiceContext) Service {

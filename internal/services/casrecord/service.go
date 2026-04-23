@@ -1,6 +1,8 @@
 package casrecord
 
 import (
+	"time"
+
 	"github.com/xxcheng123/cloudpan189-share/internal/bootstrap"
 	"github.com/xxcheng123/cloudpan189-share/internal/framework/context"
 	"github.com/xxcheng123/cloudpan189-share/internal/repository/models"
@@ -11,6 +13,7 @@ type Service interface {
 	Create(ctx context.Context, record *models.CasMediaRecord) (int64, error)
 	Query(ctx context.Context, id int64) (*models.CasMediaRecord, error)
 	QueryByStorageAndCasFileID(ctx context.Context, storageID int64, casFileID string) (*models.CasMediaRecord, error)
+	ListDueRecycle(ctx context.Context, now time.Time, limit int) ([]*models.CasMediaRecord, error)
 	Update(ctx context.Context, id int64, updates map[string]any) error
 }
 

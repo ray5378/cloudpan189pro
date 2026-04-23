@@ -5,12 +5,34 @@ import (
 
 	appctx "github.com/xxcheng123/cloudpan189-share/internal/framework/context"
 	"github.com/xxcheng123/cloudpan189-share/internal/repository/models"
+	"github.com/xxcheng123/cloudpan189-share/internal/shared"
 	"gorm.io/gorm"
 )
 
 func (s *service) getOrCreateRecord(ctx appctx.Context, req RestoreRequest) (*models.CasMediaRecord, error) {
 	record, err := s.recordSvc.QueryByStorageAndCasFileID(ctx, req.StorageID, req.CasFileID)
 	if err == nil {
+		if record.RestoredParentID != req.TargetFolderID {
+			now := time.Now()
+			if updateErr := s.recordSvc.Update(ctx, record.ID, map[string]any{
+				"restored_parent_id": req.TargetFolderID,
+				"restored_file_id":   "",
+				"restored_file_name": "",
+				"restore_status":     models.CasRestoreStatusPending,
+				"restored_at":        nil,
+				"last_access_at":     &now,
+				"last_error":         "",
+			}); updateErr != nil {
+				return nil, updateErr
+			}
+			record.RestoredParentID = req.TargetFolderID
+			record.RestoredFileID = ""
+			record.RestoredFileName = ""
+			record.RestoreStatus = models.CasRestoreStatusPending
+			record.RestoredAt = nil
+			record.LastAccessAt = &now
+			return record, nil
+		}
 		return record, nil
 	}
 	if err != nil && err != gorm.ErrRecordNotFound {
@@ -68,6 +90,12 @@ func (s *service) markRestored(ctx appctx.Context, recordID int64, result *Resto
 		"restored_at":         &now,
 		"last_access_at":      &now,
 		"last_error":          "",
+	}
+	if shared.SettingAddition.CasRestoreRetentionHours > 0 {
+		recycleAfter := now.Add(time.Duration(shared.SettingAddition.CasRestoreRetentionHours) * time.Hour)
+		updates["recycle_after_at"] = &recycleAfter
+	} else {
+		updates["recycle_after_at"] = nil
 	}
 	if result.CasInfo != nil {
 		updates["original_file_name"] = result.CasInfo.Name

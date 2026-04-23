@@ -1,14 +1,6 @@
 <template>
   <div class="cas-config-page">
     <n-space vertical size="large">
-      <n-alert type="info" :bordered="false" title="CAS 配置说明">
-        <n-space vertical size="small">
-          <n-text>本页面只承载 CAS 相关配置与手动恢复入口，不改动原有 STRM / 媒体页面。</n-text>
-          <n-text>账号密码继续复用原项目 cloud token / mountpoint 体系，这里不重复配置账号密码。</n-text>
-          <n-text>当前仅支持 reference-backed 组合：person → person、family → family、family → person。</n-text>
-        </n-space>
-      </n-alert>
-
       <n-grid :cols="24" :x-gap="16" :y-gap="16">
         <n-grid-item :span="24">
           <CasSourceConfigCard
@@ -16,11 +8,13 @@
             :cloud-token-options="cloudTokenOptions"
             :source-type-options="sourceTypeOptions"
             :family-options="familyOptions"
+            :retention-options="retentionOptions"
             :cloud-token-loading="cloudTokenLoading"
             :family-loading="familyLoading"
             :source-loading="sourceLoading"
             :source-path-label="sourcePathLabel"
             :current-folder-id-label="currentFolderIdLabel"
+            :family-group-folder-id-label="familyGroupFolderIdLabel"
             :saved-folder-id-label="savedFolderIdLabel"
             :saved-cas-path-label="savedCasPathLabel"
             :source-folder-stack="sourceFolderStack"
@@ -30,42 +24,6 @@
             @go-parent="goParentFolder"
             @save-source="saveSourceConfig"
           />
-        </n-grid-item>
-
-        <n-grid-item :span="24">
-          <CasDefaultsCard
-            :model="defaultForm"
-            :upload-route-options="uploadRouteOptions"
-            :default-destination-options="defaultDestinationOptions"
-            :input-mode-options="inputModeOptions"
-            @reset="resetDefaults"
-            @save="saveDefaults"
-          />
-        </n-grid-item>
-
-        <n-grid-item :span="24">
-          <CasManualRestoreCard
-            :model="restoreForm"
-            :input-mode-options="inputModeOptions"
-            :upload-route-options="uploadRouteOptions"
-            :destination-type-options="destinationTypeOptions"
-            :restoring="restoring"
-            @apply-defaults="applyDefaultsToRestore"
-            @reset="resetRestore"
-            @restore="handleRestore"
-          />
-        </n-grid-item>
-
-        <n-grid-item :span="12">
-          <CasRequestPreviewCard :content="requestPreview" />
-        </n-grid-item>
-
-        <n-grid-item :span="12">
-          <CasLinkInfoCard />
-        </n-grid-item>
-
-        <n-grid-item :span="24" v-if="resultText">
-          <CasResultCard :content="resultText" />
         </n-grid-item>
       </n-grid>
     </n-space>
@@ -107,10 +65,10 @@ import CasRequestPreviewCard from './components/CasRequestPreviewCard.vue'
 import CasResultCard from './components/CasResultCard.vue'
 import CasSourceConfigCard from './components/CasSourceConfigCard.vue'
 
+void [NAlert, NText, CasDefaultsCard, CasLinkInfoCard, CasManualRestoreCard, CasRequestPreviewCard, CasResultCard]
+
 type InputMode = 'virtualId' | 'path' | 'explicit'
 type SourceType = 'person' | 'family'
-
-const FIXED_CAS_FAMILY_ID = '300000933227076'
 
 interface CasDefaults {
   uploadRoute: CasUploadRoute
@@ -124,9 +82,6 @@ interface CasRestoreForm extends RestoreCasRequest {
 }
 
 interface CasSourceForm {
-  enabled: boolean
-  autoCollectEnabled: boolean
-  preservePath: boolean
   cloudToken?: number
   sourceType: SourceType
   familyId?: string
@@ -134,6 +89,7 @@ interface CasSourceForm {
   parentId: string
   parentName: string
   casAccessPath: string
+  retentionHours?: number
 }
 
 const DEFAULTS_KEY = 'cas.config.defaults'
@@ -159,6 +115,16 @@ const sourceTypeOptions = [
   { label: '家庭云盘目录', value: 'family' },
 ]
 
+const retentionOptions = [
+  { label: '永久保留', value: 0 },
+  { label: '1 小时', value: 1 },
+  { label: '6 小时', value: 6 },
+  { label: '12 小时', value: 12 },
+  { label: '1 天', value: 24 },
+  { label: '3 天', value: 72 },
+  { label: '7 天', value: 168 },
+]
+
 const inputModeOptions = [
   { label: '最简 ID 模式', value: 'virtualId' },
   { label: '路径模式', value: 'path' },
@@ -173,9 +139,6 @@ const emptyDefaults = (): CasDefaults => ({
 })
 
 const emptySourceForm = (): CasSourceForm => ({
-  enabled: false,
-  autoCollectEnabled: false,
-  preservePath: true,
   cloudToken: undefined,
   sourceType: 'person',
   familyId: undefined,
@@ -183,6 +146,7 @@ const emptySourceForm = (): CasSourceForm => ({
   parentId: '-11',
   parentName: '根目录',
   casAccessPath: '',
+  retentionHours: undefined,
 })
 
 const defaultForm = reactive<CasDefaults>(emptyDefaults())
@@ -197,11 +161,13 @@ const restoreForm = reactive<CasRestoreForm>({
   casFileName: '',
 })
 
-const defaultParentId = computed(() => '-11')
+const defaultParentId = computed(() => (sourceForm.sourceType === 'family' ? '-16' : '-11'))
 const sourcePathLabel = computed(() => {
   const root = sourceForm.sourceType === 'person' ? '/个人云盘' : '/家庭云盘'
   if (sourceFolderStack.value.length === 0) {
-    const currentId = sourceForm.parentId || defaultParentId.value || ''
+    const currentId = sourceForm.sourceType === 'family'
+      ? (savedSourceFolderId.value || sourceForm.parentId || defaultParentId.value || '')
+      : (sourceForm.parentId || defaultParentId.value || '')
     if (sourceForm.casAccessPath && currentId === savedSourceFolderId.value) {
       return sourceForm.casAccessPath
     }
@@ -211,7 +177,13 @@ const sourcePathLabel = computed(() => {
 })
 
 const savedCasPathLabel = computed(() => sourceForm.casAccessPath || '未保存')
-const currentFolderIdLabel = computed(() => sourceForm.parentId || defaultParentId.value || '')
+const currentFolderIdLabel = computed(() => {
+  if (sourceFolderStack.value.length === 0) {
+    return sourceForm.sourceType === 'family' ? '-16' : '-11'
+  }
+  return sourceForm.parentId || defaultParentId.value || ''
+})
+const familyGroupFolderIdLabel = computed(() => sourceForm.fixedFamilyId || sourceForm.familyId || '未选择')
 const savedFolderIdLabel = computed(() => savedSourceFolderId.value || '未保存')
 
 const defaultDestinationOptions = computed(() => {
@@ -284,9 +256,9 @@ watch(
   async (val) => {
     sourceEntries.value = []
     sourceFolderStack.value = []
-    sourceForm.parentId = '-11'
-    sourceForm.parentName = '根目录'
     sourceForm.familyId = val === 'family' ? sourceForm.fixedFamilyId : undefined
+    sourceForm.parentId = val === 'family' ? '-16' : '-11'
+    sourceForm.parentName = '根目录'
     if (val !== 'family') {
       sourceForm.fixedFamilyId = undefined
     }
@@ -302,7 +274,7 @@ watch(
     sourceForm.familyId = val || undefined
     sourceEntries.value = []
     sourceFolderStack.value = []
-    sourceForm.parentId = '-11'
+    sourceForm.parentId = '-16'
     sourceForm.parentName = '根目录'
   }
 )
@@ -312,7 +284,7 @@ watch(
   () => {
     sourceEntries.value = []
     sourceFolderStack.value = []
-    sourceForm.parentId = '-11'
+    sourceForm.parentId = '-16'
     sourceForm.parentName = '根目录'
   }
 )
@@ -462,19 +434,18 @@ const saveSourceConfig = async () => {
 
   const resolvedTargetPath = sourcePathLabel.value
   sourceForm.casAccessPath = resolvedTargetPath
-  sourceForm.enabled = true
-  sourceForm.autoCollectEnabled = true
 
-  const savedFolderId = sourceForm.parentId || defaultParentId.value
+  const savedFolderId = sourceForm.sourceType === 'family' && sourceFolderStack.value.length === 0
+    ? (sourceForm.fixedFamilyId || sourceForm.familyId || '')
+    : (sourceForm.parentId || defaultParentId.value)
   await modifySettingAddition({
     casTargetEnabled: true,
     casTargetTokenId: sourceForm.cloudToken,
     casTargetType: sourceForm.sourceType,
-    casTargetFamilyId: sourceForm.fixedFamilyId || sourceForm.familyId || FIXED_CAS_FAMILY_ID,
+    casTargetFamilyId: sourceForm.fixedFamilyId || sourceForm.familyId,
     casTargetFolderId: savedFolderId,
     casAccessPath: resolvedTargetPath,
-    casAutoCollectEnabled: true,
-    casAutoCollectPreservePath: sourceForm.preservePath,
+    casRestoreRetentionHours: sourceForm.retentionHours,
   })
 
   savedSourceFolderId.value = savedFolderId
@@ -487,17 +458,17 @@ const saveSourceConfig = async () => {
 const loadSourceConfigFromServer = async () => {
   const res = await getSettingAddition()
   const addition: Models.SettingAddition = res.data || ({} as Models.SettingAddition)
-  sourceForm.enabled = addition.casTargetEnabled !== false
-  sourceForm.autoCollectEnabled = addition.casAutoCollectEnabled !== false
-  sourceForm.preservePath = addition.casAutoCollectPreservePath !== false
   sourceForm.cloudToken = addition.casTargetTokenId || undefined
   sourceForm.sourceType = (addition.casTargetType as SourceType) || 'person'
   sourceForm.fixedFamilyId = addition.casTargetFamilyId || undefined
   sourceForm.familyId = addition.casTargetFamilyId || undefined
-  sourceForm.parentId = addition.casTargetFolderId || (sourceForm.sourceType === 'person' ? '-11' : '')
+  sourceForm.parentId = addition.casTargetType === 'family'
+    ? '-16'
+    : (addition.casTargetFolderId || '-11')
   savedSourceFolderId.value = addition.casTargetFolderId || ''
   sourceForm.parentName = addition.casAccessPath || '根目录'
   sourceForm.casAccessPath = addition.casAccessPath || ''
+  sourceForm.retentionHours = addition.casRestoreRetentionHours || undefined
   if (!defaultForm.targetFolderId) {
     defaultForm.targetFolderId = addition.casTargetFolderId || ''
   }
@@ -530,6 +501,7 @@ const buildRequestPayload = (): RestoreCasRequest => {
 }
 
 const requestPreview = computed(() => JSON.stringify(buildRequestPayload(), null, 2))
+void [uploadRouteOptions, inputModeOptions, defaultDestinationOptions, destinationTypeOptions, saveDefaults, resetDefaults, resetRestore, requestPreview]
 
 const validateBeforeSubmit = (): boolean => {
   if (!(restoreForm.targetFolderId || '').trim()) {
@@ -574,6 +546,7 @@ const handleRestore = () => {
       restoring.value = false
     })
 }
+void [handleRestore]
 
 onMounted(async () => {
   loadDefaults()

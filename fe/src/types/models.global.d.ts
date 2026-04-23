@@ -142,6 +142,7 @@ declare namespace Models {
     casTargetFamilyId?: string
     casTargetFolderId?: string
     casAccessPath?: string
+    casRestoreRetentionHours?: number
     casAutoCollectEnabled?: boolean
     casAutoCollectPreservePath?: boolean
   }

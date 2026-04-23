@@ -44,44 +44,39 @@ func (h *handler) GetFamilyFiles() httpcontext.HandlerFunc {
 		req := new(getFamilyFilesRequest)
 		if err := ctx.ShouldBindQuery(req); err != nil {
 			ctx.AbortWithInvalidParams(err)
-
 			return
 		}
 
 		token, err := h.cloudTokenService.Query(ctx.GetContext(), req.CloudToken)
 		if err != nil {
 			ctx.Fail(codeStorageAdvanceCloudTokenNotExist.WithError(err))
-
 			return
 		}
 
-		// 构造认证令牌
 		authToken := cloudbridge.NewAuthToken(token.AccessToken, token.ExpiresIn)
+		parentID := req.ParentId
+		if parentID == "" || parentID == req.FamilyId || parentID == "-16" {
+			parentID = "-16"
+		}
 
-		// 获取家庭云文件列表
-		fileList, err := h.cloudBridgeService.FamilyFileList(ctx.GetContext(), authToken, req.FamilyId, req.ParentId, req.PageNum, req.PageSize)
+		fileList, err := h.cloudBridgeService.FamilyFileList(ctx.GetContext(), authToken, req.FamilyId, parentID, req.PageNum, req.PageSize)
 		if err != nil {
 			ctx.Fail(codeStorageAdvanceQueryPathFailed.WithError(err))
-
 			return
 		}
 
-		// 获取家庭云文件总数
-		total, err := h.cloudBridgeService.FamilyFileCount(ctx.GetContext(), authToken, req.FamilyId, req.ParentId)
+		total, err := h.cloudBridgeService.FamilyFileCount(ctx.GetContext(), authToken, req.FamilyId, parentID)
 		if err != nil {
 			ctx.Fail(codeStorageAdvanceQueryPathFailed.WithError(err))
-
 			return
 		}
 
-		// 构造响应
 		response := &getFamilyFilesResponse{
 			Data:        fileList.Data,
 			Total:       total,
 			CurrentPage: req.PageNum,
 			PageSize:    req.PageSize,
 		}
-
 		ctx.Success(response)
 	}
 }

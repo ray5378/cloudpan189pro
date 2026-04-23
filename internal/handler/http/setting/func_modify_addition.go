@@ -36,6 +36,7 @@ type modifyAdditionRequest struct {
 	CasTargetFamilyId          *string `json:"casTargetFamilyId"`
 	CasTargetFolderId          *string `json:"casTargetFolderId"`
 	CasAccessPath              *string `json:"casAccessPath"`
+	CasRestoreRetentionHours   *int    `json:"casRestoreRetentionHours"`
 	CasAutoCollectEnabled      *bool   `json:"casAutoCollectEnabled"`
 	CasAutoCollectPreservePath *bool   `json:"casAutoCollectPreservePath"`
 }
@@ -146,6 +147,9 @@ func (h *handler) ModifyAddition() httpcontext.HandlerFunc {
 		if req.CasAccessPath != nil {
 			merged.CasAccessPath = *req.CasAccessPath
 		}
+		if req.CasRestoreRetentionHours != nil {
+			merged.CasRestoreRetentionHours = *req.CasRestoreRetentionHours
+		}
 		if req.CasAutoCollectEnabled != nil {
 			merged.CasAutoCollectEnabled = *req.CasAutoCollectEnabled
 		}
@@ -179,6 +183,15 @@ func (h *handler) ModifyAddition() httpcontext.HandlerFunc {
 			PersistentCheckTime:              merged.PersistentCheckTime,
 			AutoDeleteInvalidStorageEnabled:  merged.AutoDeleteInvalidStorageEnabled,
 			AutoDeleteInvalidStorageKeywords: merged.AutoDeleteInvalidStorageKeywords,
+			CasTargetEnabled:                 merged.CasTargetEnabled,
+			CasTargetTokenId:                 merged.CasTargetTokenId,
+			CasTargetType:                    merged.CasTargetType,
+			CasTargetFamilyId:                merged.CasTargetFamilyId,
+			CasTargetFolderId:                merged.CasTargetFolderId,
+			CasAccessPath:                    merged.CasAccessPath,
+			CasRestoreRetentionHours:         merged.CasRestoreRetentionHours,
+			CasAutoCollectEnabled:            merged.CasAutoCollectEnabled,
+			CasAutoCollectPreservePath:       merged.CasAutoCollectPreservePath,
 		}
 
 		ctx.Success()
