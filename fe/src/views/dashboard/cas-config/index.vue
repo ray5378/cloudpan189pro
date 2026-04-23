@@ -110,6 +110,8 @@ import CasSourceConfigCard from './components/CasSourceConfigCard.vue'
 type InputMode = 'virtualId' | 'path' | 'explicit'
 type SourceType = 'person' | 'family'
 
+const FIXED_CAS_FAMILY_ID = '300000933227076'
+
 interface CasDefaults {
   uploadRoute: CasUploadRoute
   destinationType: CasDestinationType
@@ -468,7 +470,7 @@ const saveSourceConfig = async () => {
     casTargetEnabled: true,
     casTargetTokenId: sourceForm.cloudToken,
     casTargetType: sourceForm.sourceType,
-    casTargetFamilyId: sourceForm.fixedFamilyId || sourceForm.familyId,
+    casTargetFamilyId: sourceForm.fixedFamilyId || sourceForm.familyId || FIXED_CAS_FAMILY_ID,
     casTargetFolderId: savedFolderId,
     casAccessPath: resolvedTargetPath,
     casAutoCollectEnabled: true,
