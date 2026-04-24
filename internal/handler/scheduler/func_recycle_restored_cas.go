@@ -88,6 +88,17 @@ func (s *RecycleRestoredCASScheduler) doJob(ctx appctx.Context) {
 		}
 		_ = s.casRecordService.Update(ctx, record.ID, map[string]any{"restore_status": models.CasRestoreStatusRecycling})
 		if err := s.recycleOne(ctx, record); err != nil {
+			exists, checkErr := s.restoredFileStillExists(ctx, record)
+			if checkErr == nil && !exists {
+				s.markRecycled(ctx, record.ID)
+				ctx.Info("CAS恢复文件后置步骤失败但文件已删除，按成功收口", zap.Int64("record_id", record.ID), zap.Error(err))
+				continue
+			}
+			if checkErr != nil {
+				ctx.Error("回收到期CAS恢复文件失败，且删除结果复核失败", zap.Int64("record_id", record.ID), zap.Error(err), zap.Error(checkErr))
+				_ = s.casRecordService.Update(ctx, record.ID, map[string]any{"restore_status": models.CasRestoreStatusFailed, "last_error": err.Error() + " | verify: " + checkErr.Error()})
+				continue
+			}
 			_ = s.casRecordService.Update(ctx, record.ID, map[string]any{"restore_status": models.CasRestoreStatusFailed, "last_error": err.Error()})
 			ctx.Error("回收到期CAS恢复文件失败", zap.Int64("record_id", record.ID), zap.Error(err))
 			continue
