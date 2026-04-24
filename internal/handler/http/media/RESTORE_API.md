@@ -148,7 +148,7 @@ curl -X POST 'http://127.0.0.1:12395/api/media/restore_cas' \
     "casVirtualId": 1001,
     "uploadRoute": "family",
     "destinationType": "family",
-    "targetFolderId": "-11"
+    "targetFolderId": "个人目标目录ID（不再建议依赖根目录默认值）"
   }'
 ```
 

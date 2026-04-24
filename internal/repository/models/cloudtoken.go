@@ -25,9 +25,16 @@ func (c *CloudToken) TableName() string {
 }
 
 const (
-	CloudTokenAdditionAutoLoginResultKey = "auto_login_result"
-	CloudTokenAdditionAutoLoginTimes     = "auto_login_times"
-	CloudTokenAdditionAppAccessToken     = "app_access_token"
+	CloudTokenAdditionAutoLoginResultKey   = "auto_login_result"
+	CloudTokenAdditionAutoLoginTimes       = "auto_login_times"
+	CloudTokenAdditionAppAccessToken       = "app_access_token"
+	CloudTokenAdditionAppRefreshToken      = "app_refresh_token"
+	CloudTokenAdditionSessionKey           = "session_key"
+	CloudTokenAdditionSessionSecret        = "session_secret"
+	CloudTokenAdditionFamilySessionKey     = "family_session_key"
+	CloudTokenAdditionFamilySessionSecret  = "family_session_secret"
+	CloudTokenAdditionSskAccessToken       = "ssk_access_token"
+	CloudTokenAdditionSskAccessTokenExpire = "ssk_access_token_expires_in"
 )
 
 const (

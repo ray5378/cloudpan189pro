@@ -6,18 +6,12 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/tickstep/cloudpan189-api/cloudpan"
 	"github.com/xxcheng123/cloudpan189-share/internal/framework/httpcontext"
+	"github.com/xxcheng123/cloudpan189-share/internal/services/appsession"
 	casrestoreSvi "github.com/xxcheng123/cloudpan189-share/internal/services/casrestore"
 )
 
-// restoreCasRequest 手动触发 CAS 恢复。
-// 注意：uploadRoute 表示秒传/上传路线；destinationType 表示最终目录归属。
-// 为了便于手动联调，接口支持三种模式：
-// 1. 最简模式：传 casVirtualId + destinationType + targetFolderId（其余上下文自动反查）
-// 2. 路径模式：传 casPath + destinationType + targetFolderId（先按路径查 VirtualFile，再自动反查）
-// 3. 显式模式：把 storageId / mountPointId / casFileId / casFileName 一起传进来
-//
-// 这里的 storageId 兜底取挂载点根 file_id，和现有 storage/list 返回的 id 语义保持一致。
 type restoreCasRequest struct {
 	StorageID       int64                         `json:"storageId" binding:"omitempty" example:"1"`
 	MountPointID    int64                         `json:"mountPointId" binding:"omitempty" example:"1"`
@@ -111,7 +105,7 @@ func (h *handler) buildRestoreRequest(ctx *httpcontext.Context, req *restoreCasR
 	}
 
 	if restoreReq.MountPointID == 0 {
-		restoreReq.MountPointID = mp.ID
+		restoreReq.MountPointID = mp.FileId
 	}
 	if restoreReq.StorageID == 0 {
 		restoreReq.StorageID = mp.FileId
@@ -127,6 +121,9 @@ func (h *handler) buildRestoreRequest(ctx *httpcontext.Context, req *restoreCasR
 	addition := latest.Addition
 
 	if restoreReq.DestinationType == casrestoreSvi.DestinationTypeFamily {
+		if strings.TrimSpace(restoreReq.TargetFolderID) == "" {
+			return casrestoreSvi.RestoreRequest{}, fmt.Errorf("targetFolderID不能为空")
+		}
 		if addition.CasTargetType != string(casrestoreSvi.DestinationTypeFamily) || addition.CasTargetFamilyId == "" {
 			return casrestoreSvi.RestoreRequest{}, fmt.Errorf("未配置CAS指定恢复位置(casTargetFamilyId)")
 		}
@@ -135,17 +132,29 @@ func (h *handler) buildRestoreRequest(ctx *httpcontext.Context, req *restoreCasR
 			return casrestoreSvi.RestoreRequest{}, fmt.Errorf("CAS指定恢复位置无效: %s", addition.CasTargetFamilyId)
 		}
 		restoreReq.FamilyID = parsed
-	} else if restoreReq.TargetFolderID == "" {
-		targetFolderID, terr := h.resolveDefaultPersonRestoreTargetFolder(ctx, vf.ID, addition.CasTargetTokenId, addition.CasTargetFolderId, addition.CasAutoCollectPreservePath)
-		if terr != nil {
-			return casrestoreSvi.RestoreRequest{}, terr
+		resolvedFolderID, ferr := h.resolveDefaultFamilyRestoreTargetFolder(ctx, vf.ID, addition.CasTargetTokenId, parsed, restoreReq.TargetFolderID, addition.CasAutoCollectPreservePath)
+		if ferr != nil {
+			return casrestoreSvi.RestoreRequest{}, ferr
 		}
-		restoreReq.TargetFolderID = targetFolderID
-		if restoreReq.TargetTokenID == 0 {
-			restoreReq.TargetTokenID = addition.CasTargetTokenId
-		}
+		restoreReq.TargetFolderID = resolvedFolderID
+		return restoreReq, nil
 	}
 
+	if strings.TrimSpace(restoreReq.TargetFolderID) != "" {
+		return restoreReq, nil
+	}
+	personBaseFolderID := ""
+	if addition.CasTargetType == string(casrestoreSvi.DestinationTypePerson) {
+		personBaseFolderID = addition.CasTargetFolderId
+	}
+	targetFolderID, terr := h.resolveDefaultPersonRestoreTargetFolder(ctx, vf.ID, addition.CasTargetTokenId, personBaseFolderID, addition.CasAutoCollectPreservePath)
+	if terr != nil {
+		return casrestoreSvi.RestoreRequest{}, terr
+	}
+	restoreReq.TargetFolderID = targetFolderID
+	if restoreReq.TargetTokenID == 0 {
+		restoreReq.TargetTokenID = addition.CasTargetTokenId
+	}
 	return restoreReq, nil
 }
 
@@ -184,6 +193,51 @@ func (h *handler) resolveDefaultPersonRestoreTargetFolder(ctx *httpcontext.Conte
 		return "", fmt.Errorf("创建个人恢复目标目录失败: 未返回最终目标目录ID relativeDir=%s", relDir)
 	}
 	return strings.TrimSpace(folder.FileId), nil
+}
+
+func (h *handler) resolveDefaultFamilyRestoreTargetFolder(ctx *httpcontext.Context, casVirtualID int64, targetTokenID int64, familyID int64, baseTargetFolderID string, preservePath bool) (string, error) {
+	folderID := strings.TrimSpace(baseTargetFolderID)
+	if folderID == "" || !preservePath {
+		return folderID, nil
+	}
+	if targetTokenID <= 0 {
+		return "", fmt.Errorf("未配置CAS指定恢复位置(casTargetTokenId)")
+	}
+	fullPath, err := h.virtualfileService.CalFullPath(ctx.GetContext(), casVirtualID)
+	if err != nil {
+		return "", err
+	}
+	relDir := strings.Trim(strings.TrimPrefix(path.Dir(fullPath), "/"), " ")
+	if relDir == "" || relDir == "." {
+		return folderID, nil
+	}
+	session, err := h.appSessionService.GetByTokenID(ctx.GetContext(), targetTokenID)
+	if err != nil {
+		return "", err
+	}
+	panClient := buildPanClient(session)
+	if panClient == nil {
+		return "", fmt.Errorf("创建PanClient失败")
+	}
+	folder, apiErr := panClient.AppMkdirRecursive(familyID, folderID, relDir, 0, strings.Split(relDir, "/"))
+	if apiErr != nil {
+		return "", fmt.Errorf("创建家庭恢复目标目录失败: %w", apiErr)
+	}
+	if folder == nil || strings.TrimSpace(folder.FileId) == "" {
+		return "", fmt.Errorf("创建家庭恢复目标目录失败: 未返回最终目标目录ID relativeDir=%s", relDir)
+	}
+	return strings.TrimSpace(folder.FileId), nil
+}
+
+func buildPanClient(session *appsession.Session) *cloudpan.PanClient {
+	if session == nil {
+		return nil
+	}
+	webToken := cloudpan.WebLoginToken{}
+	if cookie := cloudpan.RefreshCookieToken(session.Token.SessionKey); cookie != "" {
+		webToken.CookieLoginUser = cookie
+	}
+	return cloudpan.NewPanClient(webToken, session.Token)
 }
 
 func (h *handler) queryCASVirtualFile(ctx *httpcontext.Context, req *restoreCasRequest) (*struct {

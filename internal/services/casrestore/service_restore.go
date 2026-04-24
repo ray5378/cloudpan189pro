@@ -240,14 +240,14 @@ func (s *service) ensureRestoredOnce(ctx appctx.Context, req RestoreRequest) (re
 	}
 
 	verifyMountPointID := req.MountPointID
-	if isLocal {
+	if isLocal && req.DestinationType != DestinationTypeFamily {
 		verifyMountPointID = 0
 	}
 
 	if req.DestinationType == DestinationTypeFamily {
 		fileID, fileName, verifyErr := s.verifyRestoredInFamilyFolderByToken(ctx, verifyMountPointID, req.TargetTokenID, result.FamilyID, req.TargetFolderID, restoreName)
 		if verifyErr != nil {
-			return nil, verifyErr
+			return nil, fmt.Errorf("校验家庭目录恢复结果失败 verifyMountPointID=%d targetTokenID=%d familyID=%d targetFolderID=%s restoreName=%s: %w", verifyMountPointID, req.TargetTokenID, result.FamilyID, req.TargetFolderID, restoreName, verifyErr)
 		}
 		result = normalizeRestoreResult(result, fileID, fileName, req.TargetFolderID)
 	} else {

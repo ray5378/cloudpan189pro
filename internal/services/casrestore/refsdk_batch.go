@@ -10,6 +10,8 @@ import (
 	"time"
 )
 
+const cloudWebBaseURL = "https://cloud.189.cn"
+
 func (c *refSDKClient) copyFamilyFileToPersonal(accessToken string, familyID int64, familyFileID, personalFolderID, fileName string) error {
 	params := map[string]string{
 		"type":           "COPY",
@@ -143,4 +145,23 @@ func refSDKEscapeJSONString(s string) string {
 		return string(b[1 : len(b)-1])
 	}
 	return s
+}
+
+func batchRespError(code any, _ string) bool {
+	switch v := code.(type) {
+	case nil:
+		return false
+	case float64:
+		return int(v) != 0
+	case int:
+		return v != 0
+	case string:
+		return v != "" && v != "0"
+	default:
+		return false
+	}
+}
+
+func normalizePersonFolderID(folderID string) string {
+	return folderID
 }

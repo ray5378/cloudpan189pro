@@ -6,6 +6,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/tickstep/cloudpan189-api/cloudpan"
+	"go.uber.org/zap"
 	appctx "github.com/xxcheng123/cloudpan189-share/internal/framework/context"
 	"github.com/xxcheng123/cloudpan189-share/internal/repository/models"
 	"github.com/xxcheng123/cloudpan189-share/internal/services/appsession"
@@ -64,7 +65,12 @@ func (s *service) tryRestoreFamilyToPersonByRefSDK(ctx appctx.Context, req Resto
 		return nil, errors.Wrap(err, "参考SDK COPY失败")
 	}
 	if err := refClient.safeDeleteFamilyFile(accessToken, familyID, familyFileID, restoreName); err != nil {
-		return nil, errors.Wrap(err, "参考SDK清理家庭中转文件失败")
+		ctx.Warn("参考SDK清理家庭中转文件失败，按warning处理，不影响主恢复成功",
+			zap.Int64("family_id", familyID),
+			zap.String("family_file_id", familyFileID),
+			zap.String("restore_name", restoreName),
+			zap.Error(err),
+		)
 	}
 	return &familyRestoreResult{
 		FamilyID:         familyID,

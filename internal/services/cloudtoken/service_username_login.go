@@ -49,6 +49,13 @@ func (s *service) UsernameLogin(ctx context.Context, req *UsernameLoginRequest) 
 		addition[models.CloudTokenAdditionAutoLoginResultKey] = fmt.Sprintf("%s, token 刷新成功", time.Now().Format(time.DateTime))
 		addition[models.CloudTokenAdditionAutoLoginTimes] = 0
 		addition[models.CloudTokenAdditionAppAccessToken] = loginResult.AccessToken
+		addition[models.CloudTokenAdditionAppRefreshToken] = loginResult.RefreshToken
+		addition[models.CloudTokenAdditionSessionKey] = loginResult.SessionKey
+		addition[models.CloudTokenAdditionSessionSecret] = loginResult.SessionSecret
+		addition[models.CloudTokenAdditionFamilySessionKey] = loginResult.FamilySessionKey
+		addition[models.CloudTokenAdditionFamilySessionSecret] = loginResult.FamilySessionSecret
+		addition[models.CloudTokenAdditionSskAccessToken] = loginResult.SskAccessToken
+		addition[models.CloudTokenAdditionSskAccessTokenExpire] = loginResult.SskAccessTokenExpiresIn
 
 		updateMap := map[string]interface{}{
 			"access_token": loginResult.SskAccessToken,
@@ -79,7 +86,14 @@ func (s *service) UsernameLogin(ctx context.Context, req *UsernameLoginRequest) 
 		Password:    req.Password,
 		LoginType:   models.LoginTypePassword,
 		Addition: map[string]interface{}{
-			models.CloudTokenAdditionAppAccessToken: loginResult.AccessToken,
+			models.CloudTokenAdditionAppAccessToken:       loginResult.AccessToken,
+			models.CloudTokenAdditionAppRefreshToken:      loginResult.RefreshToken,
+			models.CloudTokenAdditionSessionKey:           loginResult.SessionKey,
+			models.CloudTokenAdditionSessionSecret:        loginResult.SessionSecret,
+			models.CloudTokenAdditionFamilySessionKey:     loginResult.FamilySessionKey,
+			models.CloudTokenAdditionFamilySessionSecret:  loginResult.FamilySessionSecret,
+			models.CloudTokenAdditionSskAccessToken:       loginResult.SskAccessToken,
+			models.CloudTokenAdditionSskAccessTokenExpire: loginResult.SskAccessTokenExpiresIn,
 		},
 	}
 
