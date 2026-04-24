@@ -15,11 +15,11 @@ import (
 	"github.com/pkg/errors"
 	appctx "github.com/xxcheng123/cloudpan189-share/internal/framework/context"
 	"github.com/xxcheng123/cloudpan189-share/internal/repository/models"
-	"github.com/xxcheng123/cloudpan189-share/internal/shared"
 	appsessionSvi "github.com/xxcheng123/cloudpan189-share/internal/services/appsession"
 	casrecordSvi "github.com/xxcheng123/cloudpan189-share/internal/services/casrecord"
 	cloudtokenSvi "github.com/xxcheng123/cloudpan189-share/internal/services/cloudtoken"
 	mountpointSvi "github.com/xxcheng123/cloudpan189-share/internal/services/mountpoint"
+	"github.com/xxcheng123/cloudpan189-share/internal/shared"
 	"go.uber.org/zap"
 )
 
@@ -114,9 +114,9 @@ func (s *RecycleRestoredCASScheduler) recycleOne(ctx appctx.Context, record *mod
 	if err != nil {
 		return err
 	}
-	familyID := strings.TrimSpace(shared.SettingAddition.CasTargetFamilyId)
+	familyID := strings.TrimSpace(shared.SettingAddition.CasFamilyTargetFamilyId)
 	if familyID == "" {
-		return fmt.Errorf("未配置CAS指定恢复位置(casTargetFamilyId)")
+		return fmt.Errorf("未配置家庭恢复目标(casFamilyTargetFamilyId)")
 	}
 	accessToken := strings.TrimSpace(session.Token.AccessToken)
 	if accessToken == "" {
@@ -248,21 +248,31 @@ func jsonNewDecoder(resp *http.Response, out any) error {
 func buildAccessTokenSignature(accessToken string, params map[string]string) (string, string) {
 	timestamp := strconv.FormatInt(time.Now().UnixMilli(), 10)
 	keys := make([]string, 0, len(params))
-	for k := range params { keys = append(keys, k) }
+	for k := range params {
+		keys = append(keys, k)
+	}
 	sort.Strings(keys)
 	parts := make([]string, 0, len(keys))
-	for _, k := range keys { parts = append(parts, k+"="+params[k]) }
+	for _, k := range keys {
+		parts = append(parts, k+"="+params[k])
+	}
 	raw := accessToken + strings.Join(parts, "&") + timestamp
 	sum := md5.Sum([]byte(raw))
 	return timestamp, strings.ToUpper(hex.EncodeToString(sum[:]))
 }
 
 func formURLEncode(params map[string]string) string {
-	if len(params) == 0 { return "" }
+	if len(params) == 0 {
+		return ""
+	}
 	keys := make([]string, 0, len(params))
-	for k := range params { keys = append(keys, k) }
+	for k := range params {
+		keys = append(keys, k)
+	}
 	sort.Strings(keys)
 	parts := make([]string, 0, len(keys))
-	for _, k := range keys { parts = append(parts, url.QueryEscape(k)+"="+url.QueryEscape(params[k])) }
+	for _, k := range keys {
+		parts = append(parts, url.QueryEscape(k)+"="+url.QueryEscape(params[k]))
+	}
 	return strings.Join(parts, "&")
 }

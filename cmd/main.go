@@ -48,7 +48,12 @@ func main() {
 
 	go func() {
 		// pprof on localhost (disable by PPROF_DISABLE=1)
-		if func() string { if v := os.Getenv("PPROF_DISABLE"); v != "" { return v }; return "0" }() != "1" {
+		if func() string {
+			if v := os.Getenv("PPROF_DISABLE"); v != "" {
+				return v
+			}
+			return "0"
+		}() != "1" {
 			go func() { _ = stdhttp.ListenAndServe("127.0.0.1:6060", nil) }()
 		}
 		// replace gin.Engine.Run with custom http.Server (long timeouts, idle GC)

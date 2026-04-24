@@ -50,17 +50,20 @@ type SettingAddition struct {
 	AutoDeleteInvalidStorageEnabled  bool   `json:"autoDeleteInvalidStorageEnabled"`
 	AutoDeleteInvalidStorageKeywords string `json:"autoDeleteInvalidStorageKeywords"`
 
-	CasTargetEnabled             bool   `json:"casTargetEnabled"`
-	CasTargetTokenId             int64  `json:"casTargetTokenId"`
-	CasTargetType                string `json:"casTargetType"`
-	CasTargetFamilyId            string `json:"casTargetFamilyId"`
-	CasTargetFolderId            string `json:"casTargetFolderId"`
-	CasAccessPath                string `json:"casAccessPath"`
-	CasRestoreRetentionHours     int    `json:"casRestoreRetentionHours"`
-	LocalCASAutoScanEnabled      bool   `json:"localCasAutoScanEnabled"`
-	LocalCASAutoScanIntervalMin  int    `json:"localCasAutoScanIntervalMin"`
-	CasAutoCollectEnabled        bool   `json:"casAutoCollectEnabled"`
-	CasAutoCollectPreservePath   bool   `json:"casAutoCollectPreservePath"`
+	CasTargetEnabled            bool   `json:"casTargetEnabled"`
+	CasTargetType               string `json:"casTargetType"`
+	CasPersonTargetTokenId      int64  `json:"casPersonTargetTokenId"`
+	CasPersonTargetFolderId     string `json:"casPersonTargetFolderId"`
+	CasPersonAccessPath         string `json:"casPersonAccessPath"`
+	CasFamilyTargetTokenId      int64  `json:"casFamilyTargetTokenId"`
+	CasFamilyTargetFamilyId     string `json:"casFamilyTargetFamilyId"`
+	CasFamilyTargetFolderId     string `json:"casFamilyTargetFolderId"`
+	CasFamilyAccessPath         string `json:"casFamilyAccessPath"`
+	CasRestoreRetentionHours    int    `json:"casRestoreRetentionHours"`
+	LocalCASAutoScanEnabled     bool   `json:"localCasAutoScanEnabled"`
+	LocalCASAutoScanIntervalMin int    `json:"localCasAutoScanIntervalMin"`
+	CasAutoCollectEnabled       bool   `json:"casAutoCollectEnabled"`
+	CasAutoCollectPreservePath  bool   `json:"casAutoCollectPreservePath"`
 }
 
 func (sa *SettingAddition) applyDefaults() {
@@ -93,9 +96,6 @@ func (sa *SettingAddition) applyDefaults() {
 	}
 	if sa.CasTargetType == "" {
 		sa.CasTargetType = "person"
-	}
-	if sa.CasTargetFolderId == "" {
-		sa.CasTargetFolderId = "-11"
 	}
 	if sa.LocalCASAutoScanIntervalMin <= 0 {
 		sa.LocalCASAutoScanIntervalMin = 10

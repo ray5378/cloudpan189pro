@@ -5,9 +5,9 @@ import (
 
 	"github.com/xxcheng123/cloudpan189-share/internal/framework/taskcontext"
 	"github.com/xxcheng123/cloudpan189-share/internal/pkgs/taskengine"
-	"github.com/xxcheng123/cloudpan189-share/internal/types/topic"
 	filetasklogSvi "github.com/xxcheng123/cloudpan189-share/internal/services/filetasklog"
 	storagefacadeSvi "github.com/xxcheng123/cloudpan189-share/internal/services/storagefacade"
+	"github.com/xxcheng123/cloudpan189-share/internal/types/topic"
 )
 
 type Handler interface {
@@ -25,7 +25,7 @@ func NewHandler(sf storagefacadeSvi.Service, ftl filetasklogSvi.Service, te task
 }
 
 type payload struct {
-	TaskId int64                             `json:"taskId"`
+	TaskId int64                                  `json:"taskId"`
 	Req    *storagefacadeSvi.CreateStorageRequest `json:"req"`
 }
 

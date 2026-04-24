@@ -22,14 +22,14 @@ var (
 )
 
 type createReq struct {
-	DelayTime int     `json:"delayTime"`
-	APIKey    string  `json:"apiKey"`
-	APIKey2   string  `json:"api-key"`
-	TokenId   *int64  `json:"tokenId"`
-	Link      string  `json:"shareLink"`
-	LinkCN    string  `json:"分享链接"`
-	Target    string  `json:"targetDir"`
-	TargetCN  string  `json:"目标文件夹"`
+	DelayTime int    `json:"delayTime"`
+	APIKey    string `json:"apiKey"`
+	APIKey2   string `json:"api-key"`
+	TokenId   *int64 `json:"tokenId"`
+	Link      string `json:"shareLink"`
+	LinkCN    string `json:"分享链接"`
+	Target    string `json:"targetDir"`
+	TargetCN  string `json:"目标文件夹"`
 }
 
 type createResp struct {
@@ -54,8 +54,12 @@ func (h *handler) CreateStorage() httpcontext.HandlerFunc {
 
 		// 鉴权
 		apiKey := strings.TrimSpace(req.APIKey)
-		if apiKey == "" { apiKey = strings.TrimSpace(req.APIKey2) }
-		if apiKey == "" { apiKey = strings.TrimSpace(ctx.GetHeader("X-API-Key")) }
+		if apiKey == "" {
+			apiKey = strings.TrimSpace(req.APIKey2)
+		}
+		if apiKey == "" {
+			apiKey = strings.TrimSpace(ctx.GetHeader("X-API-Key"))
+		}
 		if addition.ExternalAPIKey == "" {
 			ctx.Response(http.StatusForbidden, http.StatusForbidden, "未配置外部 API Key", nil)
 			return
@@ -192,6 +196,8 @@ func (h *handler) CreateStorage() httpcontext.HandlerFunc {
 }
 
 func first(a, b string) string {
-	if strings.TrimSpace(a) != "" { return a }
+	if strings.TrimSpace(a) != "" {
+		return a
+	}
 	return strings.TrimSpace(b)
 }

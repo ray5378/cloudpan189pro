@@ -23,23 +23,34 @@ func NewCleanupTaskLogScheduler(svc filetasklogSvi.Service) Scheduler {
 }
 
 func (s *CleanupTaskLogScheduler) Start(ctx context.Context) error {
-	if s.running { return ErrSchedulerRunning }
+	if s.running {
+		return ErrSchedulerRunning
+	}
 	s.ctx, s.cancel = context.WithCancel(ctx)
 	s.running = true
-	gopool.Go(func(){ for s.doJob(){} })
+	gopool.Go(func() {
+		for s.doJob() {
+		}
+	})
 	return nil
 }
 
 func (s *CleanupTaskLogScheduler) Stop() {
-	if !s.running { return }
+	if !s.running {
+		return
+	}
 	s.cancel()
 	s.running = false
 }
 
 func (s *CleanupTaskLogScheduler) retentionDays() int {
 	v := os.Getenv("TASKLOG_RETENTION_DAYS")
-	if v == "" { return 15 }
-	if n, err := strconv.Atoi(v); err == nil && n > 0 { return n }
+	if v == "" {
+		return 15
+	}
+	if n, err := strconv.Atoi(v); err == nil && n > 0 {
+		return n
+	}
 	return 15
 }
 

@@ -1,0 +1,1 @@
+import{ae as e}from"./index-f9c57603.js";const n=t=>e.get("/task_state/file_log/list",{params:t}).then(a=>a.data),i=()=>e.get("/task_state/task_engine/list").then(t=>t.data),g=()=>e.post("/task_state/file_log/cleanup").then(t=>t.data);export{n as a,g as c,i as g};

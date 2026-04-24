@@ -29,7 +29,7 @@ func (h *handler) tryCollectSubscribeCAS(ctx context.Context, itemPath string, i
 	if !cfg.CasTargetEnabled || !cfg.CasAutoCollectEnabled {
 		return nil
 	}
-	if cfg.CasTargetTokenId <= 0 {
+	if cfg.CasPersonTargetTokenId <= 0 {
 		return nil
 	}
 	if item == nil || item.IsFolder {
@@ -39,7 +39,7 @@ func (h *handler) tryCollectSubscribeCAS(ctx context.Context, itemPath string, i
 		return nil
 	}
 
-	session, err := h.appSessionService.GetByTokenID(ctx, cfg.CasTargetTokenId)
+	session, err := h.appSessionService.GetByTokenID(ctx, cfg.CasPersonTargetTokenId)
 	if err != nil {
 		return fmt.Errorf("获取CAS目标App会话失败: %w", err)
 	}
@@ -48,7 +48,7 @@ func (h *handler) tryCollectSubscribeCAS(ctx context.Context, itemPath string, i
 		return fmt.Errorf("创建CAS目标PanClient失败")
 	}
 
-	targetFolderID := cfg.CasTargetFolderId
+	targetFolderID := cfg.CasPersonTargetFolderId
 	if targetFolderID == "" {
 		targetFolderID = "-11"
 	}

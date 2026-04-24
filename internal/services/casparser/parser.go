@@ -10,15 +10,15 @@ import (
 )
 
 type casPayload struct {
-	Name       string `json:"name"`
-	FileName   string `json:"fileName"`
-	Size       int64  `json:"size"`
-	FileSize   int64  `json:"fileSize"`
-	MD5        string `json:"md5"`
-	FileMD5    string `json:"fileMd5"`
-	SliceMD5   string `json:"sliceMd5"`
-	SliceMD5_  string `json:"slice_md5"`
-	CreateTime string `json:"createTime"`
+	Name        string `json:"name"`
+	FileName    string `json:"fileName"`
+	Size        int64  `json:"size"`
+	FileSize    int64  `json:"fileSize"`
+	MD5         string `json:"md5"`
+	FileMD5     string `json:"fileMd5"`
+	SliceMD5    string `json:"sliceMd5"`
+	SliceMD5_   string `json:"slice_md5"`
+	CreateTime  string `json:"createTime"`
 	CreateTime2 string `json:"create_time"`
 }
 

@@ -14,7 +14,9 @@ func (h *handler) Cleanup() httpcontext.HandlerFunc {
 	return func(ctx *httpcontext.Context) {
 		ret := 15
 		if v := os.Getenv("LOGINLOG_RETENTION_DAYS"); v != "" {
-			if n, err := strconv.Atoi(v); err == nil && n > 0 { ret = n }
+			if n, err := strconv.Atoi(v); err == nil && n > 0 {
+				ret = n
+			}
 		}
 		before := time.Now().Add(-time.Duration(ret) * 24 * time.Hour)
 		deleted, err := h.loginLogService.CleanupOlderThan(ctx.GetContext(), before)

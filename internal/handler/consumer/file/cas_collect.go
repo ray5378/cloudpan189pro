@@ -235,9 +235,9 @@ func (h *handler) collectSubscribeShareCAS(ctx context.Context, runtime *casColl
 	// 注意：这里的“目录缓存去重”只允许对“开启了自动刷新的源存储”生效，不能扩成全局逻辑。
 	if topFile, topErr := h.virtualFileService.QueryTop(ctx, file.ID); topErr == nil && topFile != nil {
 		if mountPoint, mpErr := h.mountPointService.Query(ctx, topFile.ID); mpErr == nil && mountPoint != nil && mountPoint.EnableAutoRefresh {
-			if err := h.refreshCASDirCacheIfNeeded(ctx, shared.SettingAddition.CasTargetTokenId, targetFolderID, runtime); err != nil {
+			if err := h.refreshCASDirCacheIfNeeded(ctx, shared.SettingAddition.CasPersonTargetTokenId, targetFolderID, runtime); err != nil {
 				ctx.Warn("刷新CAS目标目录缓存失败，继续尝试转存", zap.Error(err), zap.String("targetFolderId", targetFolderID))
-			} else if exists, err := h.casTargetCacheService.Exists(ctx, shared.SettingAddition.CasTargetTokenId, targetFolderID, file.Name); err == nil && exists {
+			} else if exists, err := h.casTargetCacheService.Exists(ctx, shared.SettingAddition.CasPersonTargetTokenId, targetFolderID, file.Name); err == nil && exists {
 				ctx.Info("CAS自动归集命中本地目录缓存，跳过已存在文件",
 					zap.String("fileName", file.Name),
 					zap.String("targetFolderId", targetFolderID),
@@ -284,7 +284,7 @@ func (h *handler) collectSubscribeShareCAS(ctx context.Context, runtime *casColl
 		if topFile, topErr := h.virtualFileService.QueryTop(ctx, file.ID); topErr == nil && topFile != nil {
 			if mountPoint, mpErr := h.mountPointService.Query(ctx, topFile.ID); mpErr == nil && mountPoint != nil && mountPoint.EnableAutoRefresh {
 				_ = h.casTargetCacheService.Upsert(ctx, &models.CasTargetDirCache{
-					TargetTokenID:  shared.SettingAddition.CasTargetTokenId,
+					TargetTokenID:  shared.SettingAddition.CasPersonTargetTokenId,
 					TargetFolderID: targetFolderID,
 					FileName:       file.Name,
 					IsDir:          false,
@@ -305,7 +305,7 @@ func (h *handler) tryCollectCASFromVirtualFileWithRetry(ctx context.Context, fil
 	if !cfg.CasTargetEnabled || !cfg.CasAutoCollectEnabled {
 		return nil
 	}
-	if cfg.CasTargetTokenId <= 0 {
+	if cfg.CasPersonTargetTokenId <= 0 {
 		return nil
 	}
 	if file == nil || file.IsDir {
@@ -322,10 +322,10 @@ func (h *handler) tryCollectCASFromVirtualFileWithRetry(ctx context.Context, fil
 	}
 
 	ctx.Info("CAS自动归集开始获取目标运行时",
-		zap.Int64("tokenId", cfg.CasTargetTokenId),
+		zap.Int64("tokenId", cfg.CasPersonTargetTokenId),
 		zap.String("fileName", file.Name),
 	)
-	runtime, err := h.getOrCreateCASCollectRuntime(ctx, cfg.CasTargetTokenId)
+	runtime, err := h.getOrCreateCASCollectRuntime(ctx, cfg.CasPersonTargetTokenId)
 	if err != nil {
 		return fmt.Errorf("获取CAS目标运行时失败: %w", err)
 	}
@@ -333,7 +333,7 @@ func (h *handler) tryCollectCASFromVirtualFileWithRetry(ctx context.Context, fil
 		return fmt.Errorf("获取CAS目标运行时失败: session为空")
 	}
 	ctx.Info("CAS自动归集已获取目标运行时",
-		zap.Int64("tokenId", cfg.CasTargetTokenId),
+		zap.Int64("tokenId", cfg.CasPersonTargetTokenId),
 		zap.Bool("hasSessionKey", strings.TrimSpace(runtime.session.Token.SessionKey) != ""),
 		zap.Bool("hasFamilySessionKey", strings.TrimSpace(runtime.session.Token.FamilySessionKey) != ""),
 		zap.Bool("hasAccessToken", strings.TrimSpace(runtime.session.Token.AccessToken) != ""),
@@ -343,7 +343,7 @@ func (h *handler) tryCollectCASFromVirtualFileWithRetry(ctx context.Context, fil
 		return fmt.Errorf("创建CAS目标PanClient失败")
 	}
 
-	targetFolderID := cfg.CasTargetFolderId
+	targetFolderID := cfg.CasPersonTargetFolderId
 	if targetFolderID == "" {
 		targetFolderID = "-11"
 	}

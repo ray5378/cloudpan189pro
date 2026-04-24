@@ -124,15 +124,17 @@ func (h *handler) buildRestoreRequest(ctx *httpcontext.Context, req *restoreCasR
 		if strings.TrimSpace(restoreReq.TargetFolderID) == "" {
 			return casrestoreSvi.RestoreRequest{}, fmt.Errorf("targetFolderID不能为空")
 		}
-		if addition.CasTargetType != string(casrestoreSvi.DestinationTypeFamily) || addition.CasTargetFamilyId == "" {
-			return casrestoreSvi.RestoreRequest{}, fmt.Errorf("未配置CAS指定恢复位置(casTargetFamilyId)")
+		familyTargetFamilyID := addition.CasFamilyTargetFamilyId
+		familyTargetTokenID := addition.CasFamilyTargetTokenId
+		if familyTargetFamilyID == "" {
+			return casrestoreSvi.RestoreRequest{}, fmt.Errorf("未配置家庭恢复目标(casFamilyTargetFamilyId)")
 		}
-		parsed, perr := strconv.ParseInt(addition.CasTargetFamilyId, 10, 64)
+		parsed, perr := strconv.ParseInt(familyTargetFamilyID, 10, 64)
 		if perr != nil || parsed <= 0 {
-			return casrestoreSvi.RestoreRequest{}, fmt.Errorf("CAS指定恢复位置无效: %s", addition.CasTargetFamilyId)
+			return casrestoreSvi.RestoreRequest{}, fmt.Errorf("家庭恢复目标无效: %s", familyTargetFamilyID)
 		}
 		restoreReq.FamilyID = parsed
-		resolvedFolderID, ferr := h.resolveDefaultFamilyRestoreTargetFolder(ctx, vf.ID, addition.CasTargetTokenId, parsed, restoreReq.TargetFolderID, addition.CasAutoCollectPreservePath)
+		resolvedFolderID, ferr := h.resolveDefaultFamilyRestoreTargetFolder(ctx, vf.ID, familyTargetTokenID, parsed, restoreReq.TargetFolderID, addition.CasAutoCollectPreservePath)
 		if ferr != nil {
 			return casrestoreSvi.RestoreRequest{}, ferr
 		}
@@ -140,20 +142,18 @@ func (h *handler) buildRestoreRequest(ctx *httpcontext.Context, req *restoreCasR
 		return restoreReq, nil
 	}
 
-	if strings.TrimSpace(restoreReq.TargetFolderID) != "" {
-		return restoreReq, nil
+	personTargetTokenID := addition.CasPersonTargetTokenId
+	personBaseFolderID := strings.TrimSpace(restoreReq.TargetFolderID)
+	if personBaseFolderID == "" {
+		personBaseFolderID = addition.CasPersonTargetFolderId
 	}
-	personBaseFolderID := ""
-	if addition.CasTargetType == string(casrestoreSvi.DestinationTypePerson) {
-		personBaseFolderID = addition.CasTargetFolderId
-	}
-	targetFolderID, terr := h.resolveDefaultPersonRestoreTargetFolder(ctx, vf.ID, addition.CasTargetTokenId, personBaseFolderID, addition.CasAutoCollectPreservePath)
+	targetFolderID, terr := h.resolveDefaultPersonRestoreTargetFolder(ctx, vf.ID, personTargetTokenID, personBaseFolderID, addition.CasAutoCollectPreservePath)
 	if terr != nil {
 		return casrestoreSvi.RestoreRequest{}, terr
 	}
 	restoreReq.TargetFolderID = targetFolderID
 	if restoreReq.TargetTokenID == 0 {
-		restoreReq.TargetTokenID = addition.CasTargetTokenId
+		restoreReq.TargetTokenID = personTargetTokenID
 	}
 	return restoreReq, nil
 }
@@ -167,7 +167,7 @@ func (h *handler) resolveDefaultPersonRestoreTargetFolder(ctx *httpcontext.Conte
 		return folderID, nil
 	}
 	if targetTokenID <= 0 {
-		return "", fmt.Errorf("未配置CAS指定恢复位置(casTargetTokenId)")
+		return "", fmt.Errorf("未配置个人恢复目标(casPersonTargetTokenId)")
 	}
 	fullPath, err := h.virtualfileService.CalFullPath(ctx.GetContext(), casVirtualID)
 	if err != nil {
@@ -201,7 +201,7 @@ func (h *handler) resolveDefaultFamilyRestoreTargetFolder(ctx *httpcontext.Conte
 		return folderID, nil
 	}
 	if targetTokenID <= 0 {
-		return "", fmt.Errorf("未配置CAS指定恢复位置(casTargetTokenId)")
+		return "", fmt.Errorf("未配置家庭恢复目标(casFamilyTargetTokenId)")
 	}
 	fullPath, err := h.virtualfileService.CalFullPath(ctx.GetContext(), casVirtualID)
 	if err != nil {

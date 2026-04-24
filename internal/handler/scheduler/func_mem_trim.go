@@ -46,16 +46,25 @@ func (s *MemTrimScheduler) thresholdBytes() uint64 {
 }
 
 func (s *MemTrimScheduler) Start(ctx context.Context) error {
-	if !s.enabled() { return nil }
-	if s.running { return ErrSchedulerRunning }
+	if !s.enabled() {
+		return nil
+	}
+	if s.running {
+		return ErrSchedulerRunning
+	}
 	s.ctx, s.cancel = context.WithCancel(ctx)
 	s.running = true
-	gopool.Go(func(){ for s.doJob(){} })
+	gopool.Go(func() {
+		for s.doJob() {
+		}
+	})
 	return nil
 }
 
 func (s *MemTrimScheduler) Stop() {
-	if !s.running { return }
+	if !s.running {
+		return
+	}
 	s.cancel()
 	s.running = false
 }
@@ -77,7 +86,9 @@ func (s *MemTrimScheduler) doJob() bool {
 			runtime.ReadMemStats(&m)
 			reclaimable := m.HeapIdle - m.HeapReleased // 可归还的空闲页
 			th := s.thresholdBytes()
-			if reclaimable < th { continue }
+			if reclaimable < th {
+				continue
+			}
 			beforeRSS := getRSS()
 			logger.Info("memory trim: start", zap.Uint64("reclaimable_bytes", reclaimable), zap.Uint64("threshold_bytes", th), zap.Uint64("rss_before", beforeRSS))
 			debug.FreeOSMemory()

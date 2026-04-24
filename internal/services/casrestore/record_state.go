@@ -83,13 +83,13 @@ func (s *service) markRestoreFailed(ctx appctx.Context, recordID int64, err erro
 func (s *service) markRestored(ctx appctx.Context, recordID int64, result *RestoreResult) error {
 	now := time.Now()
 	updates := map[string]any{
-		"restore_status":      models.CasRestoreStatusRestored,
-		"restored_file_id":    result.RestoredFileID,
-		"restored_file_name":  result.RestoredFileName,
-		"restored_parent_id":  result.TargetFolderID,
-		"restored_at":         &now,
-		"last_access_at":      &now,
-		"last_error":          "",
+		"restore_status":     models.CasRestoreStatusRestored,
+		"restored_file_id":   result.RestoredFileID,
+		"restored_file_name": result.RestoredFileName,
+		"restored_parent_id": result.TargetFolderID,
+		"restored_at":        &now,
+		"last_access_at":     &now,
+		"last_error":         "",
 	}
 	if shared.SettingAddition.CasRestoreRetentionHours > 0 {
 		recycleAfter := now.Add(time.Duration(shared.SettingAddition.CasRestoreRetentionHours) * time.Hour)

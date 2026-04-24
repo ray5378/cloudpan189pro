@@ -29,29 +29,42 @@ func NewVacuumScheduler(svc bootstrap.ServiceContext) Scheduler {
 }
 
 func (s *VacuumScheduler) Start(ctx context.Context) error {
-	if s.running { return ErrSchedulerRunning }
+	if s.running {
+		return ErrSchedulerRunning
+	}
 	s.ctx, s.cancel = context.WithCancel(ctx)
 	s.running = true
-	gopool.Go(func(){ for s.doJob(){} })
+	gopool.Go(func() {
+		for s.doJob() {
+		}
+	})
 	return nil
 }
 
 func (s *VacuumScheduler) Stop() {
-	if !s.running { return }
+	if !s.running {
+		return
+	}
 	s.cancel()
 	s.running = false
 }
 
 func (s *VacuumScheduler) retentionWeeks() int {
 	v := os.Getenv("SQLITE_VACUUM_WEEKS")
-	if v == "" { return 1 }
-	if n, err := strconv.Atoi(v); err == nil && n > 0 { return n }
+	if v == "" {
+		return 1
+	}
+	if n, err := strconv.Atoi(v); err == nil && n > 0 {
+		return n
+	}
 	return 1
 }
 
 func (s *VacuumScheduler) isSQLite() bool {
 	db, err := s.db.DB()
-	if err != nil { return false }
+	if err != nil {
+		return false
+	}
 	// 通过驱动名粗略判断（glebarez/sqlite 使用 sqlite）
 	return driverName(db) == "sqlite"
 }
@@ -76,7 +89,9 @@ func (s *VacuumScheduler) doJob() bool {
 		case <-ctx.Done():
 			return false
 		case <-ticker.C:
-			if !s.isSQLite() { continue }
+			if !s.isSQLite() {
+				continue
+			}
 			if err := s.db.Exec("VACUUM;").Error; err != nil {
 				logger.Error("SQLite VACUUM 执行失败", zap.Error(err))
 			} else {

@@ -137,11 +137,14 @@ declare namespace Models {
     autoDeleteInvalidStorageKeywords?: string
 
     casTargetEnabled?: boolean
-    casTargetTokenId?: number
     casTargetType?: string
-    casTargetFamilyId?: string
-    casTargetFolderId?: string
-    casAccessPath?: string
+    casPersonTargetTokenId?: number
+    casPersonTargetFolderId?: string
+    casPersonAccessPath?: string
+    casFamilyTargetTokenId?: number
+    casFamilyTargetFamilyId?: string
+    casFamilyTargetFolderId?: string
+    casFamilyAccessPath?: string
     casRestoreRetentionHours?: number
     localCasAutoScanEnabled?: boolean
     localCasAutoScanIntervalMin?: number

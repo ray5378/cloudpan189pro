@@ -69,5 +69,5 @@ func (s *LocalCASSTRMScanScheduler) doJob(ctx appctx.Context, immediate bool) {
 		return
 	}
 	_, _ = s.localSTRMService.ScanAndEnsureAll(ctx)
-		s.nextRunAt = now.Add(time.Duration(interval) * time.Minute)
+	s.nextRunAt = now.Add(time.Duration(interval) * time.Minute)
 }

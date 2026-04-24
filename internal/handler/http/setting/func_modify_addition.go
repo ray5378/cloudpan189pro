@@ -30,17 +30,20 @@ type modifyAdditionRequest struct {
 	AutoDeleteInvalidStorageEnabled  *bool   `json:"autoDeleteInvalidStorageEnabled"`
 	AutoDeleteInvalidStorageKeywords *string `json:"autoDeleteInvalidStorageKeywords"`
 
-	CasTargetEnabled           *bool   `json:"casTargetEnabled"`
-	CasTargetTokenId           *int64  `json:"casTargetTokenId"`
-	CasTargetType              *string `json:"casTargetType"`
-	CasTargetFamilyId          *string `json:"casTargetFamilyId"`
-	CasTargetFolderId          *string `json:"casTargetFolderId"`
-	CasAccessPath                *string `json:"casAccessPath"`
-	CasRestoreRetentionHours     *int    `json:"casRestoreRetentionHours"`
-	LocalCASAutoScanEnabled      *bool   `json:"localCasAutoScanEnabled"`
-	LocalCASAutoScanIntervalMin  *int    `json:"localCasAutoScanIntervalMin" binding:"omitempty,min=1,max=1440"`
-	CasAutoCollectEnabled        *bool   `json:"casAutoCollectEnabled"`
-	CasAutoCollectPreservePath   *bool   `json:"casAutoCollectPreservePath"`
+	CasTargetEnabled            *bool   `json:"casTargetEnabled"`
+	CasTargetType               *string `json:"casTargetType"`
+	CasPersonTargetTokenId      *int64  `json:"casPersonTargetTokenId"`
+	CasPersonTargetFolderId     *string `json:"casPersonTargetFolderId"`
+	CasPersonAccessPath         *string `json:"casPersonAccessPath"`
+	CasFamilyTargetTokenId      *int64  `json:"casFamilyTargetTokenId"`
+	CasFamilyTargetFamilyId     *string `json:"casFamilyTargetFamilyId"`
+	CasFamilyTargetFolderId     *string `json:"casFamilyTargetFolderId"`
+	CasFamilyAccessPath         *string `json:"casFamilyAccessPath"`
+	CasRestoreRetentionHours    *int    `json:"casRestoreRetentionHours"`
+	LocalCASAutoScanEnabled     *bool   `json:"localCasAutoScanEnabled"`
+	LocalCASAutoScanIntervalMin *int    `json:"localCasAutoScanIntervalMin" binding:"omitempty,min=1,max=1440"`
+	CasAutoCollectEnabled       *bool   `json:"casAutoCollectEnabled"`
+	CasAutoCollectPreservePath  *bool   `json:"casAutoCollectPreservePath"`
 }
 
 // ModifyAddition 修改系统附加设置（可选字段更新）
@@ -134,20 +137,29 @@ func (h *handler) ModifyAddition() httpcontext.HandlerFunc {
 		if req.CasTargetEnabled != nil {
 			merged.CasTargetEnabled = *req.CasTargetEnabled
 		}
-		if req.CasTargetTokenId != nil {
-			merged.CasTargetTokenId = *req.CasTargetTokenId
-		}
 		if req.CasTargetType != nil {
 			merged.CasTargetType = *req.CasTargetType
 		}
-		if req.CasTargetFamilyId != nil {
-			merged.CasTargetFamilyId = *req.CasTargetFamilyId
+		if req.CasPersonTargetTokenId != nil {
+			merged.CasPersonTargetTokenId = *req.CasPersonTargetTokenId
 		}
-		if req.CasTargetFolderId != nil {
-			merged.CasTargetFolderId = *req.CasTargetFolderId
+		if req.CasPersonTargetFolderId != nil {
+			merged.CasPersonTargetFolderId = *req.CasPersonTargetFolderId
 		}
-		if req.CasAccessPath != nil {
-			merged.CasAccessPath = *req.CasAccessPath
+		if req.CasPersonAccessPath != nil {
+			merged.CasPersonAccessPath = *req.CasPersonAccessPath
+		}
+		if req.CasFamilyTargetTokenId != nil {
+			merged.CasFamilyTargetTokenId = *req.CasFamilyTargetTokenId
+		}
+		if req.CasFamilyTargetFamilyId != nil {
+			merged.CasFamilyTargetFamilyId = *req.CasFamilyTargetFamilyId
+		}
+		if req.CasFamilyTargetFolderId != nil {
+			merged.CasFamilyTargetFolderId = *req.CasFamilyTargetFolderId
+		}
+		if req.CasFamilyAccessPath != nil {
+			merged.CasFamilyAccessPath = *req.CasFamilyAccessPath
 		}
 		if req.CasRestoreRetentionHours != nil {
 			merged.CasRestoreRetentionHours = *req.CasRestoreRetentionHours
@@ -192,11 +204,14 @@ func (h *handler) ModifyAddition() httpcontext.HandlerFunc {
 			AutoDeleteInvalidStorageEnabled:  merged.AutoDeleteInvalidStorageEnabled,
 			AutoDeleteInvalidStorageKeywords: merged.AutoDeleteInvalidStorageKeywords,
 			CasTargetEnabled:                 merged.CasTargetEnabled,
-			CasTargetTokenId:                 merged.CasTargetTokenId,
 			CasTargetType:                    merged.CasTargetType,
-			CasTargetFamilyId:                merged.CasTargetFamilyId,
-			CasTargetFolderId:                merged.CasTargetFolderId,
-			CasAccessPath:                    merged.CasAccessPath,
+			CasPersonTargetTokenId:           merged.CasPersonTargetTokenId,
+			CasPersonTargetFolderId:          merged.CasPersonTargetFolderId,
+			CasPersonAccessPath:              merged.CasPersonAccessPath,
+			CasFamilyTargetTokenId:           merged.CasFamilyTargetTokenId,
+			CasFamilyTargetFamilyId:          merged.CasFamilyTargetFamilyId,
+			CasFamilyTargetFolderId:          merged.CasFamilyTargetFolderId,
+			CasFamilyAccessPath:              merged.CasFamilyAccessPath,
 			CasRestoreRetentionHours:         merged.CasRestoreRetentionHours,
 			CasAutoCollectEnabled:            merged.CasAutoCollectEnabled,
 			CasAutoCollectPreservePath:       merged.CasAutoCollectPreservePath,

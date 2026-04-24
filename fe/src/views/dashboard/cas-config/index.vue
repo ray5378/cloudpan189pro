@@ -179,12 +179,6 @@ const defaultParentId = computed(() => (sourceForm.sourceType === 'family' ? '-1
 const sourcePathLabel = computed(() => {
   const root = sourceForm.sourceType === 'person' ? '/个人云盘' : '/家庭云盘'
   if (sourceFolderStack.value.length === 0) {
-    const currentId = sourceForm.sourceType === 'family'
-      ? (savedSourceFolderId.value || sourceForm.parentId || defaultParentId.value || '')
-      : (sourceForm.parentId || defaultParentId.value || '')
-    if (sourceForm.casAccessPath && currentId === savedSourceFolderId.value) {
-      return sourceForm.casAccessPath
-    }
     return root
   }
   return `${root}/${sourceFolderStack.value.map((item) => item.name).join('/')}`
@@ -192,9 +186,6 @@ const sourcePathLabel = computed(() => {
 
 const savedCasPathLabel = computed(() => sourceForm.casAccessPath || '未保存')
 const currentFolderIdLabel = computed(() => {
-  if (sourceFolderStack.value.length === 0) {
-    return sourceForm.sourceType === 'family' ? '-16' : '-11'
-  }
   return sourceForm.parentId || defaultParentId.value || ''
 })
 const familyGroupFolderIdLabel = computed(() => sourceForm.fixedFamilyId || sourceForm.familyId || '未选择')
@@ -325,11 +316,11 @@ const resetDefaults = () => {
 }
 
 const applyDefaultsToRestore = () => {
-  restoreForm.uploadRoute = defaultForm.uploadRoute
-  restoreForm.destinationType = defaultForm.destinationType
-  restoreForm.targetFolderId = defaultForm.targetFolderId
+  restoreForm.uploadRoute = 'family'
+  restoreForm.destinationType = sourceForm.sourceType
+  restoreForm.targetFolderId = savedSourceFolderId.value || defaultForm.targetFolderId
   restoreForm.inputMode = defaultForm.inputMode
-  message.success('已应用默认恢复配置')
+  message.success('已按当前生效链路应用恢复配置')
 }
 
 const resetRestore = () => {
@@ -381,7 +372,7 @@ const loadFamilyList = async () => {
   }
 }
 
-const loadSourceRoot = async () => {
+const loadSourceEntries = async (parentId: string) => {
   if (!sourceForm.cloudToken) {
     message.warning('请先选择云盘账号')
     return
@@ -393,7 +384,7 @@ const loadSourceRoot = async () => {
   sourceLoading.value = true
   try {
     if (sourceForm.sourceType === 'person') {
-      const res = await getPersonFiles({ pageNum: 1, pageSize: 100, cloudToken: sourceForm.cloudToken, parentId: sourceForm.parentId || '-11' })
+      const res = await getPersonFiles({ pageNum: 1, pageSize: 100, cloudToken: sourceForm.cloudToken, parentId })
       sourceEntries.value = res.data?.data || []
     } else {
       const res = await getFamilyFiles({
@@ -401,7 +392,7 @@ const loadSourceRoot = async () => {
         pageSize: 100,
         cloudToken: sourceForm.cloudToken,
         familyId: (sourceForm.familyId || sourceForm.fixedFamilyId)!,
-        parentId: sourceForm.parentId || '',
+        parentId,
       })
       sourceEntries.value = res.data?.data || []
     }
@@ -412,11 +403,18 @@ const loadSourceRoot = async () => {
   }
 }
 
+const loadSourceRoot = async () => {
+  sourceFolderStack.value = []
+  sourceForm.parentId = defaultParentId.value
+  sourceForm.parentName = '根目录'
+  await loadSourceEntries(defaultParentId.value)
+}
+
 const enterFolder = async (row: FileNode) => {
   sourceFolderStack.value.push({ id: row.id, name: row.name })
   sourceForm.parentId = row.id
   sourceForm.parentName = row.name
-  await loadSourceRoot()
+  await loadSourceEntries(row.id)
 }
 
 const goParentFolder = async () => {
@@ -424,7 +422,7 @@ const goParentFolder = async () => {
   const current = sourceFolderStack.value[sourceFolderStack.value.length - 1]
   sourceForm.parentId = current?.id || defaultParentId.value
   sourceForm.parentName = current?.name || '根目录'
-  await loadSourceRoot()
+  await loadSourceEntries(sourceForm.parentId)
 }
 
 const useCasFile = (row: FileNode) => {
@@ -454,44 +452,63 @@ const saveSourceConfig = async () => {
     : (sourceForm.parentId || defaultParentId.value)
   await modifySettingAddition({
     casTargetEnabled: true,
-    casTargetTokenId: sourceForm.cloudToken,
     casTargetType: sourceForm.sourceType,
-    casTargetFamilyId: sourceForm.fixedFamilyId || sourceForm.familyId,
-    casTargetFolderId: savedFolderId,
-    casAccessPath: resolvedTargetPath,
+    casPersonTargetTokenId: sourceForm.sourceType === 'person' ? sourceForm.cloudToken : 0,
+    casPersonTargetFolderId: sourceForm.sourceType === 'person' ? savedFolderId : '',
+    casPersonAccessPath: sourceForm.sourceType === 'person' ? resolvedTargetPath : '',
+    casFamilyTargetTokenId: sourceForm.sourceType === 'family' ? sourceForm.cloudToken : 0,
+    casFamilyTargetFamilyId: sourceForm.sourceType === 'family' ? (sourceForm.fixedFamilyId || sourceForm.familyId || '') : '',
+    casFamilyTargetFolderId: sourceForm.sourceType === 'family' ? savedFolderId : '',
+    casFamilyAccessPath: sourceForm.sourceType === 'family' ? resolvedTargetPath : '',
     casRestoreRetentionHours: sourceForm.retentionHours,
     localCasAutoScanEnabled: sourceForm.localCasAutoScanEnabled,
     localCasAutoScanIntervalMin: sourceForm.localCasAutoScanIntervalMin,
   })
 
   savedSourceFolderId.value = savedFolderId
+  defaultForm.uploadRoute = 'family'
+  defaultForm.destinationType = sourceForm.sourceType
+  defaultForm.targetFolderId = savedFolderId
+  restoreForm.uploadRoute = 'family'
+  restoreForm.destinationType = sourceForm.sourceType
   restoreForm.targetFolderId = savedFolderId
   restoreForm.inputMode = 'path'
   restoreForm.casPath = resolvedTargetPath
-  message.success(`CAS最终目录已保存：${resolvedTargetPath}`)
+  message.success(`CAS最终目录已保存：${resolvedTargetPath}（当前仅生效 ${sourceForm.sourceType === 'person' ? '家庭→个人' : '家庭→家庭'} 链路）`)
 }
 
 const loadSourceConfigFromServer = async () => {
   const res = await getSettingAddition()
   const addition: Models.SettingAddition = res.data || ({} as Models.SettingAddition)
-  sourceForm.cloudToken = addition.casTargetTokenId || undefined
   sourceForm.sourceType = (addition.casTargetType as SourceType) || 'person'
-  sourceForm.fixedFamilyId = addition.casTargetFamilyId || undefined
-  sourceForm.familyId = addition.casTargetFamilyId || undefined
-  sourceForm.parentId = addition.casTargetType === 'family'
-    ? '-16'
-    : (addition.casTargetFolderId || '-11')
-  savedSourceFolderId.value = addition.casTargetFolderId || ''
-  sourceForm.parentName = addition.casAccessPath || '根目录'
-  sourceForm.casAccessPath = addition.casAccessPath || ''
+  if (sourceForm.sourceType === 'family') {
+    sourceForm.cloudToken = addition.casFamilyTargetTokenId || undefined
+    sourceForm.fixedFamilyId = addition.casFamilyTargetFamilyId || undefined
+    sourceForm.familyId = addition.casFamilyTargetFamilyId || undefined
+    sourceForm.parentId = '-16'
+    savedSourceFolderId.value = addition.casFamilyTargetFolderId || ''
+    sourceForm.parentName = addition.casFamilyAccessPath || '根目录'
+    sourceForm.casAccessPath = addition.casFamilyAccessPath || ''
+  } else {
+    sourceForm.cloudToken = addition.casPersonTargetTokenId || undefined
+    sourceForm.fixedFamilyId = undefined
+    sourceForm.familyId = undefined
+    sourceForm.parentId = addition.casPersonTargetFolderId || '-11'
+    savedSourceFolderId.value = addition.casPersonTargetFolderId || ''
+    sourceForm.parentName = addition.casPersonAccessPath || '根目录'
+    sourceForm.casAccessPath = addition.casPersonAccessPath || ''
+  }
   sourceForm.retentionHours = addition.casRestoreRetentionHours || undefined
   sourceForm.localCasAutoScanEnabled = !!addition.localCasAutoScanEnabled
   sourceForm.localCasAutoScanIntervalMin = addition.localCasAutoScanIntervalMin || 10
+  const resolvedDefaultTargetFolderId = sourceForm.sourceType === 'family'
+    ? (addition.casFamilyTargetFolderId || '')
+    : (addition.casPersonTargetFolderId || '')
   if (!defaultForm.targetFolderId) {
-    defaultForm.targetFolderId = addition.casTargetFolderId || ''
+    defaultForm.targetFolderId = resolvedDefaultTargetFolderId
   }
   if (!restoreForm.targetFolderId) {
-    restoreForm.targetFolderId = addition.casTargetFolderId || ''
+    restoreForm.targetFolderId = resolvedDefaultTargetFolderId
   }
 }
 
@@ -543,12 +560,9 @@ const requestPreview = computed(() => JSON.stringify(buildRequestPayload(), null
 void [uploadRouteOptions, inputModeOptions, defaultDestinationOptions, destinationTypeOptions, saveDefaults, resetDefaults, resetRestore, requestPreview]
 
 const validateBeforeSubmit = (): boolean => {
-  if (!(restoreForm.targetFolderId || '').trim()) {
-    message.warning('请填写目标目录 ID')
-    return false
-  }
-  if (restoreForm.uploadRoute === 'person' && restoreForm.destinationType === 'family') {
-    message.warning('当前仅支持 reference-backed 组合，person → family 暂未实现')
+  const effectiveTargetFolderId = (savedSourceFolderId.value || restoreForm.targetFolderId || '').trim()
+  if (!effectiveTargetFolderId) {
+    message.warning('请先保存一个生效中的最终目录')
     return false
   }
   if (restoreForm.inputMode === 'virtualId' && !restoreForm.casVirtualId) {

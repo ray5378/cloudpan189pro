@@ -2,7 +2,7 @@
   <n-card title="CAS 最终目录" size="small">
     <n-space vertical size="small">
       <n-text depth="3">这里配置的是 CAS 播放恢复时的最终落盘目录。</n-text>
-      <n-text depth="3">当前链路仅支持 family → family。</n-text>
+      <n-text depth="3">个人云盘目录配置绑定 family → person；家庭云盘目录配置绑定 family → family。</n-text>
 
       <n-form :model="sourceForm" label-placement="left" label-width="140px">
         <n-grid :cols="24" :x-gap="16" :y-gap="8">

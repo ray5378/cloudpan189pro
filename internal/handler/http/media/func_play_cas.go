@@ -37,7 +37,7 @@ func (h *handler) PlayCas() httpcontext.HandlerFunc {
 				setting = latest.Addition
 			}
 		}
-		if setting.CasTargetTokenId <= 0 || strings.TrimSpace(setting.CasTargetFolderId) == "" {
+		if setting.CasPersonTargetTokenId <= 0 || strings.TrimSpace(setting.CasPersonTargetFolderId) == "" {
 			ctx.String(http.StatusConflict, "cas target not configured")
 			return
 		}
@@ -60,7 +60,7 @@ func (h *handler) PlayCas() httpcontext.HandlerFunc {
 		result, err := h.casRestoreService.EnsureRestoredFromLocalCAS(ctx.GetContext(), casrestore.RestoreRequest{
 			StorageID:       record.StorageID,
 			MountPointID:    record.MountPointID,
-			TargetTokenID:   setting.CasTargetTokenId,
+			TargetTokenID:   setting.CasPersonTargetTokenId,
 			CasFileID:       record.CasFileID,
 			CasFileName:     record.CasFileName,
 			LocalCasPath:    localCASPath,
@@ -86,11 +86,11 @@ func (h *handler) PlayCas() httpcontext.HandlerFunc {
 			record.RestoredFileID = result.RestoredFileID
 		}
 		setting.CasTargetType = "family"
-		if strings.TrimSpace(setting.CasTargetFamilyId) == "" {
+		if strings.TrimSpace(setting.CasFamilyTargetFamilyId) == "" {
 			if result != nil && result.FamilyID > 0 {
-				setting.CasTargetFamilyId = strconv.FormatInt(result.FamilyID, 10)
+				setting.CasFamilyTargetFamilyId = strconv.FormatInt(result.FamilyID, 10)
 			} else if familyID > 0 {
-				setting.CasTargetFamilyId = strconv.FormatInt(familyID, 10)
+				setting.CasFamilyTargetFamilyId = strconv.FormatInt(familyID, 10)
 			}
 		}
 
@@ -104,10 +104,14 @@ func (h *handler) PlayCas() httpcontext.HandlerFunc {
 }
 
 func (h *handler) resolvePlaybackTargetFolder(ctx *httpcontext.Context, record *models.CasMediaRecord, setting models.SettingAddition) (string, int64, error) {
-	baseTargetFolderID := strings.TrimSpace(setting.CasTargetFolderId)
 	if strings.TrimSpace(setting.CasTargetType) != "family" {
-		baseTargetFolderID = "-11"
+		baseTargetFolderID := strings.TrimSpace(setting.CasPersonTargetFolderId)
+		if baseTargetFolderID == "" {
+			baseTargetFolderID = "-11"
+		}
+		return baseTargetFolderID, 0, nil
 	}
+	baseTargetFolderID := strings.TrimSpace(setting.CasFamilyTargetFolderId)
 	if baseTargetFolderID == "" {
 		baseTargetFolderID = "-11"
 	}
@@ -115,7 +119,7 @@ func (h *handler) resolvePlaybackTargetFolder(ctx *httpcontext.Context, record *
 	if relDir == "" || relDir == "." || h.appSessionService == nil {
 		return baseTargetFolderID, 0, nil
 	}
-	session, err := h.appSessionService.GetByTokenID(ctx.GetContext(), setting.CasTargetTokenId)
+	session, err := h.appSessionService.GetByTokenID(ctx.GetContext(), setting.CasPersonTargetTokenId)
 	if err != nil {
 		return "", 0, err
 	}
@@ -125,13 +129,13 @@ func (h *handler) resolvePlaybackTargetFolder(ctx *httpcontext.Context, record *
 	}
 	panClient := cloudpan.NewPanClient(webToken, session.Token)
 	familyID := int64(0)
-	if strings.TrimSpace(setting.CasTargetFamilyId) != "" {
-		if parsed, perr := strconv.ParseInt(strings.TrimSpace(setting.CasTargetFamilyId), 10, 64); perr == nil {
+	if strings.TrimSpace(setting.CasFamilyTargetFamilyId) != "" {
+		if parsed, perr := strconv.ParseInt(strings.TrimSpace(setting.CasFamilyTargetFamilyId), 10, 64); perr == nil {
 			familyID = parsed
 		}
 	}
 	if familyID <= 0 {
-		return "", 0, fmt.Errorf("未配置CAS指定恢复位置(casTargetFamilyId)")
+		return "", 0, fmt.Errorf("未配置家庭恢复目标(casFamilyTargetFamilyId)")
 	}
 	familyParentID := baseTargetFolderID
 	if familyParentID == "-11" {
@@ -148,19 +152,26 @@ func (h *handler) resolvePlaybackTargetFolder(ctx *httpcontext.Context, record *
 }
 
 func (h *handler) tryDirectPlaybackLink(ctx *httpcontext.Context, record *models.CasMediaRecord, setting models.SettingAddition) (string, bool) {
-	if record == nil || strings.TrimSpace(record.RestoredFileID) == "" || setting.CasTargetTokenId <= 0 {
+	if record == nil || strings.TrimSpace(record.RestoredFileID) == "" {
 		return "", false
 	}
-	token, err := h.cloudTokenService.Query(ctx.GetContext(), setting.CasTargetTokenId)
+	targetTokenID := setting.CasPersonTargetTokenId
+	if strings.EqualFold(strings.TrimSpace(setting.CasTargetType), "family") {
+		targetTokenID = setting.CasFamilyTargetTokenId
+	}
+	if targetTokenID <= 0 {
+		return "", false
+	}
+	token, err := h.cloudTokenService.Query(ctx.GetContext(), targetTokenID)
 	if err != nil {
 		return "", false
 	}
 	authToken := cloudbridgeSvi.NewAuthToken(token.AccessToken, token.ExpiresIn)
 
 	if strings.EqualFold(strings.TrimSpace(setting.CasTargetType), "family") {
-		familyID := strings.TrimSpace(setting.CasTargetFamilyId)
+		familyID := strings.TrimSpace(setting.CasFamilyTargetFamilyId)
 		if familyID == "" && h.appSessionService != nil {
-			if session, serr := h.appSessionService.GetByTokenID(ctx.GetContext(), setting.CasTargetTokenId); serr == nil && session != nil {
+			if session, serr := h.appSessionService.GetByTokenID(ctx.GetContext(), targetTokenID); serr == nil && session != nil {
 				webToken := cloudpan.WebLoginToken{}
 				if cookie := cloudpan.RefreshCookieToken(session.Token.SessionKey); cookie != "" {
 					webToken.CookieLoginUser = cookie
