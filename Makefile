@@ -10,9 +10,22 @@ OUTPUT_DIR=output
 BINARY_NAME=share
 DOCKER_IMAGE=$(PROJECT_NAME):latest
 
+# Go 编译环境
+GO_IMAGE ?= golang:1.25-alpine
+GO_DOCKER_WORKDIR ?= /src
+GO_DOCKER_ENV ?= -e CGO_ENABLED=1
+GO_CMD ?= /usr/local/go/bin/go
+USE_DOCKER_GO ?= 1
+DOCKER_GO_RUN = docker run --rm -v "$(CURDIR):$(GO_DOCKER_WORKDIR)" -w $(GO_DOCKER_WORKDIR) $(GO_DOCKER_ENV) $(GO_IMAGE) /bin/sh -lc
+ifeq ($(USE_DOCKER_GO),1)
+GO_RUNNER = $(DOCKER_GO_RUN) "$(GO_CMD)
+else
+GO_RUNNER = sh -lc "go
+endif
+
 .PHONY: build build-frontend build-backend build-multi-arch clean clean-all
 .PHONY: docker-build docker-run docker-stop docker-clean docker-logs
-.PHONY: dev test lint help
+.PHONY: dev test lint help go-env
 
 # 主构建目标
 build: build-frontend build-backend
@@ -30,64 +43,31 @@ build-frontend:
 
 # 后端构建
 build-backend:
-	@echo "🔨 Building backend..."
+	@echo "🔨 Building backend... (USE_DOCKER_GO=$(USE_DOCKER_GO))"
 	@mkdir -p $(OUTPUT_DIR)
-	go mod tidy
-	GOOS=linux GOARCH=amd64 go build \
-		-ldflags="-X $(MODULE_NAME)/configs.Commit=$(VAR_COMMIT) \
-		          -X $(MODULE_NAME)/configs.BuildDate=$(VAR_BUILD_DATE) \
-		          -X $(MODULE_NAME)/configs.GitSummary=$(VAR_GIT_SUMMARY) \
-		          -X $(MODULE_NAME)/configs.GitBranch=$(VAR_GIT_BRANCH)" \
-		-o $(OUTPUT_DIR)/$(BINARY_NAME) ./cmd/main.go
+	@$(GO_RUNNER) mod tidy"
+	@$(GO_RUNNER) build \
+		-ldflags='-X $(MODULE_NAME)/configs.Commit=$(VAR_COMMIT) -X $(MODULE_NAME)/configs.BuildDate=$(VAR_BUILD_DATE) -X $(MODULE_NAME)/configs.GitSummary=$(VAR_GIT_SUMMARY) -X $(MODULE_NAME)/configs.GitBranch=$(VAR_GIT_BRANCH)' \
+		-o $(OUTPUT_DIR)/$(BINARY_NAME) ./cmd/main.go"
 	@echo "✅ Backend build completed: $(OUTPUT_DIR)/$(BINARY_NAME)"
 
 # 多架构构建
 build-multi-arch:
-	@echo "🔨 Building for multiple architectures..."
+	@echo "🔨 Building for multiple architectures... (USE_DOCKER_GO=$(USE_DOCKER_GO))"
 	@mkdir -p $(OUTPUT_DIR)
-	go mod tidy
+	@$(GO_RUNNER) mod tidy"
 	@echo "📦 Building for Linux AMD64..."
-	GOOS=linux GOARCH=amd64 go build \
-		-ldflags="-s -w -X $(MODULE_NAME)/configs.Commit=$(VAR_COMMIT) \
-		          -X $(MODULE_NAME)/configs.BuildDate=$(VAR_BUILD_DATE) \
-		          -X $(MODULE_NAME)/configs.GitSummary=$(VAR_GIT_SUMMARY) \
-		          -X $(MODULE_NAME)/configs.GitBranch=$(VAR_GIT_BRANCH)" \
-		-o $(OUTPUT_DIR)/$(BINARY_NAME)-linux-amd64 ./cmd/main.go
+	@$(GO_RUNNER) env GOOS=linux GOARCH=amd64 $(GO_CMD) build -ldflags='-s -w -X $(MODULE_NAME)/configs.Commit=$(VAR_COMMIT) -X $(MODULE_NAME)/configs.BuildDate=$(VAR_BUILD_DATE) -X $(MODULE_NAME)/configs.GitSummary=$(VAR_GIT_SUMMARY) -X $(MODULE_NAME)/configs.GitBranch=$(VAR_GIT_BRANCH)' -o $(OUTPUT_DIR)/$(BINARY_NAME)-linux-amd64 ./cmd/main.go"
 	@echo "📦 Building for Linux ARM64..."
-	GOOS=linux GOARCH=arm64 go build \
-		-ldflags="-s -w -X $(MODULE_NAME)/configs.Commit=$(VAR_COMMIT) \
-		          -X $(MODULE_NAME)/configs.BuildDate=$(VAR_BUILD_DATE) \
-		          -X $(MODULE_NAME)/configs.GitSummary=$(VAR_GIT_SUMMARY) \
-		          -X $(MODULE_NAME)/configs.GitBranch=$(VAR_GIT_BRANCH)" \
-		-o $(OUTPUT_DIR)/$(BINARY_NAME)-linux-arm64 ./cmd/main.go
+	@$(GO_RUNNER) env GOOS=linux GOARCH=arm64 $(GO_CMD) build -ldflags='-s -w -X $(MODULE_NAME)/configs.Commit=$(VAR_COMMIT) -X $(MODULE_NAME)/configs.BuildDate=$(VAR_BUILD_DATE) -X $(MODULE_NAME)/configs.GitSummary=$(VAR_GIT_SUMMARY) -X $(MODULE_NAME)/configs.GitBranch=$(VAR_GIT_BRANCH)' -o $(OUTPUT_DIR)/$(BINARY_NAME)-linux-arm64 ./cmd/main.go"
 	@echo "📦 Building for Linux ARMv7a..."
-	GOOS=linux GOARCH=arm GOARM=7 go build \
-		-ldflags="-s -w -X $(MODULE_NAME)/configs.Commit=$(VAR_COMMIT) \
-		          -X $(MODULE_NAME)/configs.BuildDate=$(VAR_BUILD_DATE) \
-		          -X $(MODULE_NAME)/configs.GitSummary=$(VAR_GIT_SUMMARY) \
-		          -X $(MODULE_NAME)/configs.GitBranch=$(VAR_GIT_BRANCH)" \
-		-o $(OUTPUT_DIR)/$(BINARY_NAME)-linux-armv7a ./cmd/main.go
+	@$(GO_RUNNER) env GOOS=linux GOARCH=arm GOARM=7 $(GO_CMD) build -ldflags='-s -w -X $(MODULE_NAME)/configs.Commit=$(VAR_COMMIT) -X $(MODULE_NAME)/configs.BuildDate=$(VAR_BUILD_DATE) -X $(MODULE_NAME)/configs.GitSummary=$(VAR_GIT_SUMMARY) -X $(MODULE_NAME)/configs.GitBranch=$(VAR_GIT_BRANCH)' -o $(OUTPUT_DIR)/$(BINARY_NAME)-linux-armv7a ./cmd/main.go"
 	@echo "📦 Building for Windows AMD64..."
-	GOOS=windows GOARCH=amd64 go build \
-		-ldflags="-s -w -X $(MODULE_NAME)/configs.Commit=$(VAR_COMMIT) \
-		          -X $(MODULE_NAME)/configs.BuildDate=$(VAR_BUILD_DATE) \
-		          -X $(MODULE_NAME)/configs.GitSummary=$(VAR_GIT_SUMMARY) \
-		          -X $(MODULE_NAME)/configs.GitBranch=$(VAR_GIT_BRANCH)" \
-		-o $(OUTPUT_DIR)/$(BINARY_NAME)-windows-amd64.exe ./cmd/main.go
+	@$(GO_RUNNER) env GOOS=windows GOARCH=amd64 $(GO_CMD) build -ldflags='-s -w -X $(MODULE_NAME)/configs.Commit=$(VAR_COMMIT) -X $(MODULE_NAME)/configs.BuildDate=$(VAR_BUILD_DATE) -X $(MODULE_NAME)/configs.GitSummary=$(VAR_GIT_SUMMARY) -X $(MODULE_NAME)/configs.GitBranch=$(VAR_GIT_BRANCH)' -o $(OUTPUT_DIR)/$(BINARY_NAME)-windows-amd64.exe ./cmd/main.go"
 	@echo "📦 Building for macOS AMD64..."
-	GOOS=darwin GOARCH=amd64 go build \
-		-ldflags="-s -w -X $(MODULE_NAME)/configs.Commit=$(VAR_COMMIT) \
-		          -X $(MODULE_NAME)/configs.BuildDate=$(VAR_BUILD_DATE) \
-		          -X $(MODULE_NAME)/configs.GitSummary=$(VAR_GIT_SUMMARY) \
-		          -X $(MODULE_NAME)/configs.GitBranch=$(VAR_GIT_BRANCH)" \
-		-o $(OUTPUT_DIR)/$(BINARY_NAME)-darwin-amd64 ./cmd/main.go
+	@$(GO_RUNNER) env GOOS=darwin GOARCH=amd64 $(GO_CMD) build -ldflags='-s -w -X $(MODULE_NAME)/configs.Commit=$(VAR_COMMIT) -X $(MODULE_NAME)/configs.BuildDate=$(VAR_BUILD_DATE) -X $(MODULE_NAME)/configs.GitSummary=$(VAR_GIT_SUMMARY) -X $(MODULE_NAME)/configs.GitBranch=$(VAR_GIT_BRANCH)' -o $(OUTPUT_DIR)/$(BINARY_NAME)-darwin-amd64 ./cmd/main.go"
 	@echo "📦 Building for macOS ARM64..."
-	GOOS=darwin GOARCH=arm64 go build \
-		-ldflags="-s -w -X $(MODULE_NAME)/configs.Commit=$(VAR_COMMIT) \
-		          -X $(MODULE_NAME)/configs.BuildDate=$(VAR_BUILD_DATE) \
-		          -X $(MODULE_NAME)/configs.GitSummary=$(VAR_GIT_SUMMARY) \
-		          -X $(MODULE_NAME)/configs.GitBranch=$(VAR_GIT_BRANCH)" \
-		-o $(OUTPUT_DIR)/$(BINARY_NAME)-darwin-arm64 ./cmd/main.go
+	@$(GO_RUNNER) env GOOS=darwin GOARCH=arm64 $(GO_CMD) build -ldflags='-s -w -X $(MODULE_NAME)/configs.Commit=$(VAR_COMMIT) -X $(MODULE_NAME)/configs.BuildDate=$(VAR_BUILD_DATE) -X $(MODULE_NAME)/configs.GitSummary=$(VAR_GIT_SUMMARY) -X $(MODULE_NAME)/configs.GitBranch=$(VAR_GIT_BRANCH)' -o $(OUTPUT_DIR)/$(BINARY_NAME)-darwin-arm64 ./cmd/main.go"
 	@echo "✅ Multi-architecture build completed!"
 	@ls -la $(OUTPUT_DIR)/
 
@@ -97,12 +77,10 @@ clean:
 	@rm -rf $(OUTPUT_DIR)
 	@if [ -d "fe" ]; then rm -rf fe/dist fe/node_modules; fi
 
-# 清理 linter 缓存
 lint-clean:
 	@echo "🧹 Cleaning linter cache..."
 	golangci-lint cache clean
 
-# Docker 构建
 docker-build:
 	@echo "🐳 Building Docker image..."
 	docker build \
@@ -114,7 +92,6 @@ docker-build:
 		-t $(DOCKER_IMAGE) .
 	@echo "✅ Docker image built: $(DOCKER_IMAGE)"
 
-# 运行 Docker 容器
 docker-run: docker-stop
 	@echo "🚀 Starting Docker container..."
 	docker run -d \
@@ -123,55 +100,49 @@ docker-run: docker-stop
 		$(DOCKER_IMAGE)
 	@echo "✅ Container started: http://localhost:12395"
 
-# 停止 Docker 容器
 docker-stop:
 	@echo "🛑 Stopping Docker container..."
 	@docker stop $(PROJECT_NAME) 2>/dev/null || true
 	@docker rm $(PROJECT_NAME) 2>/dev/null || true
 
-# 查看 Docker 日志
 docker-logs:
 	@echo "📋 Docker container logs:"
 	docker logs -f $(PROJECT_NAME)
 
-# 清理 Docker 资源
 docker-clean: docker-stop
 	@echo "🧹 Cleaning Docker resources..."
 	@docker rmi $(DOCKER_IMAGE) 2>/dev/null || true
 	@docker image prune -f
 
-# 完整清理
 clean-all: clean docker-clean lint-clean
 	@echo "✅ Complete cleanup finished!"
 
-# 开发模式
 dev:
-	@echo "🔧 Starting development server..."
-	go run ./cmd/main.go
+	@echo "🔧 Starting development server... (USE_DOCKER_GO=$(USE_DOCKER_GO))"
+	@$(GO_RUNNER) run ./cmd/main.go"
 
-# 运行测试
 test:
-	@echo "🧪 Running tests..."
-	go test -v ./...
+	@echo "🧪 Running tests... (USE_DOCKER_GO=$(USE_DOCKER_GO))"
+	@$(GO_RUNNER) test -v ./..."
 
-# 运行 linter
 lint:
 	@echo "Running linter..."
 	golangci-lint run
 
-# 生成 Swagger 文档
+go-env:
+	@echo "🐹 Go build env"
+	@$(GO_RUNNER) version"
+
 swag-init:
 	@echo "📚 Generating Swagger documentation..."
 	swag init -g cmd/main.go -o internal/docs --parseDependency --parseInternal
 	@echo "✅ Swagger documentation generated in internal/docs/"
 
-# 格式化 Swagger 注释
 swag-fmt:
 	@echo "🎨 Formatting Swagger comments..."
 	swag fmt
 	@echo "✅ Swagger comments formatted"
 
-# 显示构建信息
 info:
 	@echo "📊 Build Information:"
 	@echo "  Project: $(PROJECT_NAME)"
@@ -181,6 +152,8 @@ info:
 	@echo "  Summary: $(VAR_GIT_SUMMARY)"
 	@echo "  Branch:  $(VAR_GIT_BRANCH)"
 	@echo "  Output:  $(OUTPUT_DIR)/$(BINARY_NAME)"
+	@echo "  USE_DOCKER_GO: $(USE_DOCKER_GO)"
+	@echo "  GO_IMAGE: $(GO_IMAGE)"
 	@echo ""
 	@echo "🏗️ Supported Architectures:"
 	@echo "  - linux/amd64"
@@ -190,34 +163,40 @@ info:
 	@echo "  - darwin/amd64"
 	@echo "  - darwin/arm64"
 
-# 帮助信息
 help:
 	@echo "🚀 Available commands:"
 	@echo ""
 	@echo "📦 Build Commands:"
-	@echo "  build           - Build frontend and backend"
-	@echo "  build-frontend  - Build frontend only"
-	@echo "  build-backend   - Build backend only"
-	@echo "  build-multi-arch - Build for multiple architectures"
-	@echo ""
-	@echo "🐳 Docker Commands:"
-	@echo "  docker-build    - Build Docker image"
-	@echo "  docker-run      - Run Docker container"
-	@echo "  docker-stop     - Stop Docker container"
-	@echo "  docker-logs     - Show container logs"
-	@echo "  docker-clean    - Clean Docker resources"
-	@echo ""
-	@echo "🧹 Cleanup Commands:"
-	@echo "  clean           - Clean build artifacts"
-	@echo "  lint-clean      - Clean linter cache"
-	@echo "  clean-all       - Complete cleanup"
+	@echo "  build            - Build frontend and backend (默认 Docker Go)"
+	@echo "  build-frontend   - Build frontend only"
+	@echo "  build-backend    - Build backend only (默认 Docker Go)"
+	@echo "  build-multi-arch - Build for multiple architectures (默认 Docker Go)"
+	@echo "  go-env           - Show active Go version in current build env"
 	@echo ""
 	@echo "🔧 Development Commands:"
-	@echo "  dev             - Start development server"
-	@echo "  test            - Run tests"
-	@echo "  lint            - Run linter"
-	@echo "  info            - Show build information"
+	@echo "  dev              - Start development server (默认 Docker Go)"
+	@echo "  test             - Run tests (默认 Docker Go)"
+	@echo "  lint             - Run golangci-lint"
 	@echo ""
+	@echo "🛠️ Overrides:"
+	@echo "  USE_DOCKER_GO=0 make build-backend"
+	@echo "  GO_IMAGE=golang:1.25-alpine make build-backend"
+	@echo ""
+	@echo "🐳 Docker Commands:"
+	@echo "  docker-build     - Build Docker image"
+	@echo "  docker-run       - Run Docker container"
+	@echo "  docker-stop      - Stop Docker container"
+	@echo "  docker-logs      - Show container logs"
+	@echo "  docker-clean     - Clean Docker resources"
+	@echo ""
+	@echo "🧹 Cleanup Commands:"
+	@echo "  clean            - Clean build artifacts"
+	@echo "  lint-clean       - Clean linter cache"
+	@echo "  clean-all        - Complete cleanup"
+	@echo ""
+	@echo "📚 Docs:"
+	@echo "  swag-init        - Generate Swagger docs"
+	@echo "  swag-fmt         - Format Swagger comments"
+	@echo "  info             - Show build information"
 
-# 默认目标
 .DEFAULT_GOAL := help

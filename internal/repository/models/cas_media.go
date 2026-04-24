@@ -22,6 +22,9 @@ type CasMediaRecord struct {
 	CasFilePath      string           `gorm:"column:cas_file_path;type:varchar(2048);not null;default:''" json:"casFilePath"`
 	SourceParentID   string           `gorm:"column:source_parent_id;type:varchar(128);not null;default:''" json:"sourceParentId"`
 	RestoredParentID string           `gorm:"column:restored_parent_id;type:varchar(128);not null;default:''" json:"restoredParentId"`
+	DestinationType  string           `gorm:"column:destination_type;type:varchar(32);not null;default:''" json:"destinationType"`
+	TargetTokenID    int64            `gorm:"column:target_token_id;type:bigint;not null;default:0" json:"targetTokenId"`
+	TargetFamilyID   string           `gorm:"column:target_family_id;type:varchar(128);not null;default:''" json:"targetFamilyId"`
 	OriginalFileName string           `gorm:"column:original_file_name;type:varchar(1024);not null;default:''" json:"originalFileName"`
 	OriginalFileSize int64            `gorm:"column:original_file_size;type:bigint;not null;default:0" json:"originalFileSize"`
 	FileMD5          string           `gorm:"column:file_md5;type:varchar(64);not null;default:''" json:"fileMd5"`

@@ -100,6 +100,11 @@ func Start(svc bootstrap.ServiceContext) (func(), error) {
 		err = append(err, e)
 	}
 
+	recycleBinAutoClearScheduler := NewRecycleBinAutoClearScheduler(appSessionService, cloudTokenService)
+	if e := recycleBinAutoClearScheduler.Start(ctx); e != nil {
+		err = append(err, e)
+	}
+
 	schedulers := []Scheduler{
 		fileTaskLogCheckScheduler,
 		refreshFileScheduler,
@@ -110,6 +115,7 @@ func Start(svc bootstrap.ServiceContext) (func(), error) {
 		cleanupTaskLogScheduler,
 		cleanupLoginLogScheduler,
 		recycleRestoredCASScheduler,
+		recycleBinAutoClearScheduler,
 	}
 
 	return closeBar(schedulers), errors2.Join(err...)

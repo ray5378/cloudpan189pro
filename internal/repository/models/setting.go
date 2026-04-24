@@ -60,6 +60,8 @@ type SettingAddition struct {
 	CasFamilyTargetFolderId     string `json:"casFamilyTargetFolderId"`
 	CasFamilyAccessPath         string `json:"casFamilyAccessPath"`
 	CasRestoreRetentionHours    int    `json:"casRestoreRetentionHours"`
+	RecycleBinAutoClearEnabled  bool   `json:"recycleBinAutoClearEnabled"`
+	RecycleBinAutoClearTime     string `json:"recycleBinAutoClearTime"`
 	LocalCASAutoScanEnabled     bool   `json:"localCasAutoScanEnabled"`
 	LocalCASAutoScanIntervalMin int    `json:"localCasAutoScanIntervalMin"`
 	CasAutoCollectEnabled       bool   `json:"casAutoCollectEnabled"`
@@ -96,6 +98,9 @@ func (sa *SettingAddition) applyDefaults() {
 	}
 	if sa.CasTargetType == "" {
 		sa.CasTargetType = "person"
+	}
+	if sa.RecycleBinAutoClearTime == "" {
+		sa.RecycleBinAutoClearTime = "03:30"
 	}
 	if sa.LocalCASAutoScanIntervalMin <= 0 {
 		sa.LocalCASAutoScanIntervalMin = 10

@@ -11,11 +11,11 @@ import (
 
 // 使用指针以便区分“未提供”和“提供零值”的场景
 type modifyAdditionRequest struct {
-	LocalProxy                *bool  `json:"localProxy" example:"false"`                                                // 是否启用本地代理（可选）
-	MultipleStream            *bool  `json:"multipleStream" example:"true"`                                             // 是否启用多线程分流（可选）
-	MultipleStreamThreadCount *int   `json:"multipleStreamThreadCount" binding:"omitempty,min=1,max=64" example:"4"`    // 多线程数量（可选）
-	MultipleStreamChunkSize   *int64 `json:"multipleStreamChunkSize" binding:"omitempty,min=1048576" example:"4194304"` // 分片大小，单位字节（可选，>=1MiB）
-	TaskThreadCount           *int   `json:"taskThreadCount" binding:"omitempty,min=1,max=32" example:"1"`              // 任务线程数量（可选）
+	LocalProxy                *bool  `json:"localProxy" example:"false"`
+	MultipleStream            *bool  `json:"multipleStream" example:"true"`
+	MultipleStreamThreadCount *int   `json:"multipleStreamThreadCount" binding:"omitempty,min=1,max=64" example:"4"`
+	MultipleStreamChunkSize   *int64 `json:"multipleStreamChunkSize" binding:"omitempty,min=1048576" example:"4194304"`
+	TaskThreadCount           *int   `json:"taskThreadCount" binding:"omitempty,min=1,max=32" example:"1"`
 
 	ExternalAPIKey             *string `json:"externalApiKey"`
 	DefaultTokenId             *int64  `json:"defaultTokenId"`
@@ -40,6 +40,8 @@ type modifyAdditionRequest struct {
 	CasFamilyTargetFolderId     *string `json:"casFamilyTargetFolderId"`
 	CasFamilyAccessPath         *string `json:"casFamilyAccessPath"`
 	CasRestoreRetentionHours    *int    `json:"casRestoreRetentionHours"`
+	RecycleBinAutoClearEnabled  *bool   `json:"recycleBinAutoClearEnabled"`
+	RecycleBinAutoClearTime     *string `json:"recycleBinAutoClearTime" binding:"omitempty,len=5"`
 	LocalCASAutoScanEnabled     *bool   `json:"localCasAutoScanEnabled"`
 	LocalCASAutoScanIntervalMin *int    `json:"localCasAutoScanIntervalMin" binding:"omitempty,min=1,max=1440"`
 	CasAutoCollectEnabled       *bool   `json:"casAutoCollectEnabled"`
@@ -64,42 +66,32 @@ func (h *handler) ModifyAddition() httpcontext.HandlerFunc {
 		req := new(modifyAdditionRequest)
 		if err := ctx.ShouldBindJSON(req); err != nil {
 			ctx.AbortWithInvalidParams(err)
-
 			return
 		}
 
-		// 查询当前设置以进行合并更新
 		current, err := h.settingService.Query(ctx.GetContext())
 		if err != nil {
 			ctx.Fail(codeQueryFailed.WithError(err))
-
 			return
 		}
 
 		merged := current.Addition
 
-		// 仅对提供的字段进行覆盖
 		if req.LocalProxy != nil {
 			merged.LocalProxy = *req.LocalProxy
 		}
-
 		if req.MultipleStream != nil {
 			merged.MultipleStream = *req.MultipleStream
 		}
-
 		if req.MultipleStreamThreadCount != nil {
 			merged.MultipleStreamThreadCount = *req.MultipleStreamThreadCount
 		}
-
 		if req.MultipleStreamChunkSize != nil {
 			merged.MultipleStreamChunkSize = *req.MultipleStreamChunkSize
 		}
-
 		if req.TaskThreadCount != nil {
 			merged.TaskThreadCount = *req.TaskThreadCount
 		}
-
-		// 外部字段合并（可选）
 		if req.ExternalAPIKey != nil {
 			merged.ExternalAPIKey = *req.ExternalAPIKey
 		}
@@ -164,6 +156,16 @@ func (h *handler) ModifyAddition() httpcontext.HandlerFunc {
 		if req.CasRestoreRetentionHours != nil {
 			merged.CasRestoreRetentionHours = *req.CasRestoreRetentionHours
 		}
+		if req.RecycleBinAutoClearEnabled != nil {
+			merged.RecycleBinAutoClearEnabled = *req.RecycleBinAutoClearEnabled
+		}
+		if req.RecycleBinAutoClearTime != nil {
+			if _, err := fmt.Sscanf(*req.RecycleBinAutoClearTime, "%02d:%02d", new(int), new(int)); err != nil {
+				ctx.AbortWithInvalidParams(fmt.Errorf("recycleBinAutoClearTime 必须为 HH:MM 格式"))
+				return
+			}
+			merged.RecycleBinAutoClearTime = *req.RecycleBinAutoClearTime
+		}
 		if req.LocalCASAutoScanEnabled != nil {
 			merged.LocalCASAutoScanEnabled = *req.LocalCASAutoScanEnabled
 		}
@@ -177,16 +179,11 @@ func (h *handler) ModifyAddition() httpcontext.HandlerFunc {
 			merged.CasAutoCollectPreservePath = *req.CasAutoCollectPreservePath
 		}
 
-		// 更新数据库
-		if err := h.settingService.Update(ctx.GetContext(),
-			utils.WithField("addition", merged),
-		); err != nil {
+		if err := h.settingService.Update(ctx.GetContext(), utils.WithField("addition", merged)); err != nil {
 			ctx.Fail(codeModifyAdditionFailed.WithError(err))
-
 			return
 		}
 
-		// 同步内存态
 		shared.SettingAddition = models.SettingAddition{
 			LocalProxy:                       merged.LocalProxy,
 			MultipleStream:                   merged.MultipleStream,
@@ -213,6 +210,10 @@ func (h *handler) ModifyAddition() httpcontext.HandlerFunc {
 			CasFamilyTargetFolderId:          merged.CasFamilyTargetFolderId,
 			CasFamilyAccessPath:              merged.CasFamilyAccessPath,
 			CasRestoreRetentionHours:         merged.CasRestoreRetentionHours,
+			RecycleBinAutoClearEnabled:       merged.RecycleBinAutoClearEnabled,
+			RecycleBinAutoClearTime:          merged.RecycleBinAutoClearTime,
+			LocalCASAutoScanEnabled:          merged.LocalCASAutoScanEnabled,
+			LocalCASAutoScanIntervalMin:      merged.LocalCASAutoScanIntervalMin,
 			CasAutoCollectEnabled:            merged.CasAutoCollectEnabled,
 			CasAutoCollectPreservePath:       merged.CasAutoCollectPreservePath,
 		}

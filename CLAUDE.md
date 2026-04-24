@@ -13,14 +13,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Common Development Commands
 
 ### Building the Project
-- `make build` - Build both frontend and backend
+- `make build` - Build both frontend and backend（默认通过 Docker Go 1.25 编译后端）
 - `make build-frontend` - Build frontend only (Vue.js)
-- `make build-backend` - Build backend only (Go binary)
-- `make build-multi-arch` - Build for multiple architectures (Linux, Windows, macOS)
+- `make build-backend` - Build backend only (Go binary, 默认 Docker Go 1.25)
+- `make build-multi-arch` - Build for multiple architectures (Linux, Windows, macOS, 默认 Docker Go 1.25)
 
 ### Development
-- `make dev` - Start development server (backend only)
-- `go run ./cmd/main.go` - Direct backend development
+- `make dev` - Start development server (backend only, 默认 Docker Go 1.25)
+- `USE_DOCKER_GO=0 make dev` - 强制改回本机 Go
+- `go run ./cmd/main.go` - 仅在你明确要绕过 Makefile/Docker Go 时使用
 - Frontend development: `cd fe && npm run dev` (starts Vite dev server on port 5173)
 
 ### Testing and Quality

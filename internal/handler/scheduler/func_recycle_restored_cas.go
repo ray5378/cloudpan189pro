@@ -19,7 +19,6 @@ import (
 	casrecordSvi "github.com/xxcheng123/cloudpan189-share/internal/services/casrecord"
 	cloudtokenSvi "github.com/xxcheng123/cloudpan189-share/internal/services/cloudtoken"
 	mountpointSvi "github.com/xxcheng123/cloudpan189-share/internal/services/mountpoint"
-	"github.com/xxcheng123/cloudpan189-share/internal/shared"
 	"go.uber.org/zap"
 )
 
@@ -106,17 +105,13 @@ func (s *RecycleRestoredCASScheduler) doJob(ctx appctx.Context) {
 }
 
 func (s *RecycleRestoredCASScheduler) recycleOne(ctx appctx.Context, record *models.CasMediaRecord) error {
-	mp, err := s.mountPointService.Query(ctx, record.MountPointID)
+	targetTokenID := record.TargetTokenID
+	if targetTokenID <= 0 {
+		return fmt.Errorf("缺少回收目标token")
+	}
+	session, err := s.appSessionService.GetByTokenID(ctx, targetTokenID)
 	if err != nil {
 		return err
-	}
-	session, err := s.appSessionService.GetByTokenID(ctx, mp.TokenId)
-	if err != nil {
-		return err
-	}
-	familyID := strings.TrimSpace(shared.SettingAddition.CasFamilyTargetFamilyId)
-	if familyID == "" {
-		return fmt.Errorf("未配置家庭恢复目标(casFamilyTargetFamilyId)")
 	}
 	accessToken := strings.TrimSpace(session.Token.AccessToken)
 	if accessToken == "" {
@@ -129,36 +124,60 @@ func (s *RecycleRestoredCASScheduler) recycleOne(ctx appctx.Context, record *mod
 	if fileName == "" {
 		fileName = record.RestoredFileID
 	}
-	deleteResp := new(batchTaskCreateResp)
-	if err := doAccessTokenFormJSONRequest(accessToken, familyBatchAPIBase+"/open/batch/createBatchTask.action", map[string]string{
-		"type":           "DELETE",
-		"taskInfos":      fmt.Sprintf(`[{"fileId":"%s","fileName":"%s","isFolder":0}]`, record.RestoredFileID, escapeJSONString(fileName)),
-		"targetFolderId": "",
-		"familyId":       familyID,
-	}, 30*time.Second, deleteResp); err != nil {
-		return errors.Wrap(err, "提交DELETE任务失败")
-	}
-	if batchRespError(deleteResp.ResCode, deleteResp.ResMessage) {
-		return fmt.Errorf("提交DELETE任务失败: %s", deleteResp.ResMessage)
-	}
-	if err := waitForRecycleBatchTask(accessToken, "DELETE", deleteResp.TaskID, 2*time.Minute); err != nil {
-		return err
-	}
+	if strings.EqualFold(strings.TrimSpace(record.DestinationType), "family") {
+		familyID := strings.TrimSpace(record.TargetFamilyID)
+		if familyID == "" {
+			return fmt.Errorf("缺少家庭回收目标familyId")
+		}
+		deleteResp := new(batchTaskCreateResp)
+		if err := doAccessTokenFormJSONRequest(accessToken, familyBatchAPIBase+"/open/batch/createBatchTask.action", map[string]string{
+			"type":           "DELETE",
+			"taskInfos":      fmt.Sprintf(`[{"fileId":"%s","fileName":"%s","isFolder":0}]`, record.RestoredFileID, escapeJSONString(fileName)),
+			"targetFolderId": "",
+			"familyId":       familyID,
+		}, 30*time.Second, deleteResp); err != nil {
+			return errors.Wrap(err, "提交DELETE任务失败")
+		}
+		if batchRespError(deleteResp.ResCode, deleteResp.ResMessage) {
+			return fmt.Errorf("提交DELETE任务失败: %s", deleteResp.ResMessage)
+		}
+		if err := waitForRecycleBatchTask(accessToken, "DELETE", deleteResp.TaskID, 2*time.Minute); err != nil {
+			return err
+		}
 
-	clearResp := new(batchTaskCreateResp)
-	if err := doAccessTokenFormJSONRequest(accessToken, familyBatchAPIBase+"/open/batch/createBatchTask.action", map[string]string{
-		"type":           "CLEAR_RECYCLE",
-		"taskInfos":      "[]",
-		"targetFolderId": "",
-		"familyId":       familyID,
-	}, 30*time.Second, clearResp); err != nil {
-		return errors.Wrap(err, "提交CLEAR_RECYCLE任务失败")
+		clearResp := new(batchTaskCreateResp)
+		if err := doAccessTokenFormJSONRequest(accessToken, familyBatchAPIBase+"/open/batch/createBatchTask.action", map[string]string{
+			"type":           "CLEAR_RECYCLE",
+			"taskInfos":      "[]",
+			"targetFolderId": "",
+			"familyId":       familyID,
+		}, 30*time.Second, clearResp); err != nil {
+			return errors.Wrap(err, "提交CLEAR_RECYCLE任务失败")
+		}
+		if batchRespError(clearResp.ResCode, clearResp.ResMessage) {
+			return fmt.Errorf("提交CLEAR_RECYCLE任务失败: %s", clearResp.ResMessage)
+		}
+		if err := waitForRecycleBatchTask(accessToken, "CLEAR_RECYCLE", clearResp.TaskID, 2*time.Minute); err != nil {
+			return err
+		}
+		return nil
 	}
-	if batchRespError(clearResp.ResCode, clearResp.ResMessage) {
-		return fmt.Errorf("提交CLEAR_RECYCLE任务失败: %s", clearResp.ResMessage)
-	}
-	if err := waitForRecycleBatchTask(accessToken, "CLEAR_RECYCLE", clearResp.TaskID, 2*time.Minute); err != nil {
+	panClient, err := s.newPanClientBySession(ctx, session)
+	if err != nil {
 		return err
+	}
+	ok, apiErr := panClient.AppDeleteFile([]string{record.RestoredFileID})
+	if apiErr != nil {
+		return apiErr
+	}
+	if !ok {
+		return fmt.Errorf("删除个人恢复文件失败")
+	}
+	if apiErr := panClient.RecycleDelete(0, []string{record.RestoredFileID}); apiErr != nil {
+		return apiErr
+	}
+	if apiErr := panClient.RecycleClear(0); apiErr != nil {
+		return apiErr
 	}
 	return nil
 }

@@ -1,6 +1,7 @@
 package casrestore
 
 import (
+	"fmt"
 	"time"
 
 	appctx "github.com/xxcheng123/cloudpan189-share/internal/framework/context"
@@ -46,6 +47,9 @@ func (s *service) getOrCreateRecord(ctx appctx.Context, req RestoreRequest) (*mo
 		CasFileID:        req.CasFileID,
 		CasFileName:      req.CasFileName,
 		RestoredParentID: req.TargetFolderID,
+		DestinationType:  string(req.DestinationType),
+		TargetTokenID:    req.TargetTokenID,
+		TargetFamilyID:   fmt.Sprint(req.FamilyID),
 		RestoreStatus:    models.CasRestoreStatusPending,
 		CreatedAt:        now,
 		UpdatedAt:        now,

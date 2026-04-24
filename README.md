@@ -28,6 +28,32 @@
 
 ## 快速开始
 
+### 本地源码编译（默认 Docker Go 1.25）
+
+项目 `Makefile` 默认优先使用本地 Docker 中的 `golang:1.25-alpine` 来执行 Go 构建、运行和测试，避免宿主机 Go 版本不匹配导致的报错。
+
+常用命令：
+
+```bash
+make go-env
+make build-backend
+make test
+make dev
+```
+
+如需临时改回宿主机 Go：
+
+```bash
+USE_DOCKER_GO=0 make build-backend
+```
+
+如需更换镜像：
+
+```bash
+GO_IMAGE=golang:1.25-alpine make build-backend
+```
+
+
 ### Docker 运行
 
 ```bash
