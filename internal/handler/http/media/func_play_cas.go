@@ -67,8 +67,12 @@ func (h *handler) PlayCas() httpcontext.HandlerFunc {
 			destinationType = casrestore.DestinationTypeFamily
 		}
 		targetTokenID := setting.CasPersonTargetTokenId
-		if destinationType == casrestore.DestinationTypeFamily && setting.CasFamilyTargetTokenId > 0 {
-			targetTokenID = setting.CasFamilyTargetTokenId
+		uploadRoute := casrestore.UploadRoutePerson
+		if destinationType == casrestore.DestinationTypeFamily {
+			uploadRoute = casrestore.UploadRouteFamily
+			if setting.CasFamilyTargetTokenId > 0 {
+				targetTokenID = setting.CasFamilyTargetTokenId
+			}
 		}
 
 		result, err := h.casRestoreService.EnsureRestoredFromLocalCAS(ctx.GetContext(), casrestore.RestoreRequest{
@@ -78,7 +82,7 @@ func (h *handler) PlayCas() httpcontext.HandlerFunc {
 			CasFileID:       record.CasFileID,
 			CasFileName:     record.CasFileName,
 			LocalCasPath:    localCASPath,
-			UploadRoute:     casrestore.UploadRouteFamily,
+			UploadRoute:     uploadRoute,
 			DestinationType: destinationType,
 			TargetFolderID:  targetFolderID,
 			FamilyID:        familyID,
