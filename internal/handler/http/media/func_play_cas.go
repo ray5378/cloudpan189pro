@@ -37,9 +37,16 @@ func (h *handler) PlayCas() httpcontext.HandlerFunc {
 				setting = latest.Addition
 			}
 		}
-		if setting.CasPersonTargetTokenId <= 0 || strings.TrimSpace(setting.CasPersonTargetFolderId) == "" {
-			ctx.String(http.StatusConflict, "cas target not configured")
-			return
+		if strings.EqualFold(strings.TrimSpace(setting.CasTargetType), "family") {
+			if setting.CasFamilyTargetTokenId <= 0 || strings.TrimSpace(setting.CasFamilyTargetFamilyId) == "" {
+				ctx.String(http.StatusConflict, "cas target not configured")
+				return
+			}
+		} else {
+			if setting.CasPersonTargetTokenId <= 0 || strings.TrimSpace(setting.CasPersonTargetFolderId) == "" {
+				ctx.String(http.StatusConflict, "cas target not configured")
+				return
+			}
 		}
 
 		if directLink, ok := h.tryDirectPlaybackLink(ctx, record, setting); ok {
@@ -55,12 +62,19 @@ func (h *handler) PlayCas() httpcontext.HandlerFunc {
 		}
 
 		localCASPath := filepath.Join("/local_cas", filepath.FromSlash(strings.TrimPrefix(strings.TrimSpace(record.CasFilePath), "/")))
-		destinationType := casrestore.DestinationTypeFamily
+		destinationType := casrestore.DestinationTypePerson
+		if strings.EqualFold(strings.TrimSpace(setting.CasTargetType), "family") {
+			destinationType = casrestore.DestinationTypeFamily
+		}
+		targetTokenID := setting.CasPersonTargetTokenId
+		if destinationType == casrestore.DestinationTypeFamily && setting.CasFamilyTargetTokenId > 0 {
+			targetTokenID = setting.CasFamilyTargetTokenId
+		}
 
 		result, err := h.casRestoreService.EnsureRestoredFromLocalCAS(ctx.GetContext(), casrestore.RestoreRequest{
 			StorageID:       record.StorageID,
 			MountPointID:    record.MountPointID,
-			TargetTokenID:   setting.CasPersonTargetTokenId,
+			TargetTokenID:   targetTokenID,
 			CasFileID:       record.CasFileID,
 			CasFileName:     record.CasFileName,
 			LocalCasPath:    localCASPath,
@@ -85,8 +99,8 @@ func (h *handler) PlayCas() httpcontext.HandlerFunc {
 			record = freshRecord
 			record.RestoredFileID = result.RestoredFileID
 		}
-		setting.CasTargetType = "family"
-		if strings.TrimSpace(setting.CasFamilyTargetFamilyId) == "" {
+		setting.CasTargetType = string(destinationType)
+		if destinationType == casrestore.DestinationTypeFamily && strings.TrimSpace(setting.CasFamilyTargetFamilyId) == "" {
 			if result != nil && result.FamilyID > 0 {
 				setting.CasFamilyTargetFamilyId = strconv.FormatInt(result.FamilyID, 10)
 			} else if familyID > 0 {
@@ -119,7 +133,7 @@ func (h *handler) resolvePlaybackTargetFolder(ctx *httpcontext.Context, record *
 	if relDir == "" || relDir == "." || h.appSessionService == nil {
 		return baseTargetFolderID, 0, nil
 	}
-	session, err := h.appSessionService.GetByTokenID(ctx.GetContext(), setting.CasPersonTargetTokenId)
+	session, err := h.appSessionService.GetByTokenID(ctx.GetContext(), setting.CasFamilyTargetTokenId)
 	if err != nil {
 		return "", 0, err
 	}
