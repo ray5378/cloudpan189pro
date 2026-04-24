@@ -5,20 +5,20 @@ VAR_BUILD_DATE ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 VAR_GIT_SUMMARY ?= $(shell git describe --tags --dirty --always)
 VAR_GIT_BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
 
-# 输出配置
 OUTPUT_DIR=output
 BINARY_NAME=share
 DOCKER_IMAGE=$(PROJECT_NAME):latest
 
-# Go 编译环境
 GO_IMAGE ?= golang:1.25-alpine
 GO_DOCKER_WORKDIR ?= /src
 GO_DOCKER_ENV ?= -e CGO_ENABLED=1
 GO_CMD ?= /usr/local/go/bin/go
 USE_DOCKER_GO ?= 1
 DOCKER_GO_RUN = docker run --rm -v "$(CURDIR):$(GO_DOCKER_WORKDIR)" -w $(GO_DOCKER_WORKDIR) $(GO_DOCKER_ENV) $(GO_IMAGE) /bin/sh -lc
+DOCKER_GO_PREPARE = if ! command -v gcc >/dev/null 2>&1; then apk add --no-cache build-base git >/dev/null; fi;
+
 ifeq ($(USE_DOCKER_GO),1)
-GO_RUNNER = $(DOCKER_GO_RUN) "$(GO_CMD)
+GO_RUNNER = $(DOCKER_GO_RUN) "$(DOCKER_GO_PREPARE) $(GO_CMD)
 else
 GO_RUNNER = sh -lc "go
 endif
@@ -27,11 +27,9 @@ endif
 .PHONY: docker-build docker-run docker-stop docker-clean docker-logs
 .PHONY: dev test lint help go-env
 
-# 主构建目标
 build: build-frontend build-backend
 	@echo "✅ Build completed successfully!"
 
-# 前端构建
 build-frontend:
 	@echo "🎨 Building frontend..."
 	@if [ -d "fe" ]; then \
@@ -41,17 +39,13 @@ build-frontend:
 		echo "⚠️  Frontend directory not found, skipping..."; \
 	fi
 
-# 后端构建
 build-backend:
 	@echo "🔨 Building backend... (USE_DOCKER_GO=$(USE_DOCKER_GO))"
 	@mkdir -p $(OUTPUT_DIR)
 	@$(GO_RUNNER) mod tidy"
-	@$(GO_RUNNER) build \
-		-ldflags='-X $(MODULE_NAME)/configs.Commit=$(VAR_COMMIT) -X $(MODULE_NAME)/configs.BuildDate=$(VAR_BUILD_DATE) -X $(MODULE_NAME)/configs.GitSummary=$(VAR_GIT_SUMMARY) -X $(MODULE_NAME)/configs.GitBranch=$(VAR_GIT_BRANCH)' \
-		-o $(OUTPUT_DIR)/$(BINARY_NAME) ./cmd/main.go"
+	@$(GO_RUNNER) build -ldflags='-X $(MODULE_NAME)/configs.Commit=$(VAR_COMMIT) -X $(MODULE_NAME)/configs.BuildDate=$(VAR_BUILD_DATE) -X $(MODULE_NAME)/configs.GitSummary=$(VAR_GIT_SUMMARY) -X $(MODULE_NAME)/configs.GitBranch=$(VAR_GIT_BRANCH)' -o $(OUTPUT_DIR)/$(BINARY_NAME) ./cmd/main.go"
 	@echo "✅ Backend build completed: $(OUTPUT_DIR)/$(BINARY_NAME)"
 
-# 多架构构建
 build-multi-arch:
 	@echo "🔨 Building for multiple architectures... (USE_DOCKER_GO=$(USE_DOCKER_GO))"
 	@mkdir -p $(OUTPUT_DIR)
@@ -71,7 +65,6 @@ build-multi-arch:
 	@echo "✅ Multi-architecture build completed!"
 	@ls -la $(OUTPUT_DIR)/
 
-# 清理构建产物
 clean:
 	@echo "🧹 Cleaning build artifacts..."
 	@rm -rf $(OUTPUT_DIR)

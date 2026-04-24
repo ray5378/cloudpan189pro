@@ -1,7 +1,6 @@
 package scheduler
 
 import (
-	"fmt"
 	"strings"
 	"time"
 
@@ -9,6 +8,7 @@ import (
 	"github.com/tickstep/cloudpan189-api/cloudpan"
 	appctx "github.com/xxcheng123/cloudpan189-share/internal/framework/context"
 	appsessionSvi "github.com/xxcheng123/cloudpan189-share/internal/services/appsession"
+	casrestoreSvi "github.com/xxcheng123/cloudpan189-share/internal/services/casrestore"
 	cloudtokenSvi "github.com/xxcheng123/cloudpan189-share/internal/services/cloudtoken"
 	"github.com/xxcheng123/cloudpan189-share/internal/shared"
 	"go.uber.org/zap"
@@ -117,20 +117,5 @@ func (s *RecycleBinAutoClearScheduler) clearFamilyRecycle(ctx appctx.Context) er
 	if accessToken == "" {
 		return nil
 	}
-	clearResp := new(batchTaskCreateResp)
-	if err := doAccessTokenFormJSONRequest(accessToken, familyBatchAPIBase+"/open/batch/createBatchTask.action", map[string]string{
-		"type":           "CLEAR_RECYCLE",
-		"taskInfos":      "[]",
-		"targetFolderId": "",
-		"familyId":       familyID,
-	}, 30*time.Second, clearResp); err != nil {
-		return err
-	}
-	if batchRespError(clearResp.ResCode, clearResp.ResMessage) {
-		return fmt.Errorf("提交CLEAR_RECYCLE任务失败: %s", clearResp.ResMessage)
-	}
-	if err := waitForRecycleBatchTask(accessToken, "CLEAR_RECYCLE", clearResp.TaskID, 2*time.Minute); err != nil {
-		return err
-	}
-	return nil
+	return casrestoreSvi.ClearFamilyRecycleByAccessToken(accessToken, familyID)
 }

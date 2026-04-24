@@ -12,11 +12,12 @@ func (s *service) ListDueRecycle(ctx context.Context, now time.Time, limit int) 
 		limit = 100
 	}
 	list := make([]*models.CasMediaRecord, 0)
+	staleRecyclingBefore := now.Add(-5 * time.Minute)
 	err := s.getDB(ctx).
-		Where("restore_status = ?", models.CasRestoreStatusRestored).
 		Where("restored_file_id <> ''").
 		Where("recycle_after_at IS NOT NULL").
 		Where("recycle_after_at <= ?", now).
+		Where("(restore_status = ? OR (restore_status = ? AND updated_at <= ?))", models.CasRestoreStatusRestored, models.CasRestoreStatusRecycling, staleRecyclingBefore).
 		Order("recycle_after_at asc").
 		Limit(limit).
 		Find(&list).Error

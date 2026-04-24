@@ -63,10 +63,18 @@ func (c *refSDKClient) waitForBatchTask(accessToken, taskType, taskID string, ma
 }
 
 func (c *refSDKClient) safeDeleteFamilyFile(accessToken string, familyID int64, fileID, fileName string) error {
+	return c.safeDeleteFamilyNode(accessToken, familyID, fileID, fileName, false)
+}
+
+func (c *refSDKClient) safeDeleteFamilyNode(accessToken string, familyID int64, fileID, fileName string, isFolder bool) error {
+	folderFlag := 0
+	if isFolder {
+		folderFlag = 1
+	}
 	deleteResp := new(refSDKBatchCreateResp)
 	if err := c.doBatchFormRequest(accessToken, familyBatchAPIBase+"/open/batch/createBatchTask.action", map[string]string{
 		"type":           "DELETE",
-		"taskInfos":      fmt.Sprintf(`[{"fileId":"%s","fileName":"%s","isFolder":0}]`, fileID, refSDKEscapeJSONString(fileName)),
+		"taskInfos":      fmt.Sprintf(`[{"fileId":"%s","fileName":"%s","isFolder":%d}]`, fileID, refSDKEscapeJSONString(fileName), folderFlag),
 		"targetFolderId": "",
 		"familyId":       fmt.Sprintf("%d", familyID),
 	}, 30*time.Second, deleteResp); err != nil {
