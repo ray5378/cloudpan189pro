@@ -456,7 +456,8 @@ const additionForm = reactive<Models.SettingAddition>({
   persistentCheckTime: '03:00',
 
   autoDeleteInvalidStorageEnabled: false,
-  autoDeleteInvalidStorageKeywords: '已失效|不存在|取消|没有',
+  autoDeleteInvalidStorageKeywords:
+    '分享审核|分享审核不通过|没有找到分享信息|页面不存在|文件或文件夹不存在|分享平铺目录未找到',
 })
 
 // 初始化完成标记，防止初始渲染触发自动保存

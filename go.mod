@@ -17,6 +17,7 @@ require (
 	github.com/samber/lo v1.51.0
 	github.com/swaggo/swag v1.16.6
 	github.com/tickstep/cloudpan189-api v0.1.0
+	github.com/tickstep/library-go v0.0.5
 	github.com/xxcheng123/cloudpan189-interface v1.0.4
 	github.com/xxcheng123/multistreamer v1.0.1
 	github.com/zeromicro/go-zero v1.8.5
@@ -71,7 +72,6 @@ require (
 	github.com/satori/go.uuid v1.2.0 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/stretchr/testify v1.11.1 // indirect
-	github.com/tickstep/library-go v0.0.5 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.2.12 // indirect
 	go.opentelemetry.io/otel v1.24.0 // indirect

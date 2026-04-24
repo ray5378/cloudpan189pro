@@ -13,6 +13,10 @@
           <n-input v-model:value="form.name" placeholder="例如：入库计划A" />
         </n-form-item>
 
+        <n-form-item label="订阅号ID">
+          <n-input v-model:value="form.subscribeUserId" placeholder="创建计划时填写的订阅号ID" disabled />
+        </n-form-item>
+
         <n-form-item label="挂载父目录" path="parentPath">
           <n-input v-model:value="form.parentPath" placeholder="/Movies" />
         </n-form-item>
@@ -150,23 +154,25 @@ watch(show, (v, ov) => {
 })
 
 // 表单
-const detailFormRef = ref<FormInst | null>(null)
-const form = reactive<
-  Required<
-    Pick<UpdatePlanRequest, 'id' | 'name' | 'parentPath' | 'onConflict' | 'autoIngestInterval'>
-  > & {
-    tokenId?: number
-    refreshStrategy: {
-      enableAutoRefresh: boolean
-      autoRefreshDays: number
-      refreshInterval: number
-      enableDeepRefresh: boolean
-    }
+type EditPlanForm = Required<
+  Pick<UpdatePlanRequest, 'id' | 'name' | 'parentPath' | 'onConflict' | 'autoIngestInterval'>
+> & {
+  subscribeUserId: string
+  tokenId?: number
+  refreshStrategy: {
+    enableAutoRefresh: boolean
+    autoRefreshDays: number
+    refreshInterval: number
+    enableDeepRefresh: boolean
   }
->({
+}
+
+const detailFormRef = ref<FormInst | null>(null)
+const form = reactive<EditPlanForm>({
   id: 0,
   name: '',
   parentPath: '',
+  subscribeUserId: '',
   onConflict: 'rename',
   autoIngestInterval: 30,
   tokenId: undefined,
@@ -183,6 +189,7 @@ const applyPlanToForm = (p: Models.AutoIngestPlan | null | undefined) => {
   form.id = p.id
   form.name = p.name || ''
   form.parentPath = p.parentPath || ''
+  form.subscribeUserId = String(p.addition?.upUserId || '')
   form.onConflict = (p.onConflict as 'rename' | 'abandon') || 'rename'
   form.autoIngestInterval = p.autoIngestInterval ?? 30
   form.tokenId = p.tokenId || undefined
@@ -297,6 +304,7 @@ const resetAll = () => {
   // 保留 id，其余恢复到默认（下次打开由 props.plan 再次填充）
   form.name = ''
   form.parentPath = ''
+  form.subscribeUserId = ''
   form.onConflict = 'rename'
   form.autoIngestInterval = 30
   form.tokenId = undefined

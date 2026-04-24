@@ -2,10 +2,12 @@ package autoingest
 
 import (
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/xxcheng123/cloudpan189-share/internal/framework/httpcontext"
 	"github.com/xxcheng123/cloudpan189-share/internal/repository/models"
+	autoingestplanSvi "github.com/xxcheng123/cloudpan189-share/internal/services/autoingestplan"
 	"github.com/xxcheng123/cloudpan189-share/internal/types/autoingest"
 	"github.com/xxcheng123/cloudpan189-share/internal/types/topic"
 )
@@ -61,6 +63,23 @@ func (h *handler) CreateSubscribePlan() httpcontext.HandlerFunc {
 			ctx.Fail(codeUpUserIdInvalid.WithError(err))
 
 			return
+		}
+
+		list, err := h.planService.List(ctx.GetContext(), &autoingestplanSvi.ListRequest{CurrentPage: 1, PageSize: 1000})
+		if err != nil {
+			ctx.Fail(codePlanListFailed.WithError(err))
+
+			return
+		}
+		for _, plan := range list {
+			if plan == nil || plan.SourceType != autoingest.SourceTypeSubscribe {
+				continue
+			}
+			if upUserID, ok := plan.Addition.String("upUserId"); ok && strings.TrimSpace(upUserID) == strings.TrimSpace(req.UpUserId) {
+				ctx.Fail(codePlanSubscribeExists)
+
+				return
+			}
 		}
 
 		enable := req.AutoIngestInterval > 0

@@ -395,7 +395,9 @@ const handleSubmit = () => {
         })
         .catch((err: unknown) => {
           console.error('创建入库计划失败:', err)
-          message.error('创建失败')
+          const apiMsg = (err as { response?: { data?: { msg?: string } }; message?: string })?.response?.data?.msg ||
+            (err as { message?: string })?.message
+          message.error(apiMsg || '创建失败')
         })
         .finally(() => {
           submitting.value = false

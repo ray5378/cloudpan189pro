@@ -94,7 +94,7 @@ func (sa *SettingAddition) applyDefaults() {
 		sa.PersistentCheckTime = "03:00"
 	}
 	if sa.AutoDeleteInvalidStorageKeywords == "" {
-		sa.AutoDeleteInvalidStorageKeywords = "已失效|不存在|取消|没有"
+		sa.AutoDeleteInvalidStorageKeywords = "分享审核|分享审核不通过|没有找到分享信息|页面不存在|文件或文件夹不存在|分享平铺目录未找到"
 	}
 	if sa.CasTargetType == "" {
 		sa.CasTargetType = "person"
