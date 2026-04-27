@@ -112,3 +112,7 @@ export const rebuildLocalCASSTRM = (): Promise<ApiResponse<RebuildLocalCASSTRMRe
 export const restoreCas = (data: RestoreCasRequest): Promise<ApiResponse<RestoreCasResult>> => {
   return api.post('/media/restore_cas', data).then((res) => res.data)
 }
+
+export const runFallbackRecycleOnce = (): Promise<ApiResponse<{ ok: boolean }>> => {
+  return api.post('/media/run_fallback_recycle_once').then((res) => res.data)
+}

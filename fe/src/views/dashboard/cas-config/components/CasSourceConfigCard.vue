@@ -85,13 +85,10 @@
           </n-grid-item>
         </n-grid>
 
-        <n-space justify="space-between">
-          <n-space>
-            <n-button @click="$emit('load-root')">加载根目录</n-button>
-            <n-button @click="$emit('go-parent')" :disabled="sourceFolderStack.length === 0">返回上级</n-button>
-            <n-button type="primary" @click="$emit('save-source')">保存 CAS 最终目录</n-button>
-          </n-space>
-          <n-text depth="3">当前目录决定 `.strm` 播放时 CAS 恢复后的最终云盘落点；恢复仍优先使用本地 `/local_cas` 中的 `.cas` 文件。</n-text>
+        <n-space>
+          <n-button @click="$emit('load-root')">加载根目录</n-button>
+          <n-button @click="$emit('go-parent')" :disabled="sourceFolderStack.length === 0">返回上级</n-button>
+          <n-button type="primary" @click="$emit('save-source')">保存 CAS 最终目录</n-button>
         </n-space>
       </n-form>
 

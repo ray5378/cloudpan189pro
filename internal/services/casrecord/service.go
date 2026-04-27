@@ -13,6 +13,7 @@ type Service interface {
 	Create(ctx context.Context, record *models.CasMediaRecord) (int64, error)
 	Query(ctx context.Context, id int64) (*models.CasMediaRecord, error)
 	QueryByStorageAndCasFileID(ctx context.Context, storageID int64, casFileID string) (*models.CasMediaRecord, error)
+	QueryByRestoredFileID(ctx context.Context, restoredFileID string) (*models.CasMediaRecord, error)
 	ListDueRecycle(ctx context.Context, now time.Time, limit int) ([]*models.CasMediaRecord, error)
 	Update(ctx context.Context, id int64, updates map[string]any) error
 	DeleteByCasFilePath(ctx context.Context, casFilePath string) error

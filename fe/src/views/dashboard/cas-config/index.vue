@@ -29,8 +29,10 @@
           <CasLocalStrmCard
             :source-form="sourceForm"
             :manual-scanning="manualLocalStrmScanning"
+            :manual-fallback-recycle-running="manualFallbackRecycleRunning"
             @save-settings="saveLocalStrmSettings"
             @manual-scan="handleManualLocalStrmScan"
+            @manual-fallback-recycle="handleManualFallbackRecycle"
           />
         </n-grid-item>
       </n-grid>
@@ -62,7 +64,7 @@
 import { computed, h, onMounted, reactive, ref, watch } from 'vue'
 import { NAlert, NButton, NGrid, NGridItem, NSpace, NText, useMessage, type DataTableColumns } from 'naive-ui'
 import type { RestoreCasRequest, CasDestinationType, CasUploadRoute } from '@/api/media'
-import { rebuildLocalCASSTRM, restoreCas } from '@/api/media'
+import { rebuildLocalCASSTRM, restoreCas, runFallbackRecycleOnce } from '@/api/media'
 import { getCloudTokenList } from '@/api/cloudtoken'
 import { getSettingAddition, modifySettingAddition } from '@/api/setting'
 import { getFamilyFiles, getFamilyList, getPersonFiles, type FileNode } from '@/api/storage/advance'
@@ -111,6 +113,7 @@ const cloudTokenLoading = ref(false)
 const familyLoading = ref(false)
 const sourceLoading = ref(false)
 const manualLocalStrmScanning = ref(false)
+const manualFallbackRecycleRunning = ref(false)
 const sourceEntries = ref<FileNode[]>([])
 const cloudTokenOptions = ref<{ label: string; value: number }[]>([])
 const familyOptions = ref<{ label: string; value: string }[]>([])
@@ -530,6 +533,18 @@ const handleManualLocalStrmScan = async () => {
     message.error(err?.message || '本地CAS扫描失败')
   } finally {
     manualLocalStrmScanning.value = false
+  }
+}
+
+const handleManualFallbackRecycle = async () => {
+  manualFallbackRecycleRunning.value = true
+  try {
+    await runFallbackRecycleOnce()
+    message.success('CAS 兜底清理已执行完成')
+  } catch (err: any) {
+    message.error(err?.message || 'CAS 兜底清理执行失败')
+  } finally {
+    manualFallbackRecycleRunning.value = false
   }
 }
 

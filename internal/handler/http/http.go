@@ -269,6 +269,7 @@ func Start(svc bootstrap.ServiceContext) {
 			mediaRouter.POST("/rebuild_strm_file", wrap(mediaHandler.RebuildStrmFile()))
 			mediaRouter.POST("/rebuild_local_cas_strm", wrap(mediaHandler.RebuildLocalCASSTRM()))
 			mediaRouter.POST("/restore_cas", wrap(mediaHandler.RestoreCas()))
+			mediaRouter.POST("/run_fallback_recycle_once", wrap(mediaHandler.RunFallbackRecycleOnce()))
 		}
 		openapiRouter.GET("/cas/play/:recordId", wrap(mediaHandler.PlayCas()))
 	}

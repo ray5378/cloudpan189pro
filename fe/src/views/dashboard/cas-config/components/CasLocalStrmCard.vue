@@ -30,6 +30,14 @@
               </n-space>
             </n-form-item>
           </n-grid-item>
+          <n-grid-item :span="24">
+            <n-form-item label="恢复文件兜底清理">
+              <n-space>
+                <n-button type="warning" :loading="manualFallbackRecycleRunning" @click="$emit('manual-fallback-recycle')">立即触发一次兜底清理</n-button>
+                <n-text depth="3">按“优先 restored_at、兜底 CreateTime”的留存时间规则，扫描最终落盘目录，删除超时文件并递归清理空目录，最后清空回收站。</n-text>
+              </n-space>
+            </n-form-item>
+          </n-grid-item>
         </n-grid>
       </n-form>
 
@@ -55,10 +63,12 @@ import {
 defineProps<{
   sourceForm: any
   manualScanning: boolean
+  manualFallbackRecycleRunning: boolean
 }>()
 
 defineEmits<{
   (e: 'save-settings'): void
   (e: 'manual-scan'): void
+  (e: 'manual-fallback-recycle'): void
 }>()
 </script>

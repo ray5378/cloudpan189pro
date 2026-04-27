@@ -27,6 +27,7 @@ type Handler interface {
 	RebuildStrmFile() httpcontext.HandlerFunc
 	RebuildLocalCASSTRM() httpcontext.HandlerFunc
 	RestoreCas() httpcontext.HandlerFunc
+	RunFallbackRecycleOnce() httpcontext.HandlerFunc
 	PlayCas() httpcontext.HandlerFunc
 }
 
@@ -39,9 +40,10 @@ var (
 	codeConfigToggleFailed = bi.Next("切换媒体配置启用状态失败")
 
 	codeMediaNotEnabled  = bi.Next("媒体功能未启用")
-	codeClearFailed      = bi.Next("清理媒体文件失败")
-	codeRebuildFailed    = bi.Next("重建strm文件失败")
-	codeRestoreCasFailed = bi.Next("恢复CAS文件失败")
+	codeClearFailed               = bi.Next("清理媒体文件失败")
+	codeRebuildFailed             = bi.Next("重建strm文件失败")
+	codeRestoreCasFailed          = bi.Next("恢复CAS文件失败")
+	codeRunFallbackRecycleFailed  = bi.Next("触发CAS兜底清理失败")
 )
 
 type handler struct {
