@@ -160,29 +160,41 @@ func (s *RecycleRestoredCASScheduler) calcNextFallbackRun(now time.Time) time.Ti
 }
 
 func (s *RecycleRestoredCASScheduler) runFallbackRecycleSweep(ctx appctx.Context, cutoff time.Time) error {
-	var firstErr error
+	var (
+		firstErr  error
+		attempted int
+		succeeded int
+	)
 
 	personTokenID := shared.SettingAddition.CasPersonTargetTokenId
 	personRootID := strings.TrimSpace(shared.SettingAddition.CasPersonTargetFolderId)
 	if personTokenID > 0 && personRootID != "" {
-		session, err := s.appSessionService.GetByTokenID(ctx, personTokenID)
-		if err != nil {
-			firstErr = pickFirstErr(firstErr, fmt.Errorf("加载个人兜底清理session失败: %w", err))
-		} else {
+		attempted++
+		branchErr := func() error {
+			session, err := s.appSessionService.GetByTokenID(ctx, personTokenID)
+			if err != nil {
+				return fmt.Errorf("加载个人兜底清理session失败: %w", err)
+			}
 			panClient, err := s.newPanClientBySession(ctx, session)
 			if err != nil {
-				firstErr = pickFirstErr(firstErr, fmt.Errorf("创建个人兜底清理panClient失败: %w", err))
-			} else {
-				deletedAny, err := s.sweepExpiredPersonFiles(ctx, panClient, personRootID, personRootID, cutoff)
-				if err != nil {
-					firstErr = pickFirstErr(firstErr, fmt.Errorf("个人兜底清理失败: %w", err))
-				}
-				if deletedAny {
-					if apiErr := panClient.RecycleClear(0); apiErr != nil {
-						firstErr = pickFirstErr(firstErr, fmt.Errorf("清空个人回收站失败: %w", apiErr))
-					}
+				return fmt.Errorf("创建个人兜底清理panClient失败: %w", err)
+			}
+			deletedAny, err := s.sweepExpiredPersonFiles(ctx, panClient, personRootID, personRootID, cutoff)
+			if err != nil {
+				return fmt.Errorf("个人兜底清理失败: %w", err)
+			}
+			if deletedAny {
+				if apiErr := panClient.RecycleClear(0); apiErr != nil {
+					return fmt.Errorf("清空个人回收站失败: %w", apiErr)
 				}
 			}
+			return nil
+		}()
+		if branchErr != nil {
+			firstErr = pickFirstErr(firstErr, branchErr)
+			ctx.Error("个人兜底清理执行失败", zap.Error(branchErr))
+		} else {
+			succeeded++
 		}
 	}
 
@@ -190,37 +202,50 @@ func (s *RecycleRestoredCASScheduler) runFallbackRecycleSweep(ctx appctx.Context
 	familyID := strings.TrimSpace(shared.SettingAddition.CasFamilyTargetFamilyId)
 	familyRootID := strings.TrimSpace(shared.SettingAddition.CasFamilyTargetFolderId)
 	if familyTokenID > 0 && familyID != "" && familyRootID != "" {
-		session, err := s.appSessionService.GetByTokenID(ctx, familyTokenID)
-		if err != nil {
-			firstErr = pickFirstErr(firstErr, fmt.Errorf("加载家庭兜底清理session失败: %w", err))
-		} else {
+		attempted++
+		branchErr := func() error {
+			session, err := s.appSessionService.GetByTokenID(ctx, familyTokenID)
+			if err != nil {
+				return fmt.Errorf("加载家庭兜底清理session失败: %w", err)
+			}
 			panClient, err := s.newPanClientBySession(ctx, session)
 			if err != nil {
-				firstErr = pickFirstErr(firstErr, fmt.Errorf("创建家庭兜底清理panClient失败: %w", err))
-			} else {
-				cloudToken, err := s.cloudTokenService.Query(ctx, familyTokenID)
-				if err != nil {
-					firstErr = pickFirstErr(firstErr, fmt.Errorf("加载家庭兜底清理cloudToken失败: %w", err))
-				} else {
-					refAccessToken, err := casrestoreSvi.BuildRefSDKAccessToken(session, cloudToken)
-					if err != nil {
-						firstErr = pickFirstErr(firstErr, fmt.Errorf("构建家庭兜底清理accessToken失败: %w", err))
-					} else {
-						deletedAny, err := s.sweepExpiredFamilyFiles(ctx, panClient, refAccessToken, familyID, familyRootID, familyRootID, cutoff)
-						if err != nil {
-							firstErr = pickFirstErr(firstErr, fmt.Errorf("家庭兜底清理失败: %w", err))
-						}
-						if deletedAny {
-							if err := casrestoreSvi.ClearFamilyRecycleByAccessToken(refAccessToken, familyID); err != nil {
-								firstErr = pickFirstErr(firstErr, fmt.Errorf("清空家庭回收站失败: %w", err))
-							}
-						}
-					}
+				return fmt.Errorf("创建家庭兜底清理panClient失败: %w", err)
+			}
+			cloudToken, err := s.cloudTokenService.Query(ctx, familyTokenID)
+			if err != nil {
+				return fmt.Errorf("加载家庭兜底清理cloudToken失败: %w", err)
+			}
+			refAccessToken, err := casrestoreSvi.BuildRefSDKAccessToken(session, cloudToken)
+			if err != nil {
+				return fmt.Errorf("构建家庭兜底清理accessToken失败: %w", err)
+			}
+			deletedAny, err := s.sweepExpiredFamilyFiles(ctx, panClient, refAccessToken, familyID, familyRootID, familyRootID, cutoff)
+			if err != nil {
+				return fmt.Errorf("家庭兜底清理失败: %w", err)
+			}
+			if deletedAny {
+				if err := casrestoreSvi.ClearFamilyRecycleByAccessToken(refAccessToken, familyID); err != nil {
+					return fmt.Errorf("清空家庭回收站失败: %w", err)
 				}
 			}
+			return nil
+		}()
+		if branchErr != nil {
+			firstErr = pickFirstErr(firstErr, branchErr)
+			ctx.Error("家庭兜底清理执行失败", zap.Error(branchErr))
+		} else {
+			succeeded++
 		}
 	}
 
+	if attempted == 0 {
+		ctx.Info("CAS兜底清理手动触发已跳过：未配置可扫描目标")
+		return nil
+	}
+	if succeeded > 0 {
+		return nil
+	}
 	return firstErr
 }
 
