@@ -5,9 +5,9 @@ import (
 	schedulerHandler "github.com/xxcheng123/cloudpan189-share/internal/handler/scheduler"
 )
 
-// RunFallbackRecycleOnce 手动立即触发一次 CAS 恢复文件兜底扫描清理。
-// @Summary 手动触发一次 CAS 兜底清理
-// @Description 按当前 CAS 最终目录与恢复后文件留存时间，立即执行一次兜底扫描清理，并在结束后清空回收站
+// RunFallbackRecycleOnce 手动立即触发一次 CAS 恢复文件清理。
+// @Summary 手动触发一次 CAS 恢复记录清理
+// @Description 立即执行一次原有“按恢复记录驱动”的到期清理链，复用自动清理同一套回收逻辑
 // @Tags 媒体管理
 // @Accept json
 // @Produce json

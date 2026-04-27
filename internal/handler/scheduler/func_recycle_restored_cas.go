@@ -88,11 +88,17 @@ func (s *RecycleRestoredCASScheduler) doJob(ctx appctx.Context) {
 }
 
 func (s *RecycleRestoredCASScheduler) doRecordedRecycle(ctx appctx.Context, now time.Time) {
+	if err := s.runRecordedRecycleOnce(ctx, now); err != nil {
+		ctx.Error("执行CAS恢复记录回收失败", zap.Error(err))
+	}
+}
+
+func (s *RecycleRestoredCASScheduler) runRecordedRecycleOnce(ctx appctx.Context, now time.Time) error {
 	list, err := s.casRecordService.ListDueRecycle(ctx, now, 50)
 	if err != nil {
-		ctx.Error("查询到期CAS恢复文件失败")
-		return
+		return err
 	}
+	var firstErr error
 	for _, record := range list {
 		if record == nil || strings.TrimSpace(record.RestoredFileID) == "" {
 			continue
@@ -102,6 +108,7 @@ func (s *RecycleRestoredCASScheduler) doRecordedRecycle(ctx appctx.Context, now 
 			if settleErr != nil {
 				_ = s.casRecordService.Update(ctx, record.ID, map[string]any{"restore_status": models.CasRestoreStatusFailed, "last_error": settleErr.Error()})
 				ctx.Error("处理卡住的CAS回收记录失败", zap.Int64("record_id", record.ID), zap.Error(settleErr))
+				firstErr = pickFirstErr(firstErr, settleErr)
 				continue
 			}
 			if settled {
@@ -119,14 +126,17 @@ func (s *RecycleRestoredCASScheduler) doRecordedRecycle(ctx appctx.Context, now 
 			if checkErr != nil {
 				ctx.Error("回收到期CAS恢复文件失败，且删除结果复核失败", zap.Int64("record_id", record.ID), zap.Error(err), zap.Error(checkErr))
 				_ = s.casRecordService.Update(ctx, record.ID, map[string]any{"restore_status": models.CasRestoreStatusFailed, "last_error": err.Error() + " | verify: " + checkErr.Error()})
+				firstErr = pickFirstErr(firstErr, fmt.Errorf("record_id=%d recycle=%v verify=%v", record.ID, err, checkErr))
 				continue
 			}
 			_ = s.casRecordService.Update(ctx, record.ID, map[string]any{"restore_status": models.CasRestoreStatusFailed, "last_error": err.Error()})
 			ctx.Error("回收到期CAS恢复文件失败", zap.Int64("record_id", record.ID), zap.Error(err))
+			firstErr = pickFirstErr(firstErr, err)
 			continue
 		}
 		s.markRecycled(ctx, record.ID)
 	}
+	return firstErr
 }
 
 func (s *RecycleRestoredCASScheduler) doFallbackRecycle(ctx appctx.Context, now time.Time) {
